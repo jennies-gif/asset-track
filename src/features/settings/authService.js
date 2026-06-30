@@ -32,6 +32,37 @@ export function readStoredAuthSession() {
   }
 }
 
+export async function consumeAuthRedirectSession() {
+  const config = getAuthConfig();
+  if (!config.configured) return { status: "empty" };
+  const params = authRedirectParams();
+  const error = params.get("error_description") || params.get("error");
+  if (error) {
+    clearAuthRedirectParams();
+    return { status: "error", message: error };
+  }
+  const accessToken = params.get("access_token");
+  if (!accessToken) {
+    if (params.get("code")) {
+      clearAuthRedirectParams();
+      return { status: "verified", message: "邮箱验证完成，请登录。" };
+    }
+    return { status: "empty" };
+  }
+  const user = await fetchAuthUser(config, accessToken);
+  const expiresIn = Number(params.get("expires_in") || 3600);
+  const session = {
+    access_token: accessToken,
+    refresh_token: params.get("refresh_token") || "",
+    token_type: params.get("token_type") || "bearer",
+    expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+    user
+  };
+  storeAuthSession(session);
+  clearAuthRedirectParams();
+  return { status: "signed_in", session };
+}
+
 export async function registerWithEmail({ email, password, name }) {
   const config = getAuthConfig();
   if (!config.configured) throw authError("Supabase 尚未配置，请先填写部署环境变量。");
@@ -42,6 +73,34 @@ export async function registerWithEmail({ email, password, name }) {
   });
   if (payload.session) storeAuthSession(payload.session);
   return payload;
+}
+
+async function fetchAuthUser(config, accessToken) {
+  const response = await fetch(`${config.url}/auth/v1/user`, {
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw authError(formatAuthError(response.status, payload));
+  return payload;
+}
+
+function authRedirectParams() {
+  const params = new URLSearchParams(globalThis.location?.hash?.replace(/^#/u, "") || "");
+  const searchParams = new URLSearchParams(globalThis.location?.search || "");
+  for (const [key, value] of searchParams.entries()) {
+    if (!params.has(key)) params.set(key, value);
+  }
+  return params;
+}
+
+function clearAuthRedirectParams() {
+  const location = globalThis.location;
+  const history = globalThis.history;
+  if (!location || !history?.replaceState) return;
+  history.replaceState({}, document.title, `${location.pathname}${location.search.replace(/[?&](access_token|refresh_token|expires_in|token_type|type|code|error|error_description|error_code)=[^&]*/gu, "").replace(/^\?$/u, "")}`);
 }
 
 export async function loginWithEmail({ email, password }) {

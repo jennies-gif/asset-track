@@ -1,5 +1,5 @@
 import { applySettings, readSettingsForm } from "./settingsRender.js";
-import { getAuthConfig, loginWithEmail, logoutAuthSession, readStoredAuthSession, registerWithEmail } from "./authService.js";
+import { consumeAuthRedirectSession, getAuthConfig, loginWithEmail, logoutAuthSession, readStoredAuthSession, registerWithEmail } from "./authService.js";
 
 export function closeSettingsPanel(elements) {
   elements.settingsPanel.classList.add("is-hidden");
@@ -13,7 +13,7 @@ export function closeAuthPanel(elements) {
 
 export function initSettingsEvents(context) {
   const { elements } = context;
-  hydrateStoredAuthSession(context);
+  hydrateAuthSession(context);
   elements.settingsButton.addEventListener("click", () => {
     const hidden = elements.settingsPanel.classList.toggle("is-hidden");
     elements.settingsButton.setAttribute("aria-expanded", String(!hidden));
@@ -118,6 +118,32 @@ export function initSettingsEvents(context) {
   elements.resetDemo.addEventListener("click", () => {
     context.loadDemoState();
   });
+}
+
+async function hydrateAuthSession(context) {
+  try {
+    const redirectResult = await consumeAuthRedirectSession();
+    if (redirectResult.status === "signed_in") {
+      const user = redirectResult.session.user;
+      applySignedInSession(context, {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.display_name || user.email || "资产轨迹用户",
+        provider: "supabase"
+      });
+      setAuthStatus(context.elements, "邮箱验证成功，已登录。", "success");
+      context.persistAndRender();
+      return;
+    }
+    if (redirectResult.status === "verified") {
+      setAuthStatus(context.elements, redirectResult.message, "success");
+    } else if (redirectResult.status === "error") {
+      setAuthStatus(context.elements, redirectResult.message, "error");
+    }
+  } catch (error) {
+    setAuthStatus(context.elements, error instanceof Error ? error.message : "认证回跳处理失败。", "error");
+  }
+  hydrateStoredAuthSession(context);
 }
 
 function hydrateStoredAuthSession(context) {
