@@ -2,13 +2,23 @@ const authStorageKey = "asset-trail-supabase-auth-v1";
 
 export function getAuthConfig() {
   const supabase = globalThis.ASSET_TRAIL_CONFIG?.supabase || {};
-  const url = String(supabase.url || "").trim().replace(/\/+$/u, "");
+  const url = normalizeSupabaseUrl(supabase.url);
   const anonKey = String(supabase.anonKey || "").trim();
   return {
     url,
     anonKey,
     configured: Boolean(url && anonKey)
   };
+}
+
+function normalizeSupabaseUrl(value) {
+  const rawUrl = String(value || "").trim();
+  if (!rawUrl) return "";
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return rawUrl.replace(/\/(rest|auth)\/v1\/?$/u, "").replace(/\/+$/u, "");
+  }
 }
 
 export function readStoredAuthSession() {
