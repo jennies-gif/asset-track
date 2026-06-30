@@ -57,17 +57,22 @@ export async function logoutAuthSession() {
 }
 
 async function requestSupabaseAuth(config, path, body) {
-  const response = await fetch(`${config.url}${path}`, {
-    method: "POST",
-    headers: {
-      apikey: config.anonKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+  let response;
+  try {
+    response = await fetch(`${config.url}${path}`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    throw authError(error instanceof Error ? `无法连接 Supabase：${error.message}` : "无法连接 Supabase。");
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw authError(payload.msg || payload.message || "认证请求失败");
+    throw authError(formatAuthError(response.status, payload));
   }
   return payload;
 }
@@ -81,4 +86,16 @@ function authError(message) {
   const error = new Error(message);
   error.name = "AuthError";
   return error;
+}
+
+function formatAuthError(status, payload) {
+  const details = [
+    payload.error_description,
+    payload.msg,
+    payload.message,
+    payload.error,
+    payload.code || payload.error_code
+  ].filter(Boolean);
+  if (details.length) return `Supabase ${status}：${details.join(" / ")}`;
+  return `认证请求失败：Supabase HTTP ${status}`;
 }
