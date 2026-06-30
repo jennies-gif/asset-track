@@ -1,0 +1,32 @@
+export function getAnalysisElements() {
+  return {
+    attributionMetrics: document.querySelector("#attribution-metrics"),
+    attributionList: document.querySelector("#attribution-list"),
+    analysisJudgementTitle: document.querySelector("#analysis-judgement-title"),
+    analysisJudgementList: document.querySelector("#analysis-judgement-list"),
+    analysisHealthList: document.querySelector("#analysis-health-list"),
+    stageComparisonGrid: document.querySelector("#stage-comparison-grid"),
+    analysisContributionRows: document.querySelector("#analysis-contribution-rows"),
+    analysisQualityMetrics: document.querySelector("#analysis-quality-metrics"),
+    analysisMonthlyReturnChart: document.querySelector("#analysis-monthly-return-chart"),
+    analysisBenchmarkEmpty: document.querySelector("#analysis-benchmark-empty"),
+    syncBenchmarkDataButton: document.querySelector("#sync-benchmark-data"),
+    analysisTopReturnAssets: document.querySelector("#analysis-top-return-assets"),
+    analysisContributionSummary: document.querySelector("#analysis-contribution-summary"),
+    analysisRiskMetrics: document.querySelector("#analysis-risk-metrics"),
+    analysisDrawdownChart: document.querySelector("#analysis-drawdown-chart"),
+    analysisRiskNote: document.querySelector("#analysis-risk-note"),
+    analysisAllocationChart: document.querySelector("#analysis-allocation-chart"),
+    analysisAllocationRows: document.querySelector("#analysis-allocation-rows"),
+    analysisAllocationNote: document.querySelector("#analysis-allocation-note"),
+    analysisConcentrationMetrics: document.querySelector("#analysis-concentration-metrics"),
+    analysisTopHoldings: document.querySelector("#analysis-top-holdings"),
+    analysisConcentrationNote: document.querySelector("#analysis-concentration-note"),
+    analysisCashflowChart: document.querySelector("#analysis-cashflow-chart"),
+    analysisAccountFilter: document.querySelector("#analysis-account-filter"),
+    analysisAssetFilter: document.querySelector("#analysis-asset-filter"),
+    analysisStart: document.querySelector("#analysis-start"),
+    analysisEnd: document.querySelector("#analysis-end"),
+    analysisRangeSummary: document.querySelector("#analysis-range-summary")
+  };
+}

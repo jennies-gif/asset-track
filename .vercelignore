@@ -1,0 +1,16 @@
+node_modules
+.npm-cache
+.cache
+.tmp
+tmp
+storage
+dist
+build
+coverage
+test-results
+playwright-report
+blob-report
+.env
+.env.*
+*.log
+.DS_Store

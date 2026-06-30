@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Build and coverage outputs
+dist/
+dist-static/
+build/
+coverage/
+.nyc_output/
+
+# Test and browser artifacts
+test-results/
+playwright-report/
+blob-report/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Runtime caches
+.cache/
+.npm-cache/
+.tmp/
+tmp/
+storage/
+.vercel
+public/runtime-config.js

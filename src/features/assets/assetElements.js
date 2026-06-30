@@ -1,0 +1,30 @@
+export function getAssetElements() {
+  return {
+    portfolioRows: document.querySelector("#portfolio-rows"),
+    portfolioAccountFilter: document.querySelector("#portfolio-account-filter"),
+    portfolioTypeFilter: document.querySelector("#portfolio-type-filter"),
+    portfolioStatusFilter: document.querySelector("#portfolio-status-filter"),
+    portfolioFilterSummary: document.querySelector("#portfolio-filter-summary"),
+    historyRows: document.querySelector("#history-rows"),
+    assetChangeRows: document.querySelector("#asset-change-rows"),
+    openAssetFormButton: document.querySelector("#open-asset-form"),
+    closeAssetFormButton: document.querySelector("#close-asset-form"),
+    assetFormSection: document.querySelector("#asset-form-section"),
+    assetFormSubtitle: document.querySelector("#asset-form-subtitle"),
+    assetAdjustmentSummary: document.querySelector("#asset-adjustment-summary"),
+    assetLiveSummary: document.querySelector("#asset-live-summary"),
+    transactionLiveSummary: document.querySelector("#transaction-live-summary"),
+    closeConfirmNote: document.querySelector("#close-confirm-note"),
+    accountPicker: document.querySelector("#account-picker"),
+    accountNameOptions: document.querySelector("#account-name-options"),
+    accountTypeCustomField: document.querySelector("#account-type-custom-field"),
+    assetForm: document.querySelector("#asset-form"),
+    assetError: document.querySelector("#asset-error"),
+    assetSubmitButton: document.querySelector('#asset-form button[type="submit"]'),
+    closeFields: document.querySelector("#close-fields"),
+    portfolioCurrentPriceHeading: document.querySelector("#portfolio-current-price-heading"),
+    historyCurrentPriceHeading: document.querySelector("#history-current-price-heading"),
+    changesCurrentPriceHeading: document.querySelector("#changes-current-price-heading"),
+    marketValueHeading: document.querySelector("#market-value-heading")
+  };
+}

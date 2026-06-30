@@ -1,0 +1,34 @@
+{
+  "name": "asset-trail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "npm run dev -w apps/web",
+    "api:start": "npm run start -w apps/api",
+    "data:sync-universes": "node scripts/market-data/sync-index-universes.mjs",
+    "data:migrate-storage": "node scripts/market-data/migrate-market-data-storage.mjs",
+    "data:backfill": "node scripts/market-data/fetch-market-data.mjs backfill --months=3",
+    "data:daily": "node scripts/market-data/fetch-market-data.mjs daily",
+    "build": "npm run build -w apps/web",
+    "build:static": "node scripts/build-static.mjs",
+    "typecheck": "npm run typecheck -w packages/domain && npm run typecheck -w apps/web",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.8.0",
+    "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
