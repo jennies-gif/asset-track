@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run build:static",
   "cleanUrls": true,
+  "installCommand": "npm install --ignore-scripts",
   "outputDirectory": "dist-static",
   "headers": [
     {
