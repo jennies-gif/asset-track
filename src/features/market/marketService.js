@@ -74,7 +74,7 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols, days: 7, trigger })
     });
-    if (!response.ok) throw new Error(`API ${response.status}`);
+    if (!response.ok) throw new Error(marketApiErrorMessage(response.status));
     const payload = await response.json();
     const syncedAt = payload.syncedAt || new Date().toISOString();
     const applied = applyMarketSyncResults(payload.results || [], syncedAt);
@@ -115,7 +115,7 @@ export async function syncBenchmarkMarketPrices() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols, days: 30 })
     });
-    if (!response.ok) throw new Error(`API ${response.status}`);
+    if (!response.ok) throw new Error(marketApiErrorMessage(response.status));
     const payload = await response.json();
     ctx.setMarketSyncState({
       status: payload.summary?.missingCount ? "warning" : "success",
@@ -135,6 +135,13 @@ export async function syncBenchmarkMarketPrices() {
     });
     renderMarketSyncResult();
   }
+}
+
+function marketApiErrorMessage(status) {
+  if (status === 404) {
+    return "行情 API 路由不存在。请确认本地已运行 npm run api:start，或线上已部署并配置 MARKET_API_BASE_URL。";
+  }
+  return `行情 API 返回 ${status}`;
 }
 
 function applyMarketSyncResults(results, syncedAt) {

@@ -72,6 +72,13 @@
 - 部署后必须使用 HTTPS 链接访问，不要长期暴露本地 `npm start` 预览服务。
 - HTTPS 页面不会调用硬编码的本地 HTTP API，避免 mixed content。默认会请求同源 `/api`；如果静态站没有同源 API，“同步价格”和基准同步会显示失败，但不影响手动录入、计算、复盘和导入导出。
 
+推荐线上架构：
+
+- Vercel 只部署静态前端。
+- `apps/api` 独立部署为 HTTPS API 服务。
+- Vercel 环境变量 `MARKET_API_BASE_URL` 指向独立 API 域名，例如 `https://asset-trail-api.onrender.com`。
+- API 环境变量 `API_ALLOWED_ORIGINS` 只允许前端域名调用，例如 `https://your-project.vercel.app`。
+
 Vercel 部署：
 
 - 仓库已配置 `vercel.json`，会执行 `npm run build:static` 并发布 `dist-static`。
@@ -86,6 +93,46 @@ Netlify / Cloudflare Pages 部署：
 - 如平台支持响应头，建议保持与 `vercel.json` 等价的 HTTPS 安全头。
 
 如线上需要接入独立行情 API，请确保 API 也是 HTTPS，并通过部署环境注入或发布前替换 `window.ASSET_TRAIL_CONFIG.marketApiBaseUrl`。不要把 HTTPS 页面指向 `http://127.0.0.1:4180` 或任何明文 HTTP API。
+
+## 独立部署行情 API
+
+长期推荐将 `apps/api` 作为独立 HTTPS 服务部署，并为行情缓存配置持久化磁盘。仓库已提供 `render.yaml`，可在 Render 中用 Blueprint 创建 `asset-trail-api` 服务。
+
+API 部署环境变量：
+
+```text
+API_HOST=0.0.0.0
+API_ALLOWED_ORIGINS=https://your-project.vercel.app
+MARKET_DATA_DIR=/var/data/market-data
+MARKET_DAILY_SYNC_ENABLED=true
+```
+
+Render Blueprint 默认会：
+
+- 执行 `npm ci` 安装依赖。
+- 执行 `npm run api:start` 启动 API。
+- 通过 `/api/health` 做健康检查。
+- 挂载 `/var/data` 作为持久化磁盘，并将行情缓存写入 `/var/data/market-data`。
+
+API 服务部署成功后，确认健康检查：
+
+```text
+https://your-api.example.com/api/health
+```
+
+然后在 Vercel 前端项目配置：
+
+```text
+MARKET_API_BASE_URL=https://your-api.example.com
+```
+
+重新部署前端后，“同步价格”会请求：
+
+```text
+https://your-api.example.com/api/market-data/sync-daily
+```
+
+如果线上仍看到 `行情 API 路由不存在`，通常表示 `MARKET_API_BASE_URL` 没有配置、配置到了静态前端域名，或 API 服务没有部署对应路由。
 
 ## 邮箱注册和登录
 

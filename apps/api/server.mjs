@@ -22,6 +22,8 @@ import {
 } from "../../src/domain/marketData.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
+const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
+const allowedOrigins = parseAllowedOrigins(process.env.API_ALLOWED_ORIGINS);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const marketStorageDir = path.resolve(repoRoot, process.env.MARKET_DATA_DIR || "storage/market-data");
 const dailySyncHour = Number(process.env.MARKET_DAILY_SYNC_HOUR || "22");
@@ -101,6 +103,7 @@ const state = {
 };
 
 const server = http.createServer(async (request, response) => {
+  response.req = request;
   const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
 
   try {
@@ -127,8 +130,9 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Asset Trail API running at http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  const displayHost = host === "0.0.0.0" ? "localhost" : host;
+  console.log(`Asset Trail API running at http://${displayHost}:${port}`);
   scheduleDailyMarketSync();
 });
 
@@ -664,18 +668,14 @@ function sendJson(response, data, status = 200) {
   const payload = JSON.stringify(data, (_, value) => (typeof value === "bigint" ? value.toString() : value));
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+    ...corsHeaders(response.req)
   });
   response.end(payload);
 }
 
 function sendNoContent(response) {
   response.writeHead(204, {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+    ...corsHeaders(response.req)
   });
   response.end();
 }
@@ -704,6 +704,41 @@ function readJson(request) {
     });
     request.on("error", reject);
   });
+}
+
+function parseAllowedOrigins(value) {
+  return String(value || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/u, ""))
+    .filter(Boolean);
+}
+
+function corsHeaders(request) {
+  const origin = String(request?.headers?.origin || "").replace(/\/+$/u, "");
+  const localOrigins = new Set([
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:4174",
+    "http://127.0.0.1:4174",
+    "http://localhost:4175",
+    "http://127.0.0.1:4175",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+  ]);
+  const explicitOrigins = new Set(allowedOrigins);
+  const allowOrigin = explicitOrigins.has("*")
+    ? "*"
+    : explicitOrigins.has(origin) || localOrigins.has(origin)
+      ? origin
+      : allowedOrigins.length
+        ? allowedOrigins[0]
+        : "http://127.0.0.1:4173";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Vary": "Origin"
+  };
 }
 
 async function readJsonArray(file) {

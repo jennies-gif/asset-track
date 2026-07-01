@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: asset-trail-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm run api:start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: MARKET_DATA_DIR
+        value: /var/data/market-data
+      - key: MARKET_DAILY_SYNC_ENABLED
+        value: true
+      - key: API_ALLOWED_ORIGINS
+        sync: false
+    disk:
+      name: market-data
+      mountPath: /var/data
+      sizeGB: 1

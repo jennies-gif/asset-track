@@ -20,9 +20,28 @@ npm run api:start
 http://127.0.0.1:4180
 ```
 
-可用 `API_PORT=4181 npm run api:start` 指定端口。
+可用 `API_PORT=4181 npm run api:start` 指定端口。云服务部署时需要监听所有网卡：
+
+```bash
+API_HOST=0.0.0.0 npm run api:start
+```
 
 服务启动后默认按本机时区每天 `22:00` 自动执行一次行情同步，逻辑与手动调用 `POST /api/market-data/sync-daily` 相同。可用 `MARKET_DAILY_SYNC_HOUR`、`MARKET_DAILY_SYNC_MINUTE` 调整时间，或用 `MARKET_DAILY_SYNC_ENABLED=false` 关闭。
+
+## 线上部署
+
+推荐将 API 独立部署为 HTTPS 服务，并让静态前端通过 `MARKET_API_BASE_URL` 调用。仓库根目录提供 `render.yaml`，可用 Render Blueprint 创建服务。
+
+生产环境建议配置：
+
+```text
+API_HOST=0.0.0.0
+API_ALLOWED_ORIGINS=https://your-project.vercel.app
+MARKET_DATA_DIR=/var/data/market-data
+MARKET_DAILY_SYNC_ENABLED=true
+```
+
+`API_ALLOWED_ORIGINS` 是逗号分隔的前端来源白名单。不要在生产环境长期使用 `*`，除非只是临时公开演示。
 
 ## 已有接口
 

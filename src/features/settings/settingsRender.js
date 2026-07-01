@@ -49,7 +49,7 @@ export function renderAuthState() {
   ctx.elements.authEmail.value = state.session.email || "";
   ctx.elements.authName.value = state.session.name || "";
   ctx.elements.authPassword.value = "";
-  ctx.elements.authLogoutButton.classList.toggle("is-hidden", !state.session.signedIn);
+  if (!state.session.signedIn) ctx.elements.authUserMenu.classList.add("is-hidden");
 }
 
 function applyLanguage() {

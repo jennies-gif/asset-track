@@ -190,12 +190,12 @@ const DATA_UNAVAILABLE = "暂无数据";
 const NOT_SYNCED = "未同步";
 
 function resolveMarketApiBaseUrl() {
-  const configured = globalThis.ASSET_TRAIL_CONFIG?.marketApiBaseUrl;
+  const configured = String(globalThis.ASSET_TRAIL_CONFIG?.marketApiBaseUrl || "").trim();
   const fallback =
     globalThis.location?.protocol === "http:" && /^(localhost|127\.0\.0\.1)$/u.test(globalThis.location?.hostname || "")
       ? `${globalThis.location.protocol}//127.0.0.1:4180`
       : "";
-  const baseUrl = String(configured ?? fallback).trim().replace(/\/+$/u, "");
+  const baseUrl = (configured || fallback).replace(/\/+$/u, "");
   if (!baseUrl) return "";
   try {
     const resolved = new URL(baseUrl, globalThis.location?.origin || "https://asset-trail.local");
