@@ -265,7 +265,9 @@ async function fetchRecentMarketData(request, response) {
     state.auditLogs.push(audit("fetch_recent_market_data", "market_data", fetchResult.run.id, fetchResult));
     return sendJson(response, fetchResult, 202);
   } catch (error) {
-    return sendError(response, 502, "market_data_fetch_failed", error instanceof Error ? error.message : "抓取失败");
+    const message = errorMessage(error, "抓取失败");
+    console.error(`[market-data] fetch_recent failed: ${message}`);
+    return sendError(response, 502, "market_data_fetch_failed", message);
   }
 }
 
@@ -275,7 +277,9 @@ async function syncDailyMarketData(request, response) {
     const result = await runDailyMarketDataSync(body, "manual");
     return sendJson(response, result, 202);
   } catch (error) {
-    return sendError(response, 502, "market_data_sync_failed", error instanceof Error ? error.message : "同步失败");
+    const message = errorMessage(error, "同步失败");
+    console.error(`[market-data] sync_daily failed: ${message}`);
+    return sendError(response, 502, "market_data_sync_failed", message);
   }
 }
 
@@ -305,12 +309,28 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   let fetchResult = null;
 
   if (body.autoFetch !== false) {
-    fetchResult = await fetchRecentMarketDataRun({
-      ...body,
-      symbols: candidates.map((asset) => asset.symbol).filter(Boolean),
-      days: body.days || 7
-    });
-    state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
+    try {
+      fetchResult = await fetchRecentMarketDataRun({
+        ...body,
+        symbols: candidates.map((asset) => asset.symbol).filter(Boolean),
+        days: body.days || 7
+      });
+      state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
+    } catch (error) {
+      const message = errorMessage(error, "抓取失败");
+      fetchResult = {
+        status: "failed",
+        message,
+        run: {
+          id: `run-fetch-failed-${Date.now()}`,
+          status: "failed",
+          failureCount: candidates.length || requestedSymbols.length || 1,
+          messages: [{ level: "error", message }]
+        }
+      };
+      console.error(`[market-data] auto_fetch failed, falling back to cache: ${message}`);
+      state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data_failed", "market_data", fetchResult.run.id, fetchResult));
+    }
   }
 
   for (const asset of candidates) {
@@ -682,6 +702,10 @@ function sendNoContent(response) {
 
 function sendError(response, status, code, message, fieldErrors = {}) {
   return sendJson(response, { code, message, fieldErrors, requestId: `req-${Date.now()}` }, status);
+}
+
+function errorMessage(error, fallback) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function readJson(request) {

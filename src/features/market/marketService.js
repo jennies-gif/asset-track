@@ -74,12 +74,14 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols, days: 7, trigger })
     });
-    if (!response.ok) throw new Error(marketApiErrorMessage(response.status));
+    if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
     const syncedAt = payload.syncedAt || new Date().toISOString();
     const applied = applyMarketSyncResults(payload.results || [], syncedAt);
     const fetchRun = payload.fetch?.run;
-    const fetchStatus = fetchRun?.failureCount
+    const fetchStatus = payload.fetch?.status === "failed"
+      ? `抓取失败，已尝试使用缓存：${payload.fetch.message || "请查看 API 日志"}`
+      : fetchRun?.failureCount
       ? `抓取完成但 ${fetchRun.failureCount} 个源失败`
       : "抓取完成";
     const nextState = {
@@ -115,7 +117,7 @@ export async function syncBenchmarkMarketPrices() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbols, days: 30 })
     });
-    if (!response.ok) throw new Error(marketApiErrorMessage(response.status));
+    if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
     ctx.setMarketSyncState({
       status: payload.summary?.missingCount ? "warning" : "success",
@@ -137,11 +139,22 @@ export async function syncBenchmarkMarketPrices() {
   }
 }
 
-function marketApiErrorMessage(status) {
-  if (status === 404) {
+async function marketApiErrorMessage(response) {
+  const detail = await readErrorPayload(response);
+  if (detail) return detail;
+  if (response.status === 404) {
     return "行情 API 路由不存在。请确认本地已运行 npm run api:start，或线上已部署并配置 MARKET_API_BASE_URL。";
   }
-  return `行情 API 返回 ${status}`;
+  return `行情 API 返回 ${response.status}`;
+}
+
+async function readErrorPayload(response) {
+  try {
+    const payload = await response.clone().json();
+    return payload?.message || payload?.code || "";
+  } catch {
+    return "";
+  }
 }
 
 function applyMarketSyncResults(results, syncedAt) {
