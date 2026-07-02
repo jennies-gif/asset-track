@@ -30,18 +30,21 @@ API_HOST=0.0.0.0 npm run api:start
 
 ## 线上部署
 
-推荐将 API 独立部署为 HTTPS 服务，并让静态前端通过 `MARKET_API_BASE_URL` 调用。仓库根目录提供 `render.yaml`，可用 Render Blueprint 创建服务。
+推荐将 API 独立部署为 HTTPS 服务，并让静态前端通过 `MARKET_API_BASE_URL` 调用。仓库根目录提供 `render.yaml`，可用 Render Blueprint 创建服务。生产环境推荐将 `DATABASE_URL` 指向 Supabase PostgreSQL。
 
 生产环境建议配置：
 
 ```text
 API_HOST=0.0.0.0
 API_ALLOWED_ORIGINS=https://your-project.vercel.app
-MARKET_DATA_DIR=/var/data/market-data
+DATABASE_URL=postgresql://postgres.xxxxxx:PASSWORD@aws-xxx.pooler.supabase.com:6543/postgres
+DATABASE_SSL=true
 MARKET_DAILY_SYNC_ENABLED=true
 ```
 
 `API_ALLOWED_ORIGINS` 是逗号分隔的前端来源白名单。不要在生产环境长期使用 `*`，除非只是临时公开演示。
+
+设置 `DATABASE_URL` 后，行情价格、基金净值、汇率和同步运行记录会写入 Supabase PostgreSQL。没有数据库时会回退到文件缓存；如果使用 Render Free，不要把 `MARKET_DATA_DIR` 指向 `/var/data`，除非已经配置可写的持久化 Disk。
 
 ## 已有接口
 

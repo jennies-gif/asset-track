@@ -20,6 +20,10 @@ import {
   marketUniverses,
   securityWhitelist
 } from "../../src/domain/marketData.js";
+import {
+  isMarketDataDatabaseEnabled,
+  readMarketDataRows
+} from "../../src/server/marketDataDatabase.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
 const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
@@ -210,7 +214,7 @@ async function getMarketHistory(url, response) {
         universe: inferUniverse(asset)
       },
       points: stored,
-      source: "storage/market-data"
+      source: isMarketDataDatabaseEnabled() ? "postgres-market-data" : "storage/market-data"
     });
   }
   if (isBenchmarkSymbol(symbol)) {
@@ -221,7 +225,7 @@ async function getMarketHistory(url, response) {
         universe: inferUniverse(asset)
       },
       points: [],
-      source: "storage/market-data",
+      source: isMarketDataDatabaseEnabled() ? "postgres-market-data" : "storage/market-data",
       warning: "benchmark_history_not_cached"
     });
   }
@@ -575,6 +579,15 @@ function sourceFreshnessRank(source) {
 }
 
 async function readStoredRowsForSymbol(asset, kind) {
+  if (isMarketDataDatabaseEnabled()) {
+    const dbRows = await readMarketDataRows({
+      symbol: asset.symbol,
+      market: asset.market || inferMarket(asset),
+      kind
+    });
+    if (dbRows.length) return dbRows;
+  }
+
   const shardRows = await readJsonArray(snapshotShardPath(asset, kind));
   if (shardRows.length) return shardRows;
 

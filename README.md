@@ -96,23 +96,33 @@ Netlify / Cloudflare Pages 部署：
 
 ## 独立部署行情 API
 
-长期推荐将 `apps/api` 作为独立 HTTPS 服务部署，并为行情缓存配置持久化磁盘。仓库已提供 `render.yaml`，可在 Render 中用 Blueprint 创建 `asset-trail-api` 服务。
+长期推荐将 `apps/api` 作为独立 HTTPS 服务部署，并使用 Supabase PostgreSQL 保存行情缓存和同步记录。仓库已提供 `render.yaml`，可在 Render 中用 Blueprint 创建 `asset-trail-api` 服务；也可以手动创建 Web Service 后按下方环境变量配置。
 
 API 部署环境变量：
 
 ```text
 API_HOST=0.0.0.0
 API_ALLOWED_ORIGINS=https://your-project.vercel.app
-MARKET_DATA_DIR=/var/data/market-data
+DATABASE_URL=postgresql://postgres.xxxxxx:PASSWORD@aws-xxx.pooler.supabase.com:6543/postgres
+DATABASE_SSL=true
 MARKET_DAILY_SYNC_ENABLED=true
 ```
 
 Render Blueprint 默认会：
 
-- 执行 `npm ci` 安装依赖。
+- 执行 `npm install` 安装依赖。
 - 执行 `npm run api:start` 启动 API。
 - 通过 `/api/health` 做健康检查。
-- 挂载 `/var/data` 作为持久化磁盘，并将行情缓存写入 `/var/data/market-data`。
+- 在设置 `DATABASE_URL` 后，将行情价格、基金净值、汇率和同步运行记录写入 Supabase PostgreSQL。
+
+获取 Supabase 数据库连接字符串：
+
+1. 打开 Supabase 项目。
+2. 进入 `Project Settings` -> `Database`。
+3. 找到 `Connection string`。
+4. 选择适合服务端应用的 pooled connection string，复制形如 `postgresql://...pooler.supabase.com:6543/postgres` 的 URI。
+5. 将其中的 `[YOUR-PASSWORD]` 替换为项目数据库密码。
+6. 粘贴到 Render 的 `DATABASE_URL` 环境变量。
 
 API 服务部署成功后，确认健康检查：
 
@@ -133,6 +143,8 @@ https://your-api.example.com/api/market-data/sync-daily
 ```
 
 如果线上仍看到 `行情 API 路由不存在`，通常表示 `MARKET_API_BASE_URL` 没有配置、配置到了静态前端域名，或 API 服务没有部署对应路由。
+
+如暂时没有 `DATABASE_URL`，API 会回退到文件缓存；生产环境不要把 `MARKET_DATA_DIR` 指向不可写的 `/var/data`，除非已经配置 Render Disk。短期临时测试可用 `/tmp/market-data`，但它会随实例重启丢失。
 
 ## 邮箱注册和登录
 

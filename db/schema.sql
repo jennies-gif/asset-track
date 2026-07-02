@@ -227,6 +227,78 @@ create table fx_rate_snapshots (
   check (rate_decimal > 0)
 );
 
+-- Runtime market-data cache used by the standalone API before the full
+-- instrument-backed repository is introduced. Rows keep the normalized payload
+-- used by the current app while preserving decimal-safe typed columns.
+create table market_data_price_snapshots (
+  symbol text not null,
+  name text not null,
+  market text not null,
+  currency char(3) not null,
+  trade_date date not null,
+  close_price_decimal numeric(38, 12) not null,
+  source text not null,
+  source_fetched_at timestamptz not null,
+  quality_status text not null default 'ok',
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (symbol, market, trade_date, source),
+  check (close_price_decimal > 0)
+);
+
+create index market_data_price_symbol_date_idx
+  on market_data_price_snapshots(symbol, market, trade_date desc);
+
+create table market_data_fund_nav_snapshots (
+  symbol text not null,
+  name text not null,
+  market text not null,
+  currency char(3) not null,
+  nav_date date not null,
+  unit_nav_decimal numeric(38, 12) not null,
+  source text not null,
+  source_fetched_at timestamptz not null,
+  quality_status text not null default 'ok',
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (symbol, market, nav_date, source),
+  check (unit_nav_decimal > 0)
+);
+
+create index market_data_nav_symbol_date_idx
+  on market_data_fund_nav_snapshots(symbol, market, nav_date desc);
+
+create table market_data_fx_rate_snapshots (
+  base_currency char(3) not null,
+  quote_currency char(3) not null,
+  rate_date date not null,
+  rate_decimal numeric(38, 12) not null,
+  source text not null,
+  source_fetched_at timestamptz not null,
+  quality_status text not null default 'ok',
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (base_currency, quote_currency, rate_date, source),
+  check (rate_decimal > 0)
+);
+
+create table market_data_runs (
+  id text primary key,
+  command text not null,
+  status text not null,
+  started_at timestamptz not null,
+  finished_at timestamptz,
+  requested_symbols text[] not null default '{}',
+  success_count integer not null default 0,
+  skipped_count integer not null default 0,
+  failure_count integer not null default 0,
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+
 create table valuation_snapshots (
   id uuid primary key,
   user_id uuid not null references users(id) on delete cascade,

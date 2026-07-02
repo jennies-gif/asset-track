@@ -17,6 +17,12 @@ import {
   normalizeMetalsDevLatest,
   preciousMetalInstruments
 } from "../../src/domain/marketDataSources.js";
+import {
+  appendMarketDataRun,
+  isMarketDataDatabaseEnabled,
+  upsertFxRateRows,
+  upsertMarketDataRows
+} from "../../src/server/marketDataDatabase.js";
 
 const execFileAsync = promisify(execFile);
 const storageDir = path.resolve(process.env.MARKET_DATA_DIR || "storage/market-data");
@@ -37,7 +43,7 @@ if (!["backfill", "daily"].includes(command)) {
   process.exit(1);
 }
 
-await fs.mkdir(storageDir, { recursive: true });
+if (!isMarketDataDatabaseEnabled()) await fs.mkdir(storageDir, { recursive: true });
 
 const range = buildRange(command, options);
 const instruments = await selectInstruments(options, range.dateTo);
@@ -71,9 +77,14 @@ for (const instrument of instruments) {
       continue;
     }
 
-    const target = await readSnapshotShard(instrument, result.kind);
-    const changedCount = upsertSnapshots(target, result.rows, result.kind);
-    await writeSnapshotShard(instrument, result.kind, target.sort(compareSnapshot));
+    const changedCount = isMarketDataDatabaseEnabled()
+      ? await upsertMarketDataRows({ instrument, rows: result.rows, kind: result.kind })
+      : upsertSnapshots(await readSnapshotShard(instrument, result.kind), result.rows, result.kind);
+    if (!isMarketDataDatabaseEnabled()) {
+      const target = await readSnapshotShard(instrument, result.kind);
+      upsertSnapshots(target, result.rows, result.kind);
+      await writeSnapshotShard(instrument, result.kind, target.sort(compareSnapshot));
+    }
     run.successCount += changedCount;
     run.messages.push({
       symbol: instrument.symbol,
@@ -95,9 +106,14 @@ for (const instrument of instruments) {
 if (options.fx !== "false") {
   try {
     const result = await fetchFrankfurterFx(run.requestedFxPairs, range);
-    const target = await readJsonArray(fxFile);
-    const changedCount = upsertFxRates(target, result.rows);
-    await writeJson(fxFile, target.sort(compareFxRate));
+    const changedCount = isMarketDataDatabaseEnabled()
+      ? await upsertFxRateRows(result.rows)
+      : upsertFxRates(await readJsonArray(fxFile), result.rows);
+    if (!isMarketDataDatabaseEnabled()) {
+      const target = await readJsonArray(fxFile);
+      upsertFxRates(target, result.rows);
+      await writeJson(fxFile, target.sort(compareFxRate));
+    }
     run.successCount += changedCount;
     run.messages.push({
       symbol: "FX",
@@ -117,7 +133,8 @@ if (options.fx !== "false") {
 run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
 run.finishedAt = new Date().toISOString();
 
-await appendRun(runFile, run);
+if (isMarketDataDatabaseEnabled()) await appendMarketDataRun(run);
+else await appendRun(runFile, run);
 
 console.log(JSON.stringify(run, null, 2));
 
