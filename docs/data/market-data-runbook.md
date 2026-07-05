@@ -2,8 +2,9 @@
 
 ## 当前能力
 
-已实现三个本地脚本：
+已实现四个本地脚本：
 
+- `npm run data:sync-registry`：同步资产名称/代码/市场主库，生成录入搜索使用的 `instrument-registry`。默认要求 A 股、港股和美股各自达到覆盖阈值，避免美股数量掩盖中国市场缺口。
 - `npm run data:sync-universes`：同步沪深 300、恒生科技和纳斯达克 100 成分股全集。
 - `npm run data:backfill`：默认拉取最近三个月数据。
 - `npm run data:daily`：默认拉取当天数据，也可指定日期；同时拉取默认汇率对。
@@ -12,6 +13,8 @@
 
 ```text
 storage/market-data/
+  instrument-registry.json
+  instrument-registry-summary.json
   index-universes.json
   index-constituents.json
   prices/
@@ -24,7 +27,7 @@ storage/market-data/
   market-data-runs.json
 ```
 
-历史兼容：旧版 `price-snapshots.json` 和 `fund-nav-snapshots.json` 仍可被 API 读取，但新脚本默认写入按证券代码分片的小文件。
+`instrument-registry.json` 是资产搜索主库，只保存名称、代码、市场、类型、币种和来源等主数据，不保存用户持仓，也不会触发价格抓取。脚本默认覆盖阈值为 A 股 `5000`、港股 `2000`、美股 `4000`；如果某个市场低于阈值，同步运行会在 `market-data-runs.json` 中标记失败，便于发现源失效或缓存不足。历史兼容：旧版 `price-snapshots.json` 和 `fund-nav-snapshots.json` 仍可被 API 读取，但新脚本默认写入按证券代码分片的小文件。
 
 `storage/` 已加入 `.gitignore`，不会提交真实行情缓存。
 
@@ -39,9 +42,35 @@ storage/market-data/
 - 货币汇率：Frankfurter 参考汇率，默认抓取 `USD/CNY`、`HKD/CNY`、`USD/HKD` 和 `EUR/CNY`。
 - 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产，按 USD/USDT 近似存储价格；CoinGecko 保留为部分稳定币兜底。
 - 美股和美股 ETF：Nasdaq historical 公开接口。
+- 资产主库：A 股/港股尝试使用东方财富市场列表，港股也支持读取 `hkex-list-of-securities.csv` 或 `hkex-list-of-securities.txt` 本地缓存；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/*clist*.json`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源。
 - 沪深 300 成分股：东方财富 datacenter 公开接口。
 - 恒生科技成分股：Goldman Sachs Warrants 公开 AJAX。
 - 纳斯达克 100 成分股：Nasdaq list-type 公开接口。
+
+## 资产主库同步策略
+
+资产主库和价格缓存是两套任务：主库用于录入时匹配名称、代码、市场、类型和币种；价格脚本只对用户录入且需要行情的资产抓取价格。
+
+面向中国用户时，不应为了控制总量而降低美股覆盖，因为美元资产录入仍然常见。当前策略是保留美股普通股票和 ETF，同时用市场级覆盖闸门要求 A 股和港股必须补齐：
+
+```bash
+npm run data:sync-registry
+```
+
+如在本地调试某个单一来源，可临时降低阈值：
+
+```bash
+npm run data:sync-registry -- --sources=cn,us,core --min-cn=100 --min-hk=0
+```
+
+生产或正式发布前不要降低默认阈值；如果 A 股低于 `5000` 或港股低于 `2000`，应补齐缓存或修复源适配器后再生成主库。港股官方清单可先转换为 CSV/制表符文本，放入：
+
+```text
+storage/market-data/hkex-list-of-securities.csv
+storage/market-data/hkex-list-of-securities.txt
+```
+
+脚本会过滤港股窝轮、牛熊证、权证、债券和结构化产品，保留普通股、ETF 和 REIT 等适合资产录入的主流品种。
 
 这些数据源适合 MVP 原型和个人本地使用。上线前仍要确认目标数据源的授权、限频、稳定性和商业使用边界。
 

@@ -14,6 +14,7 @@ import {
   scaledIntToDecimal
 } from "../../src/domain/calculations.js";
 import { buildDataTasks, buildHistorySeries, inferUniverse, lookupSecurity } from "../../src/domain/marketData.js";
+import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
 import {
   cryptoInstruments,
   defaultFxPairs,
@@ -26,6 +27,7 @@ import {
   preciousMetalInstruments
 } from "../../src/domain/marketDataSources.js";
 import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.js";
+import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 
 test("parses decimal values with deterministic rounding", () => {
   assert.equal(parseDecimalToScaledInt("12.345", 2), 1235n);
@@ -227,6 +229,33 @@ test("maps first-version market coverage to data tasks and price series", () => 
   });
   assert.ok(series.length > 40);
   assert.equal(series.at(-1).close, 320);
+});
+
+test("searches the generated instrument registry for mainstream assets", () => {
+  assert.ok(activeInstrumentRegistry().length >= 5000);
+  assert.equal(lookupInstrument("AAPL").market, "US");
+  assert.equal(lookupInstrument("NVDA").type, "股票");
+  assert.equal(lookupInstrument("600519").name, "贵州茅台");
+  assert.equal(searchInstruments("茅台", { limit: 3 })[0].symbol, "600519");
+  assert.equal(searchInstruments("平安", { limit: 3 })[0].symbol, "601318");
+  assert.equal(searchInstruments("招行", { limit: 3 })[0].symbol, "600036");
+  assert.equal(searchInstruments("宁王", { limit: 3 })[0].symbol, "300750");
+  assert.equal(searchInstruments("美光", { limit: 3 })[0].symbol, "MU");
+  assert.equal(searchInstruments("狗狗币", { limit: 3 })[0].symbol, "DOGE");
+  assert.equal(lookupInstrument("腾讯控股").symbol, "00700");
+  assert.equal(searchInstruments("Apple", { limit: 3 })[0].symbol, "AAPL");
+  assert.equal(instrumentMatchStatus("不存在资产XYZ999").status, "uncovered");
+});
+
+test("prioritizes asset entry matches from the instrument registry", () => {
+  const matches = findAssetQuickMatches("NVDA", 5);
+  assert.equal(matches[0].symbol, "NVDA");
+  assert.equal(matches[0].market, "US");
+  assert.equal(findAssetQuickMatches("茅台", 5)[0].symbol, "600519");
+  assert.equal(findAssetQuickMatches("比亚迪", 5)[0].symbol, "002594");
+  assert.equal(findAssetQuickMatches("美光", 5)[0].symbol, "MU");
+  assert.equal(findAssetQuickMatches("狗狗币", 5)[0].symbol, "DOGE");
+  assert.equal(findAssetQuickMatches("不存在资产XYZ999", 5).length, 0);
 });
 
 test("recognizes gold assets without changing gold ETFs into precious metals", () => {

@@ -15,6 +15,7 @@
     "start": "node server.mjs",
     "dev": "npm run dev -w apps/web",
     "api:start": "npm run start -w apps/api",
+    "data:sync-registry": "node scripts/market-data/sync-instrument-registry.mjs",
     "data:sync-universes": "node scripts/market-data/sync-index-universes.mjs",
     "data:migrate-storage": "node scripts/market-data/migrate-market-data-storage.mjs",
     "data:backfill": "node scripts/market-data/fetch-market-data.mjs backfill --months=3",

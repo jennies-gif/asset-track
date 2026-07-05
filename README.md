@@ -244,13 +244,14 @@ MARKET_DAILY_SYNC_ENABLED=false npm run api:start
 拉取首版行情 / 净值数据：
 
 ```bash
+npm run data:sync-registry
 npm run data:sync-universes
 npm run data:migrate-storage
 npm run data:backfill
 npm run data:daily
 ```
 
-当前脚本默认使用公开数据源；股票、ETF、基金、虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比支持沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY`、纳斯达克100指数 `NDX`，前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
+`data:sync-registry` 维护资产名称/代码/市场主库，用于录入搜索和自动补全；它不会抓取价格。该脚本按市场设置覆盖闸门，默认要求 A 股、港股和美股分别达到最小数量，避免单一市场数量过大掩盖中国市场缺口。价格和净值仍只通过后续行情脚本、API 手动同步或用户录入资产触发。当前脚本默认使用公开数据源；股票、ETF、基金、虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比支持沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY`、纳斯达克100指数 `NDX`，前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
 
 汇率缓存读取接口：
 

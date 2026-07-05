@@ -9,6 +9,7 @@ export const cryptoInstruments = [
   { symbol: "BTC", name: "Bitcoin", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "bitcoin", binanceSymbol: "BTCUSDT" },
   { symbol: "ETH", name: "Ethereum", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "ethereum", binanceSymbol: "ETHUSDT" },
   { symbol: "SOL", name: "Solana", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "solana", binanceSymbol: "SOLUSDT" },
+  { symbol: "DOGE", name: "Dogecoin", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "dogecoin", binanceSymbol: "DOGEUSDT", aliases: ["狗狗币", "狗币"] },
   { symbol: "BNB", name: "BNB", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "binancecoin", binanceSymbol: "BNBUSDT" },
   { symbol: "USDT", name: "Tether", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "tether", binanceSymbol: "" },
   { symbol: "USDC", name: "USD Coin", type: "数字资产", universe: "crypto", market: "WEB3", currency: "USD", coinGeckoId: "usd-coin", binanceSymbol: "USDCUSDT" }

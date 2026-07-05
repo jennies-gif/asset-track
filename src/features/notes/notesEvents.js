@@ -54,17 +54,6 @@ export function initNotesEvents(context) {
     if (!elements.noteAssetSelect.value) context.clearNoteTransactionLink({ keepAsset: true });
   });
   elements.noteTransactionSelect.addEventListener("change", context.applySelectedNoteTransaction);
-  elements.noteSuggestedTransactions?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-suggested-transaction]");
-    if (!button) return;
-    const change = context.buildRecentNoteTransactionSuggestions()
-      .find((item) => context.noteTransactionLabel(item) === button.dataset.suggestedTransaction);
-    if (!change) return;
-    context.setNoteAssetLink(change.asset.id);
-    context.setNoteTransactionLink(context.noteTransactionLabel(change));
-    const template = context.reviewTemplateForChange(change);
-    if (template !== "hold") context.applyNoteTemplate(template);
-  });
 
   elements.closeReviewLater.addEventListener("click", context.hideCloseReviewPrompt);
   elements.closeReviewModal.addEventListener("click", (event) => {

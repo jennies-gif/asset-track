@@ -122,7 +122,6 @@ export function showNoteEditor(note = null) {
   elements.noteCustomTagField.classList.add("is-hidden");
   populateNoteAssetOptions();
   populateNoteTransactionOptions();
-  renderSuggestedNoteTransactions();
   clearNoteTransactionLink();
   setNoteTemplateSelection("blank");
   delete elements.noteForm.dataset.editingId;
@@ -179,26 +178,6 @@ export function updateNoteCounters() {
   const content = elements.noteForm.elements.content?.value || "";
   elements.noteTitleCount.textContent = `${title.length}/80`;
   elements.noteContentCount.textContent = `${content.length}/5000`;
-}
-
-export function buildRecentNoteTransactionSuggestions() {
-  const changes = ctx.buildAssetChangeRecords();
-  const demoSuggestions = [
-    createSuggestedChange("BTC", "比特币现货", "卖出", "0.1", "2026-06-02"),
-    createSuggestedChange("00700", "腾讯控股", "买入", "100", "2026-06-01"),
-    createSuggestedChange("SPY", "SPY", "清仓", "", "2026-05-31")
-  ];
-  const combined = [...demoSuggestions, ...changes];
-  const seen = new Set();
-  return combined
-    .filter((change) => {
-      const key = `${change.date}:${change.action}:${change.asset.name}:${change.quantity}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")))
-    .slice(0, 5);
 }
 
 export function noteTransactionLabel(change) {
@@ -418,54 +397,4 @@ function populateNoteTransactionOptions() {
         .map((change) => `<option value="${escapeHtml(noteTransactionLabel(change))}" data-asset-id="${escapeHtml(change.asset.id)}">${escapeHtml(noteTransactionLabel(change))}</option>`)
         .join("")}`
     : `<option value="">暂无可关联交易</option>`;
-}
-
-function renderSuggestedNoteTransactions() {
-  const elements = ctx.elements;
-  if (!elements.noteSuggestedTransactions) return;
-  const suggestions = buildRecentNoteTransactionSuggestions();
-  elements.noteSuggestedTransactions.innerHTML = suggestions.length
-    ? `
-      <strong>最近交易推荐</strong>
-      <div>
-        ${suggestions.map((change) => `
-          <button data-suggested-transaction="${escapeHtml(noteTransactionLabel(change))}" type="button">
-            ${escapeHtml(shortNoteTransactionLabel(change))}
-          </button>
-        `).join("")}
-      </div>
-    `
-    : "";
-}
-
-function createSuggestedChange(symbol, name, action, quantity, date) {
-  const state = ctx.getState();
-  const asset = state.assets.find((item) =>
-    item.symbol === symbol ||
-    item.name === name ||
-    (symbol === "BTC" && String(item.symbol || "").toUpperCase() === "BTC")
-  ) || {
-    id: "",
-    symbol,
-    name,
-    account: "",
-    currency: state.settings?.currency || "CNY"
-  };
-  return {
-    id: `suggested:${symbol}:${date}:${action}`,
-    asset,
-    action,
-    date,
-    quantity,
-    changePrice: "",
-    currentPrice: "",
-    valueCents: 0n,
-    fees: "0"
-  };
-}
-
-function shortNoteTransactionLabel(change) {
-  const quantity = change.quantity ? ` ${change.quantity}` : "";
-  const displayName = change.asset.name === "腾讯控股" ? "腾讯控股" : (change.asset.symbol || change.asset.name);
-  return `${displayName} ${change.action}${quantity}｜${change.date || "-"}`;
 }

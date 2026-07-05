@@ -1,4 +1,4 @@
-import { lookupSecurity, securityWhitelist } from "../../domain/marketData.js";
+import { activeInstrumentRegistry, lookupInstrument, normalizeInstrumentSearchText, searchInstruments } from "../../domain/instrumentRegistry.js";
 
 export const manualAssetMatches = [
   { symbol: "CASH-CNY", name: "现金备用金", type: "现金", currency: "CNY", market: "CASH", aliases: ["现金", "CASH", "备用金"] },
@@ -11,22 +11,40 @@ export const manualAssetMatches = [
 export function findAssetQuickMatch(query) {
   const normalized = normalizeQuickMatchText(query);
   if (!normalized) return null;
-  const symbolMatch = lookupSecurity(query);
+  const symbolMatch = lookupInstrument(query);
   if (symbolMatch) return symbolMatch;
   const manualMatch = manualAssetMatches.find((item) => {
     const fields = [item.symbol, item.name, ...(item.aliases || [])].map(normalizeQuickMatchText);
     return fields.some((field) => field && (field === normalized || field.includes(normalized) || normalized.includes(field)));
   });
   if (manualMatch) return manualMatch;
-  return securityWhitelist.find((item) => {
-    const name = normalizeQuickMatchText(item.name);
-    const symbol = normalizeQuickMatchText(item.symbol);
-    return name.includes(normalized) || symbol.includes(normalized);
-  }) || null;
+  return searchInstruments(query, { limit: 1 })[0] || null;
+}
+
+export function findAssetQuickMatches(query, limit = 5) {
+  const normalized = normalizeQuickMatchText(query);
+  if (!normalized) return [];
+  const registryMatches = searchInstruments(query, { limit });
+  const manualMatches = manualAssetMatches.filter((item) => {
+    const fields = [item.symbol, item.name, ...(item.aliases || [])].map(normalizeQuickMatchText);
+    return fields.some((field) => field && (field === normalized || field.includes(normalized) || normalized.includes(field)));
+  });
+  const merged = [...manualMatches, ...registryMatches];
+  const seen = new Set();
+  return merged.filter((item) => {
+    const key = `${item.market || ""}:${item.symbol || ""}:${item.name || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
+}
+
+export function assetQuickMatchOptions() {
+  return [...activeInstrumentRegistry().slice(0, 300), ...manualAssetMatches];
 }
 
 export function normalizeQuickMatchText(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  return normalizeInstrumentSearchText(value);
 }
 
 export function isManualCashMatch(match) {

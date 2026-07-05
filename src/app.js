@@ -123,7 +123,6 @@ import { initFeedbackEvents } from "./features/feedback/feedbackEvents.js";
 import {
   applyNoteTemplate,
   applySelectedNoteTransaction,
-  buildRecentNoteTransactionSuggestions,
   clearNoteTransactionLink,
   commitCustomNoteTag,
   configureNotesEditor,
@@ -479,7 +478,6 @@ initNotesEvents({
   commitCustomNoteTag,
   clearNoteTransactionLink,
   applySelectedNoteTransaction,
-  buildRecentNoteTransactionSuggestions,
   noteTransactionLabel,
   setNoteAssetLink,
   setNoteTransactionLink,

@@ -7,11 +7,13 @@ import {
   editAsset,
   handleAccountTypeChange,
   requestHideAssetFormPanel,
+  selectAssetMatchByIndex,
   startCloseAsset,
   startQuickAsset,
   startSellAsset,
   submitAssetForm,
   syncAdjustmentMode,
+  updateAssetMatchPanel,
   updateAssetLiveSummary,
   updateTransactionLiveSummary
 } from "./assetForm.js";
@@ -40,11 +42,22 @@ export function initAssetEvents(ctx) {
   });
   elements.assetForm.elements.name?.addEventListener("change", () => {
     applyAssetQuickMatch();
+    updateAssetMatchPanel();
     updateAssetLiveSummary();
   });
+  elements.assetForm.elements.name?.addEventListener("input", updateAssetMatchPanel);
   elements.assetForm.elements.symbol?.addEventListener("change", () => {
     applyAssetQuickMatch();
+    updateAssetMatchPanel();
     updateAssetLiveSummary();
+  });
+  elements.assetForm.elements.symbol?.addEventListener("input", updateAssetMatchPanel);
+  elements.assetMatchPanel?.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest("[data-asset-match-index]");
+    if (!button) return;
+    event.preventDefault();
+    button.classList.add("is-confirming");
+    selectAssetMatchByIndex(button.dataset.assetMatchIndex, { delayHide: true });
   });
   elements.assetForm.elements.type?.addEventListener("change", () => {
     applyCashAssetFormMode();

@@ -1,16 +1,17 @@
 import { calculateBuyPreview, calculateMoneyFromQuantity, calculateSellPreview, formatPercent, normalizeAsset, roundDivide, validateAsset } from "../../domain/calculations.js";
-import { securityWhitelist } from "../../domain/marketData.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { todayIsoDate } from "../../utils/date.js";
 import { formatDisplayCurrency, formatSignedAmountOnly } from "../../ui/formatters.js";
 import { accountNamePresets, accountTypeLabel, inferAccountType, normalizeAccountTypeFormValue } from "./accountOptions.js";
-import { findAssetQuickMatch, isManualCashMatch, manualAssetMatches, normalizeQuickMatchText } from "./assetQuickMatch.js";
+import { assetQuickMatchOptions, findAssetQuickMatch, findAssetQuickMatches, isManualCashMatch, normalizeQuickMatchText } from "./assetQuickMatch.js";
 import { inferAssetMarket, marketLabel } from "./marketOptions.js";
 import { buildAssetFormPayload, defaultAssetFxRate } from "./assetFormPayload.js";
 import { buildAddAssetUpdate, buildSellAssetUpdate } from "./assetTransactions.js";
 import { clearAssetFieldErrors, humanizeAssetError, setTransactionFieldError, validateAssetFormByMode } from "./assetValidation.js";
 
 let ctx = {};
+let assetMatchCandidates = [];
+let suppressNextMatchPanel = false;
 
 export function configureAssetForm(context) {
   ctx = context;
@@ -22,6 +23,7 @@ export function startQuickAsset() {
   syncAccountPickerToName("");
   setDefaultAssetFormValues();
   applyCashAssetFormMode();
+  updateAssetMatchPanel();
   updateAssetLiveSummary();
   ctx.elements.assetError.textContent = "";
   showAssetFormPanel("添加资产", "先建立资产档案；买入、卖出和清仓请从已有持仓的“记录交易”进入。");
@@ -96,6 +98,7 @@ export function submitAssetForm() {
   resetAssetFormMode("create");
   setDefaultAssetFormValues();
   applyCashAssetFormMode();
+  updateAssetMatchPanel();
   updateAssetLiveSummary();
   ctx.elements.assetError.textContent = "";
   hideAssetFormPanel();
@@ -118,6 +121,9 @@ export function setDefaultAssetFormValues() {
   if (ctx.elements.assetForm.elements.transactionType) ctx.elements.assetForm.elements.transactionType.value = "买入";
   if (ctx.elements.assetForm.elements.priceSource) ctx.elements.assetForm.elements.priceSource.value = "";
   if (ctx.elements.assetForm.elements.priceStatus) ctx.elements.assetForm.elements.priceStatus.value = "";
+  if (ctx.elements.assetForm.elements.assetRegistryId) ctx.elements.assetForm.elements.assetRegistryId.value = "";
+  if (ctx.elements.assetForm.elements.assetMatchStatus) ctx.elements.assetForm.elements.assetMatchStatus.value = "unmatched";
+  if (ctx.elements.assetForm.elements.marketDataSupported) ctx.elements.assetForm.elements.marketDataSupported.value = "false";
   if (ctx.elements.assetForm.elements.purchaseDate) ctx.elements.assetForm.elements.purchaseDate.value = todayIsoDate();
 }
 
@@ -215,7 +221,7 @@ export function updateTransactionLiveSummary() {
 export function renderAssetQuickMatchOptions() {
   const datalist = document.querySelector("#asset-quick-match-options");
   if (!datalist) return;
-  datalist.innerHTML = [...securityWhitelist, ...manualAssetMatches]
+  datalist.innerHTML = assetQuickMatchOptions()
     .map((item) => {
       const label = [item.name, item.symbol, marketLabel(item.market), item.type, item.currency].filter(Boolean).join(" · ");
       return `<option value="${escapeHtml(item.symbol)}">${escapeHtml(label)}</option><option value="${escapeHtml(item.name)}">${escapeHtml(label)}</option>`;
@@ -223,15 +229,76 @@ export function renderAssetQuickMatchOptions() {
     .join("");
 }
 
+export function updateAssetMatchPanel() {
+  const panel = ctx.elements.assetMatchPanel;
+  const form = ctx.elements.assetForm;
+  if (!panel || !form || isTransactionMode()) return;
+  if (suppressNextMatchPanel) {
+    suppressNextMatchPanel = false;
+    hideAssetMatchPanel();
+    return;
+  }
+  const query = assetSearchQuery();
+  moveAssetMatchPanelToActiveField();
+  assetMatchCandidates = query ? findAssetQuickMatches(query, 5) : [];
+  if (!query) {
+    panel.classList.add("is-hidden");
+    panel.innerHTML = "";
+    setAssetMatchHiddenFields(null, "unmatched");
+    return;
+  }
+  if (!assetMatchCandidates.length) {
+    setAssetMatchHiddenFields(null, "uncovered");
+    panel.classList.remove("is-hidden");
+    panel.innerHTML = `
+      <div class="asset-match-empty">
+        <strong>未搜到对应资产</strong>
+        <span>保存后将作为手动管理资产，价格、来源和估值需要自行维护。</span>
+      </div>
+    `;
+    return;
+  }
+  const exact = assetMatchCandidates.find((item) => isExactAssetMatch(item, query));
+  setAssetMatchHiddenFields(exact || null, exact ? "matched" : "possible");
+  panel.classList.remove("is-hidden");
+  panel.innerHTML = `
+    <div class="asset-match-title">
+      <strong>已匹配资产</strong>
+    </div>
+    <div class="asset-match-list">
+      ${assetMatchCandidates.map((item, index) => renderAssetMatchOption(item, index, exact?.id === item.id)).join("")}
+    </div>
+  `;
+}
+
 export function applyAssetQuickMatch() {
   const form = ctx.elements.assetForm;
   const query = String(form.elements.symbol?.value || form.elements.name?.value || "").trim();
   const match = findAssetQuickMatch(query);
-  if (!match) return;
+  if (!match) {
+    setAssetMatchHiddenFields(null, query ? "uncovered" : "unmatched");
+    updateAssetMatchPanel();
+    return;
+  }
+  selectAssetMatch(match, query);
+}
 
+export function selectAssetMatchByIndex(index, options = {}) {
+  const match = assetMatchCandidates[Number(index)];
+  if (!match) return;
+  selectAssetMatch(match, assetSearchQuery(), { forceName: true });
+  suppressNextMatchPanel = true;
+  if (options.delayHide) setTimeout(hideAssetMatchPanel, 120);
+  else hideAssetMatchPanel();
+  updateAssetLiveSummary();
+}
+
+function selectAssetMatch(match, query, options = {}) {
+  const form = ctx.elements.assetForm;
   if (form.elements.name && (!form.elements.name.value.trim() || normalizeQuickMatchText(form.elements.name.value) === normalizeQuickMatchText(query))) {
     form.elements.name.value = match.name;
   }
+  if (options.forceName && form.elements.name) form.elements.name.value = match.name;
   if (form.elements.symbol && !isManualCashMatch(match)) form.elements.symbol.value = match.symbol;
   if (form.elements.symbol && isManualCashMatch(match)) form.elements.symbol.value = "";
   if (form.elements.type) form.elements.type.value = match.type;
@@ -247,7 +314,56 @@ export function applyAssetQuickMatch() {
       form.elements.previousFxRate.value = nextRate;
     }
   }
+  setAssetMatchHiddenFields(match, "matched");
   applyCashAssetFormMode();
+}
+
+function assetSearchQuery() {
+  const form = ctx.elements.assetForm;
+  const active = document.activeElement;
+  if (active === form.elements.symbol) return String(form.elements.symbol?.value || "").trim();
+  if (active === form.elements.name) return String(form.elements.name?.value || "").trim();
+  return String(form.elements.name?.value || form.elements.symbol?.value || "").trim();
+}
+
+function moveAssetMatchPanelToActiveField() {
+  const panel = ctx.elements.assetMatchPanel;
+  const form = ctx.elements.assetForm;
+  const target = document.activeElement === form.elements.symbol ? ctx.elements.assetSymbolField : ctx.elements.assetNameField;
+  if (panel && target && panel.parentElement !== target) target.append(panel);
+}
+
+function hideAssetMatchPanel() {
+  if (!ctx.elements.assetMatchPanel) return;
+  ctx.elements.assetMatchPanel.classList.add("is-hidden");
+  ctx.elements.assetMatchPanel.innerHTML = "";
+  assetMatchCandidates = [];
+}
+
+function setAssetMatchHiddenFields(match, status) {
+  const form = ctx.elements.assetForm;
+  if (form.elements.assetRegistryId) form.elements.assetRegistryId.value = match?.id || "";
+  if (form.elements.assetMatchStatus) form.elements.assetMatchStatus.value = status;
+  if (form.elements.marketDataSupported) form.elements.marketDataSupported.value = String(Boolean(match?.marketDataSupported));
+}
+
+function isExactAssetMatch(item, query) {
+  const normalized = normalizeQuickMatchText(query);
+  return [item.symbol, item.name, ...(item.aliases || [])].some((value) => normalizeQuickMatchText(value) === normalized);
+}
+
+function renderAssetMatchOption(item, index, selected) {
+  const meta = [item.symbol, marketLabel(item.market), item.type, item.currency].filter(Boolean).join(" · ");
+  const supportLabel = item.marketDataSupported ? "支持行情" : "手动价格";
+  return `
+    <button class="asset-match-option ${selected ? "is-selected" : ""}" type="button" data-asset-match-index="${index}">
+      <span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <small>${escapeHtml(meta)}</small>
+      </span>
+      <em>${escapeHtml(supportLabel)}</em>
+    </button>
+  `;
 }
 
 export function applyCashAssetFormMode() {
@@ -458,8 +574,9 @@ export function hideAssetFormPanel() {
 function isAssetFormDirty() {
   if (ctx.elements.assetFormSection?.classList.contains("is-hidden")) return false;
   const form = Object.fromEntries(new FormData(ctx.elements.assetForm));
-  const ignoredValues = new Set(["0", "1", "买入", "brokerage"]);
+  const ignoredValues = new Set(["0", "1", "买入", "brokerage", "unmatched", "false"]);
   return Object.entries(form).some(([key, value]) => {
+    if (["assetRegistryId", "assetMatchStatus", "marketDataSupported"].includes(key)) return !ignoredValues.has(String(value || "").trim());
     if (["adjustmentType", "fxRate", "previousFxRate", "contribution", "dividends", "interest", "fees", "taxes", "manualAdjustment", "transactionType", "accountType"].includes(key)) {
       return !ignoredValues.has(String(value || "").trim());
     }
@@ -493,6 +610,9 @@ function fillAssetForm(asset) {
     "manualAdjustment",
     "purchaseDate",
     "transactionType",
+    "assetRegistryId",
+    "assetMatchStatus",
+    "marketDataSupported",
     "priceSource",
     "pricedAt",
     "priceStatus",
@@ -507,6 +627,7 @@ function fillAssetForm(asset) {
   }
   setAccountTypeControl(asset.accountType || inferAccountType(asset));
   applyCashAssetFormMode();
+  updateAssetMatchPanel();
 }
 
 export function resetAssetFormMode(mode = "create") {
@@ -519,6 +640,11 @@ export function resetAssetFormMode(mode = "create") {
   ctx.elements.transactionLiveSummary?.classList.add("is-hidden");
   if (ctx.elements.closeConfirmNote) ctx.elements.closeConfirmNote.classList.add("is-hidden");
   if (ctx.elements.accountPicker) ctx.elements.accountPicker.value = "";
+  if (ctx.elements.assetMatchPanel) {
+    ctx.elements.assetMatchPanel.classList.add("is-hidden");
+    ctx.elements.assetMatchPanel.innerHTML = "";
+  }
+  assetMatchCandidates = [];
   if (ctx.elements.assetForm.elements.accountTypeCustom) ctx.elements.assetForm.elements.accountTypeCustom.value = "";
   updateCustomAccountTypeVisibility();
   applyCashAssetFormMode();

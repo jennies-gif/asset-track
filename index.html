@@ -139,6 +139,30 @@
         <section class="home-section home-data-status-section" aria-label="数据状态">
           <div class="home-data-status" id="home-data-status"></div>
         </section>
+        <section class="home-section home-dashboard-section analysis-trend-section" aria-labelledby="home-trend-title">
+          <div class="analysis-card-heading">
+            <div>
+              <h2 id="home-trend-title">总资产趋势</h2>
+              <p class="section-description">按总览当前账户范围展示资产变化，曲线基于可追踪价格和估值数据生成。</p>
+            </div>
+            <form class="date-range" aria-label="总资产趋势日期范围">
+              <label class="is-hidden">图表指标 <select id="trend-metric"><option value="value">总资产</option><option value="return">收益率</option></select></label>
+              <label class="is-hidden">时间范围 <select id="trend-range"><option value="day">1日</option><option value="1">1月</option><option value="3">近3月</option><option value="ytd">今年</option><option value="12" selected>近一年</option><option value="custom">自定义</option></select></label>
+              <div class="range-pills" aria-label="趋势时间范围">
+                <button class="range-pill" data-range-value="day" type="button">1日</button>
+                <button class="range-pill" data-range-value="1" type="button">1月</button>
+                <button class="range-pill" data-range-value="3" type="button">近3月</button>
+                <button class="range-pill" data-range-value="ytd" type="button">今年</button>
+                <button class="range-pill" data-range-value="custom" type="button">自定义</button>
+              </div>
+              <label class="custom-date">开始日期 <input id="trend-start" type="date"></label>
+              <label class="custom-date">结束日期 <input id="trend-end" type="date"></label>
+            </form>
+          </div>
+          <div class="trend-chart" id="trend-chart"></div>
+          <div class="benchmark-table-wrap"><table class="benchmark-table"><tbody id="benchmark-rows"></tbody></table></div>
+          <p class="empty-state benchmark-empty-state is-hidden" id="benchmark-empty">暂无基准数据。</p>
+        </section>
         <section class="home-section allocation-section home-dashboard-section" aria-labelledby="allocation-title">
           <div class="panel-heading">
             <div>
@@ -233,7 +257,7 @@
             <div><h2 id="asset-form-title">添加资产</h2><p class="section-description" id="asset-form-subtitle">先建立资产档案；买入、卖出和清仓请从已有持仓的“记录交易”进入。</p></div>
             <button class="secondary-button compact-button" id="close-asset-form" type="button">关闭</button>
           </div>
-          <form class="asset-form" id="asset-form" data-mode="create">
+          <form class="asset-form" id="asset-form" data-mode="create" autocomplete="off">
             <fieldset class="form-section adjustment-summary-section">
               <legend>交易资产</legend>
               <div class="asset-adjustment-summary" id="asset-adjustment-summary"></div>
@@ -256,11 +280,16 @@
             <fieldset class="form-section quick-entry-section">
               <legend>必要信息</legend>
               <div class="form-section-grid">
-                <label>资产名称 <input name="name" required list="asset-quick-match-options" placeholder="输入代码或名称"><datalist id="asset-quick-match-options"></datalist></label>
-                <label>代码 <input name="symbol" list="security-code-options"><datalist id="security-code-options"></datalist></label>
+                <div class="asset-name-field">
+                  <label>资产名称 <input name="name" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入代码或名称"></label>
+                  <div class="asset-match-panel is-hidden" id="asset-match-panel" aria-live="polite"></div>
+                </div>
+                <div class="asset-symbol-field">
+                  <label>代码 <input name="symbol" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+                </div>
                 <label>资产类型
                   <select name="type">
-                    <option>股票</option><option>ETF</option><option>基金</option><option>现金</option><option>数字资产</option><option>贵金属</option><option>实物资产</option><option>其他</option>
+                    <option>股票</option><option>ETF</option><option>REIT</option><option>基金</option><option>现金</option><option>数字资产</option><option>贵金属</option><option>实物资产</option><option>其他</option>
                   </select>
                 </label>
                 <label class="advanced-field">市场 <input name="market" placeholder="US / CN / HK / CASH"></label>
@@ -281,6 +310,9 @@
                 <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
                 <label class="advanced-field">当前汇率到 USD <input name="fxRate" inputmode="decimal" value="1"></label>
               </div>
+              <input name="assetRegistryId" type="hidden">
+              <input name="assetMatchStatus" type="hidden" value="unmatched">
+              <input name="marketDataSupported" type="hidden" value="false">
               <p class="form-help" data-price-fallback>不填当前价格时，将暂按成本价估值。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>
@@ -362,27 +394,6 @@
         </section>
         <div class="analysis-grid analysis-focus-grid">
           <section class="analysis-card analysis-card-wide"><h3>关键指标</h3><div class="analysis-health-list" id="analysis-health-list"></div></section>
-          <section class="analysis-card analysis-card-wide analysis-trend-section">
-            <div class="analysis-card-heading">
-              <h3>总资产趋势</h3>
-              <form class="date-range" aria-label="总资产趋势日期范围">
-                <label class="is-hidden">图表指标 <select id="trend-metric"><option value="value">总资产</option><option value="return">收益率</option></select></label>
-                <label class="is-hidden">时间范围 <select id="trend-range"><option value="day">1日</option><option value="1">1月</option><option value="3">近3月</option><option value="ytd">今年</option><option value="12" selected>近一年</option><option value="custom">自定义</option></select></label>
-                <div class="range-pills" aria-label="趋势时间范围">
-                  <button class="range-pill" data-range-value="day" type="button">1日</button>
-                  <button class="range-pill" data-range-value="1" type="button">1月</button>
-                  <button class="range-pill" data-range-value="3" type="button">近3月</button>
-                  <button class="range-pill" data-range-value="ytd" type="button">今年</button>
-                  <button class="range-pill" data-range-value="custom" type="button">自定义</button>
-                </div>
-                <label class="custom-date">开始日期 <input id="trend-start" type="date"></label>
-                <label class="custom-date">结束日期 <input id="trend-end" type="date"></label>
-              </form>
-            </div>
-            <div class="trend-chart" id="trend-chart"></div>
-            <div class="benchmark-table-wrap"><table class="benchmark-table"><tbody id="benchmark-rows"></tbody></table></div>
-            <p class="empty-state benchmark-empty-state is-hidden" id="benchmark-empty">暂无基准数据。</p>
-          </section>
           <section class="analysis-card analysis-card-wide" data-analysis-requires-assets>
             <div class="analysis-card-heading"><h3>收益表现对比</h3><div class="analysis-toggle" role="tablist" aria-label="收益表现口径"><button class="is-active" data-analysis-return-metric="mwr" type="button">MWR</button><button data-analysis-return-metric="twr" type="button">TWR</button><button data-analysis-return-metric="sr" type="button">SR</button></div></div>
             <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
@@ -425,7 +436,7 @@
               <fieldset class="note-template-field"><legend>模板</legend><input name="template" type="hidden" value="blank"><div class="note-template-cards" id="note-template-cards"><button class="note-template-card" data-note-template="hold" type="button">持有观察</button><button class="note-template-card" data-note-template="buy" type="button">买入复盘</button><button class="note-template-card" data-note-template="close" type="button">卖出/清仓复盘</button><button class="note-template-card is-selected" data-note-template="blank" type="button">空白复盘</button></div></fieldset>
               <fieldset class="note-tag-field"><legend>标签</legend><div class="note-tag-options"><label><input type="checkbox" name="tags" value="交易复盘"><span># 交易复盘</span></label><label><input type="checkbox" name="tags" value="持有观察"><span># 持有观察</span></label><label><input type="checkbox" name="tags" value="原则"><span># 原则</span></label><label><input type="checkbox" name="tags" value="理财学习"><span># 复盘学习</span></label><label><input type="checkbox" name="tags" value="交易心理"><span># 交易心理</span></label><button class="note-new-tag-button" id="note-new-tag-button" type="button">＋ 新建标签</button><label class="note-custom-tag is-hidden" id="note-custom-tag-field"><input name="customTag" maxlength="12" placeholder="输入标签名"></label></div></fieldset>
               <label class="note-content-field"><strong>正文</strong><span class="note-textarea-shell"><textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结..."></textarea><small id="note-content-count">0/5000</small></span></label>
-              <section class="note-link-card"><strong>关联资产与交易</strong><p>先关联资产，也可以进一步选择一笔交易，方便后续回顾。</p><label class="note-asset-link-field">关联资产 <select name="assetId" id="note-asset-select"></select></label><input name="asset" type="hidden"><label class="note-asset-link-field">关联交易 <select id="note-transaction-select" aria-label="选择关联资产变动"></select></label><input name="format" type="hidden" value="plain"><input name="status" type="hidden" value="published"><div class="note-suggested-transactions" id="note-suggested-transactions"></div></section>
+              <section class="note-link-card"><strong>关联资产与交易</strong><label class="note-asset-link-field">关联资产 <select name="assetId" id="note-asset-select"></select></label><input name="asset" type="hidden"><label class="note-asset-link-field">关联交易 <select id="note-transaction-select" aria-label="选择关联资产变动"></select></label><input name="format" type="hidden" value="plain"><input name="status" type="hidden" value="published"></section>
             </section>
             <div class="note-editor-actions"><button class="secondary-button note-draft-button" id="note-save-draft" type="button">保存草稿</button><button class="primary-button note-save-button" type="submit">保存</button></div>
           </form>

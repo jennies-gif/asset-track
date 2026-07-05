@@ -24,7 +24,6 @@ export function getNotesElements() {
     noteCustomTagField: document.querySelector("#note-custom-tag-field"),
     noteAssetSelect: document.querySelector("#note-asset-select"),
     noteTransactionSelect: document.querySelector("#note-transaction-select"),
-    noteSuggestedTransactions: document.querySelector("#note-suggested-transactions"),
     notesList: document.querySelector("#notes-list"),
     closeReviewModal: document.querySelector("#close-review-modal"),
     closeReviewMessage: document.querySelector("#close-review-message"),
