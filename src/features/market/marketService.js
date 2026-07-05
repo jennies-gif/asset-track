@@ -1,4 +1,3 @@
-import { benchmarkInstruments } from "../../domain/marketData.js";
 import { todayIsoDate } from "../../utils/date.js";
 import { findAssetQuickMatch, normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
 import { inferAssetMarket } from "../assets/marketOptions.js";
@@ -31,7 +30,7 @@ export async function syncDailyMarketPricesIfDue() {
   const autoSync = readAutoSyncState();
   if (autoSync.lastCompletedDate === today || autoSync.lastAttemptedDate === today) return;
 
-  const symbols = symbolsForOpenAssets();
+  const symbols = symbolsForMarketSync();
   if (!symbols.length) return;
 
   writeAutoSyncState({ ...autoSync, lastAttemptedDate: today, lastAttemptedAt: new Date().toISOString() });
@@ -60,9 +59,9 @@ export async function syncDailyMarketPricesIfDue() {
 }
 
 async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
-  const symbols = symbolsForOpenAssets();
+  const symbols = symbolsForMarketSync();
   if (!symbols.length) {
-    ctx.setMarketSyncState({ status: "empty", message: "当前记录没有可同步代码。请先为股票、基金、ETF、贵金属或数字资产填写代码。", results: [], syncedAt: "" });
+    ctx.setMarketSyncState({ status: "empty", message: "当前没有可同步代码。请先填写资产代码，或在分析页选择收益对比基准。", results: [], syncedAt: "" });
     renderMarketSyncResult();
     return;
   }
@@ -85,15 +84,17 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
       ? `抓取完成但 ${fetchRun.failureCount} 个源失败`
       : "抓取完成";
     const nextState = {
-      status: applied.appliedCount ? "success" : "warning",
-      message: `${fetchStatus}，更新 ${applied.appliedCount} 个资产，${applied.missingCount} 个缺少缓存。`,
+      status: applied.appliedCount || applied.benchmarkSyncedCount ? "success" : "warning",
+      message: `${fetchStatus}，更新 ${applied.appliedCount} 个资产、${applied.benchmarkSyncedCount} 个分析基准，${applied.missingCount} 个缺少缓存。`,
       results: payload.results || [],
       syncedAt
     };
     ctx.setMarketSyncState(nextState);
     ctx.persistAndRender();
+    ctx.loadBenchmarkPerformance?.({ force: true });
     onSettled?.(nextState);
   } catch (error) {
+    markOpenAssetsPriceError(symbols, error instanceof Error ? error.message : "无法连接行情 API");
     const nextState = {
       status: "error",
       message: `同步失败：${error instanceof Error ? error.message : "无法连接行情 API"}`,
@@ -101,40 +102,9 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
       syncedAt: ""
     };
     ctx.setMarketSyncState(nextState);
+    ctx.persistAndRender?.();
     onSettled?.(nextState);
   } finally {
-    renderMarketSyncResult();
-  }
-}
-
-export async function syncBenchmarkMarketPrices() {
-  const symbols = benchmarkInstruments.map((benchmark) => benchmark.symbol);
-  ctx.setMarketSyncState({ status: "loading", message: "正在同步沪深300、标普500和纳斯达克100基准数据...", results: [], syncedAt: "" });
-  renderMarketSyncResult();
-  try {
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols, days: 30 })
-    });
-    if (!response.ok) throw new Error(await marketApiErrorMessage(response));
-    const payload = await response.json();
-    ctx.setMarketSyncState({
-      status: payload.summary?.missingCount ? "warning" : "success",
-      message: `已同步 ${payload.summary?.syncedCount || 0} 个基准，${payload.summary?.missingCount || 0} 个缺少缓存。`,
-      results: payload.results || [],
-      syncedAt: payload.syncedAt || new Date().toISOString()
-    });
-    ctx.setBenchmarkPerformanceState({ status: "idle", histories: {}, error: "" });
-    await ctx.loadBenchmarkPerformance({ force: true });
-    renderMarketSyncResult();
-  } catch (error) {
-    ctx.setMarketSyncState({
-      status: "error",
-      message: `基准同步失败：${error instanceof Error ? error.message : "无法连接行情 API"}`,
-      results: [],
-      syncedAt: ""
-    });
     renderMarketSyncResult();
   }
 }
@@ -161,6 +131,8 @@ function applyMarketSyncResults(results, syncedAt) {
   const state = ctx.getState();
   let appliedCount = 0;
   let missingCount = 0;
+  let benchmarkSyncedCount = 0;
+  const benchmarkSymbols = new Set(benchmarkSymbolsForAnalysis());
   const bySymbol = new Map(
     results
       .filter((result) => result.status === "synced" && result.after?.currentPrice)
@@ -172,7 +144,16 @@ function applyMarketSyncResults(results, syncedAt) {
   state.assets = state.assets.map((asset) => {
     const symbol = syncSymbolForAsset(asset);
     const result = bySymbol.get(symbol);
-    if (!result) return asset;
+    if (!result) {
+      const missing = results.find((item) => String(item.symbol || "").toUpperCase() === symbol && item.status !== "synced");
+      if (!missing) return asset;
+      return {
+        ...asset,
+        priceStatus: "missing",
+        priceError: missing.message || "未找到可用价格缓存",
+        updatedAt: syncedAt || new Date().toISOString()
+      };
+    }
     appliedCount += 1;
     const matched = findAssetQuickMatch(symbol);
     return {
@@ -186,16 +167,47 @@ function applyMarketSyncResults(results, syncedAt) {
       pricedAt: result.after.pricedAt || asset.pricedAt,
       priceSource: result.after.priceSource || asset.priceSource,
       priceStatus: "synced",
+      priceError: "",
       updatedAt: syncedAt || new Date().toISOString()
     };
   });
-  return { appliedCount, missingCount };
+  for (const result of results) {
+    if (result.status === "synced" && benchmarkSymbols.has(String(result.symbol || "").toUpperCase())) {
+      benchmarkSyncedCount += 1;
+    }
+  }
+  return { appliedCount, missingCount, benchmarkSyncedCount };
+}
+
+function markOpenAssetsPriceError(symbols, message) {
+  const state = ctx.getState();
+  const requested = new Set(symbols.map((symbol) => String(symbol || "").toUpperCase()).filter(Boolean));
+  state.assets = state.assets.map((asset) => {
+    const symbol = syncSymbolForAsset(asset);
+    if (!symbol || !requested.has(symbol) || asset.closed) return asset;
+    return {
+      ...asset,
+      priceStatus: "error",
+      priceError: message,
+      updatedAt: new Date().toISOString()
+    };
+  });
 }
 
 function symbolsForOpenAssets() {
   const state = ctx.getState();
   const assets = state.assets.filter((asset) => !asset.closed && syncSymbolForAsset(asset) && inferAssetMarket(asset) !== "CASH");
   return [...new Set(assets.map(syncSymbolForAsset).filter(Boolean))];
+}
+
+function symbolsForMarketSync() {
+  return [...new Set([...symbolsForOpenAssets(), ...benchmarkSymbolsForAnalysis()].filter(Boolean))];
+}
+
+function benchmarkSymbolsForAnalysis() {
+  return (ctx.selectedBenchmarkInstruments?.() || [])
+    .map((benchmark) => String(benchmark.symbol || "").trim().toUpperCase())
+    .filter(Boolean);
 }
 
 function readAutoSyncState() {

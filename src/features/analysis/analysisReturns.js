@@ -1,5 +1,4 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
-import { benchmarkInstruments } from "../../domain/marketData.js";
 import { addMonths, todayIsoDate } from "../../utils/date.js";
 import { buildAnalysisTrendPoints, daysBetween, selectedAnalysisBounds } from "./analysisModel.js";
 
@@ -38,13 +37,13 @@ export function buildAnalysisReturnRows(analysis, analysisScopeLabel) {
       periods: periods.map((period) => ({ label: period.label, valueBps: portfolioReturnMetricBps(portfolioPoints, period, start, end, analysis) }))
     }
   ];
-  for (const benchmark of benchmarkInstruments) {
+  for (const benchmark of ctx.selectedBenchmarkInstruments()) {
     const points = benchmarkPerformanceState().histories[benchmark.key] || [];
-    if (!points.length) continue;
     rows.push({
       kind: "benchmark",
       label: benchmark.label,
       meta: benchmark.meta,
+      hasData: points.length >= 2,
       periods: periods.map((period) => ({
         label: period.label,
         valueBps: benchmarkReturnMetricBps(points, period, { start, end })

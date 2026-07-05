@@ -16,6 +16,9 @@ export function configureAssetTransactions(context) {
 
 export function buildSellAssetUpdate(existingAsset, formAsset, { closeAll }) {
   if (!existingAsset) return { error: "未找到要卖出的资产" };
+  if (!hasPositiveCostBasis(formAsset.costPrice || existingAsset.costPrice)) {
+    return { error: "该资产缺少成本价，补充成本后再记录卖出或清仓。" };
+  }
 
   const sellQuantity = String(ctx.elements.assetForm.elements.sellQuantity?.value || "").trim();
   const sellPrice = String(ctx.elements.assetForm.elements.closePrice?.value || "").trim();
@@ -93,6 +96,9 @@ export function buildSellAssetUpdate(existingAsset, formAsset, { closeAll }) {
 
 export function buildAddAssetUpdate(existingAsset, formAsset) {
   if (!existingAsset) return { error: "未找到要加仓的资产" };
+  if (!hasPositiveCostBasis(existingAsset.costPrice)) {
+    return { error: "该资产缺少历史成本，补充成本后再计算加仓后的平均成本。" };
+  }
 
   const addQuantity = String(ctx.elements.assetForm.elements.addQuantity?.value || "").trim();
   const addPrice = String(ctx.elements.assetForm.elements.addPrice?.value || "").trim();
@@ -149,6 +155,10 @@ export function buildAddAssetUpdate(existingAsset, formAsset) {
   } catch {
     return { error: "加仓数量、价格和手续费必须是有效数字" };
   }
+}
+
+function hasPositiveCostBasis(value) {
+  return Number(String(value || "0").trim()) > 0;
 }
 
 export function handlePortfolioTransactionAction(assetId, action) {

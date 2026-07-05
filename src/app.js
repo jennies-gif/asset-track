@@ -5,6 +5,7 @@ import {
   getBenchmarkPerformanceState,
   getMarketSyncState,
   getPortfolioFilter,
+  getSelectedBenchmarkKeys,
   getState,
   loadDemoState,
   persistAndRender,
@@ -14,6 +15,7 @@ import {
   setBenchmarkPerformanceState,
   setMarketSyncState,
   setPortfolioFilter,
+  setSelectedBenchmarkKeys,
   setState
 } from "./core/appState.js";
 import { configureRender, renderApp as render, renderTrendDependentViews } from "./core/render.js";
@@ -31,6 +33,7 @@ import {
   selectedAccountName,
   selectedOpenAssets
 } from "./domain/portfolioSelectors.js";
+import { selectedBenchmarkInstruments } from "./domain/marketData.js";
 import {
   inferAccountType
 } from "./features/assets/accountOptions.js";
@@ -59,7 +62,6 @@ import {
   configureMarketService,
   hideMarketSyncResult,
   syncDailyMarketPricesIfDue,
-  syncBenchmarkMarketPrices,
   syncLatestMarketPrices
 } from "./features/market/marketService.js";
 import { getTrendElements } from "./features/trends/trendElements.js";
@@ -313,6 +315,7 @@ const marketContext = {
   getMarketSyncState,
   setMarketSyncState,
   setBenchmarkPerformanceState,
+  selectedBenchmarkInstruments: () => selectedBenchmarkInstruments(getSelectedBenchmarkKeys()),
   marketApiBaseUrl: MARKET_API_BASE_URL,
   openAssets,
   loadBenchmarkPerformance,
@@ -325,6 +328,7 @@ configureBenchmarkRender({
   elements: marketElements,
   getBenchmarkPerformanceState,
   setBenchmarkPerformanceState,
+  selectedBenchmarkInstruments: () => selectedBenchmarkInstruments(getSelectedBenchmarkKeys()),
   marketApiBaseUrl: MARKET_API_BASE_URL,
   calculateCumulativeReturnBps,
   annualizedCumulativeReturnBps,
@@ -413,7 +417,9 @@ configureAnalysisRender({
   getAnalysisFilter,
   setAnalysisFilter,
   getAnalysisReturnMetric,
+  getSelectedBenchmarkKeys,
   getBenchmarkPerformanceState,
+  selectedBenchmarkInstruments: () => selectedBenchmarkInstruments(getSelectedBenchmarkKeys()),
   openAssets,
   buildAccountSummaries,
   calculateDisplayPortfolio,
@@ -422,6 +428,7 @@ configureAnalysisRender({
   buildTrendDates,
   latestTrendDate,
   renderMarketSyncResult,
+  loadBenchmarkPerformance,
   latestOverviewUpdateLabel,
   fxRateSummary,
   calculateTrendValueChangeForRange,
@@ -499,9 +506,11 @@ initAnalysisEvents({
   setAnalysisFilter,
   getAnalysisReturnMetric,
   setAnalysisReturnMetric,
+  getSelectedBenchmarkKeys,
+  setSelectedBenchmarkKeys,
   renderAttribution,
   handleInlineCurrencyChange,
-  syncBenchmarkMarketPrices
+  loadBenchmarkPerformance
 });
 
 initMarketEvents({

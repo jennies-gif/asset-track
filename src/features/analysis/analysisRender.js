@@ -1,5 +1,6 @@
 import { calculateAttribution, formatPercent, roundDivide } from "../../domain/calculations.js";
 import { buildAssetDataIssues } from "../assets/dataQuality.js";
+import { benchmarkInstruments } from "../../domain/marketData.js";
 import { inferAssetMarket, marketLabel } from "../assets/marketOptions.js";
 import { absBigInt } from "../../utils/bigint.js";
 import { escapeHtml } from "../../utils/dom.js";
@@ -17,6 +18,7 @@ import {
   analysisMiniMetric,
   analysisStatusClass,
   analysisStatusLabel,
+  renderBenchmarkComparisonChart,
   renderAllocationBars,
   renderDrawdownChart,
   renderWaterfallChart
@@ -25,6 +27,7 @@ import {
   analysisStageEndLabel,
   analysisStageStartLabel,
   buildAnalysisModel,
+  buildAnalysisTrendPoints,
   configureAnalysisModel
 } from "./analysisModel.js";
 import {
@@ -61,6 +64,7 @@ export function configureAnalysisRender(context) {
   configureAnalysisReturns({
     getAnalysisReturnMetric: context.getAnalysisReturnMetric,
     getBenchmarkPerformanceState: context.getBenchmarkPerformanceState,
+    selectedBenchmarkInstruments: context.selectedBenchmarkInstruments,
     benchmarkReturnPeriods: context.benchmarkReturnPeriods,
     benchmarkHistoryPeriodReturnBps: context.benchmarkHistoryPeriodReturnBps
   });
@@ -75,6 +79,7 @@ export function configureAnalysisRender(context) {
 
 function syncAnalysisContext() {
   syncAnalysisFilters();
+  renderAnalysisBenchmarkSelector();
 }
 
 export function renderAttribution() {
@@ -166,7 +171,7 @@ function renderEmptyAnalysis() {
     analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "录入资产后，这里会列出价格、汇率、权重和待核对状态。")}</td></tr>`;
   }
   if (analysisElements.analysisMonthlyReturnChart) analysisElements.analysisMonthlyReturnChart.innerHTML = "";
-  if (analysisElements.analysisBenchmarkEmpty) analysisElements.analysisBenchmarkEmpty.classList.add("is-hidden");
+  if (analysisElements.analysisBenchmarkTrendChart) analysisElements.analysisBenchmarkTrendChart.innerHTML = "";
   if (analysisElements.analysisAllocationChart) analysisElements.analysisAllocationChart.innerHTML = "";
   if (analysisElements.analysisAllocationRows) analysisElements.analysisAllocationRows.innerHTML = "";
   if (analysisElements.analysisAllocationNote) analysisElements.analysisAllocationNote.textContent = "";
@@ -383,14 +388,14 @@ function renderAnalysisQuality(analysis) {
 }
 
 function renderAnalysisReturnRows(analysis) {
+  ensureAnalysisBenchmarkDataLoaded();
   syncAnalysisReturnMetricButtons();
   const rows = buildAnalysisReturnRows(analysis, analysisScopeLabel);
   const tableWrap = analysisElements.analysisMonthlyReturnChart?.closest(".table-wrap");
-  const hasBenchmarkRows = rows.some((row) => row.kind === "benchmark");
   tableWrap?.classList.toggle("is-hidden", !rows.length);
-  analysisElements.analysisBenchmarkEmpty?.classList.toggle("is-hidden", hasBenchmarkRows);
   if (!rows.length) {
     analysisElements.analysisMonthlyReturnChart.innerHTML = "";
+    renderAnalysisBenchmarkTrendChart(analysis);
     return;
   }
   analysisElements.analysisMonthlyReturnChart.innerHTML = rows
@@ -406,6 +411,77 @@ function renderAnalysisReturnRows(analysis) {
       </tr>
     `)
     .join("");
+  renderAnalysisBenchmarkTrendChart(analysis);
+}
+
+function ensureAnalysisBenchmarkDataLoaded() {
+  const status = ctx.getBenchmarkPerformanceState?.().status;
+  if (status === "idle" || status === "error") ctx.loadBenchmarkPerformance?.({ force: status === "error" });
+}
+
+function renderAnalysisBenchmarkSelector() {
+  if (!analysisElements.analysisBenchmarkSelector) return;
+  const selected = new Set(ctx.getSelectedBenchmarkKeys());
+  analysisElements.analysisBenchmarkSelector.innerHTML = benchmarkInstruments
+    .map((benchmark) => `
+      <label class="benchmark-option ${selected.has(benchmark.key) ? "is-selected" : ""}">
+        <input type="checkbox" value="${escapeHtml(benchmark.key)}" ${selected.has(benchmark.key) ? "checked" : ""}>
+        <span>${escapeHtml(benchmark.label)}</span>
+      </label>
+    `)
+    .join("");
+}
+
+function renderAnalysisBenchmarkTrendChart(analysis) {
+  if (!analysisElements.analysisBenchmarkTrendChart) return;
+  const trendPoints = buildAnalysisTrendPoints(analysis.assets);
+  const comparableSeries = buildComparableBenchmarkSeries(trendPoints);
+  analysisElements.analysisBenchmarkTrendChart.innerHTML = renderBenchmarkComparisonChart(comparableSeries, buildEvenlySpacedXAxisLabels);
+}
+
+function buildComparableBenchmarkSeries(trendPoints) {
+  const portfolioRawPoints = trendPoints
+    .map((point) => ({ date: point.date, value: Number(BigInt(point.valueCents || 0)) }))
+    .filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value > 0);
+  const benchmarkRawSeries = ctx.selectedBenchmarkInstruments().map((benchmark) => ({
+    label: benchmark.label,
+    points: (ctx.getBenchmarkPerformanceState().histories[benchmark.key] || [])
+      .map((point) => ({ date: point.date, value: Number(point.close) }))
+      .filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value > 0)
+  }));
+  const availableSeries = [
+    { label: "我的组合", points: portfolioRawPoints },
+    ...benchmarkRawSeries
+  ].filter((series) => series.points.length >= 2);
+  if (!availableSeries.length) return [];
+
+  const commonStart = availableSeries.reduce(
+    (current, series) => series.points[0].date > current ? series.points[0].date : current,
+    availableSeries[0].points[0].date
+  );
+  const commonEnd = availableSeries.reduce(
+    (current, series) => series.points.at(-1).date < current ? series.points.at(-1).date : current,
+    availableSeries[0].points.at(-1).date
+  );
+  if (commonStart >= commonEnd) return [];
+
+  return availableSeries.map((series) => ({
+    label: series.label,
+    points: normalizedReturnPoints(series.points, commonStart, commonEnd)
+  }));
+}
+
+function normalizedReturnPoints(points, start, end) {
+  const scopedPoints = points.filter((point) => point.date >= start && point.date <= end);
+  const first = scopedPoints.find((point) => point.value > 0);
+  if (!first) return [];
+  const base = first.value;
+  return scopedPoints
+    .filter((point) => point.date >= first.date && point.value > 0)
+    .map((point) => ({
+      date: point.date,
+      returnBps: BigInt(Math.round(((point.value - base) / base) * 10000))
+    }));
 }
 
 function renderAnalysisRisk(analysis) {
@@ -549,7 +625,7 @@ function renderContributionGroup(title, rows, max, emptyText) {
 }
 
 function contributionAssetMeta(position) {
-  return [position.account, marketLabel(position.market), formatPercent(position.returnBps)].filter(Boolean).join(" · ");
+  return [position.account, marketLabel(position.market), position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"].filter(Boolean).join(" · ");
 }
 
 function renderTopHoldings(analysis) {

@@ -86,7 +86,7 @@ export function renderHomeHoldings(elements, context) {
   }
   elements.homeHoldingsList.innerHTML = rows.map((position) => {
     const asset = assets.find((item) => item.id === position.id) || position;
-    const pnlClass = toneClassForValue(position.unrealizedPnlCents);
+    const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
     const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
     return `
       <article class="home-list-row">
@@ -96,7 +96,7 @@ export function renderHomeHoldings(elements, context) {
         </div>
         <div class="home-list-value">
           <strong>${formatDisplayCurrency(position.marketValueCents)}</strong>
-          <span class="${pnlClass}">${formatSignedAmountOnly(position.unrealizedPnlCents)} / ${formatPercent(position.returnBps)}</span>
+          <span class="${pnlClass}">${position.hasCostBasis ? `${formatSignedAmountOnly(position.unrealizedPnlCents)} / ${formatPercent(position.returnBps)}` : "成本缺失"}</span>
         </div>
         <div class="home-list-status">
           ${trustBadge(formatShare(weightBps))}

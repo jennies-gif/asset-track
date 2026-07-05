@@ -1,5 +1,4 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
-import { benchmarkInstruments } from "../../domain/marketData.js";
 import { addMonths } from "../../utils/date.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { performanceValueClass } from "../../ui/formatters.js";
@@ -26,8 +25,8 @@ export function renderBenchmarkPerformance() {
     if (elements.benchmarkEmpty) {
       const isLoading = ctx.getBenchmarkPerformanceState().status === "loading";
       elements.benchmarkEmpty.textContent = isLoading
-        ? "正在读取沪深300、标普500和纳斯达克100基准数据..."
-        : "暂无基准数据。点击“分析”页的同步基准数据，或启动行情 API 后自动读取沪深300、标普500和纳斯达克100。";
+        ? "正在读取已选基准数据..."
+        : "暂无基准数据。点击“分析”页的同步基准数据，或启动行情 API 后自动读取已选基准。";
     }
     return;
   }
@@ -63,7 +62,7 @@ export async function loadBenchmarkPerformance({ force = false } = {}) {
   try {
     const histories = {};
     const results = await Promise.allSettled(
-      benchmarkInstruments.map(async (benchmark) => {
+      ctx.selectedBenchmarkInstruments().map(async (benchmark) => {
         const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/history?symbol=${encodeURIComponent(benchmark.symbol)}`);
         if (!response.ok) throw new Error(`${benchmark.symbol} ${response.status}`);
         const payload = await response.json();
@@ -134,7 +133,7 @@ function normalizeBenchmarkHistory(points) {
 function buildBenchmarkPerformanceRows() {
   const periods = benchmarkReturnPeriods();
   const benchmarkPerformanceState = ctx.getBenchmarkPerformanceState();
-  return benchmarkInstruments.map((benchmark) => {
+  return ctx.selectedBenchmarkInstruments().map((benchmark) => {
     const points = benchmarkPerformanceState.histories[benchmark.key] || [];
     return {
       ...benchmark,

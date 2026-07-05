@@ -41,10 +41,12 @@ export function buildAssetFormPayload(existingAsset) {
   }
   const fxRate = form.fxRate || existingAsset?.fxRate || defaultAssetFxRate(form.currency);
   const hasManualPrice = String(form.currentPrice || "").trim() !== "";
+  const hasCostPrice = Number(String(form.costPrice || existingAsset?.costPrice || "0").trim()) > 0;
   const hasExistingPrice = Boolean(existingAsset?.currentPrice && existingAsset?.priceStatus !== "pending");
-  const priceStatus = hasManualPrice ? "manual" : hasExistingPrice ? existingAsset.priceStatus || "manual" : "pending";
+  const priceStatus = hasManualPrice ? "manual" : hasExistingPrice ? existingAsset.priceStatus || "manual" : hasCostPrice ? "pending" : "missing";
   return {
     ...form,
+    costPrice: form.costPrice || existingAsset?.costPrice || "0",
     currentPrice: form.currentPrice || existingAsset?.currentPrice || form.costPrice || "0",
     previousPrice: form.previousPrice || existingAsset?.previousPrice || form.costPrice || form.currentPrice || "0",
     priceStatus,

@@ -23,6 +23,79 @@ export async function readMarketDataRows({ symbol, market, kind }) {
   return result.rows.map((row) => row.raw_payload).filter(Boolean);
 }
 
+export async function readUserAssetDailyPriceRows({ userId, assetId, dateFrom, dateTo }) {
+  const pool = await getPool();
+  if (!pool) return [];
+  await ensureMarketDataSchema(pool);
+  const result = await pool.query(
+    `
+      select raw_payload
+      from user_asset_daily_price_snapshots
+      where user_id = $1
+        and asset_id = $2
+        and ($3::date is null or price_date >= $3::date)
+        and ($4::date is null or price_date <= $4::date)
+      order by price_date asc
+    `,
+    [userId, assetId, dateFrom || null, dateTo || null]
+  );
+  return result.rows.map((row) => row.raw_payload).filter(Boolean);
+}
+
+export async function upsertUserAssetDailyPriceRows(rows) {
+  const pool = await getPool();
+  if (!pool) return 0;
+  await ensureMarketDataSchema(pool);
+  let changedCount = 0;
+  for (const row of rows) {
+    const result = await pool.query(
+      `
+        insert into user_asset_daily_price_snapshots (
+          user_id, asset_id, account, symbol, market, currency, price_date,
+          close_price_decimal, price_type, price_basis, carried_from_date,
+          source, source_fetched_at, quality_status, raw_payload, updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13::timestamptz, $14, $15::jsonb, now())
+        on conflict (user_id, asset_id, price_date)
+        do update set
+          account = excluded.account,
+          symbol = excluded.symbol,
+          market = excluded.market,
+          currency = excluded.currency,
+          close_price_decimal = excluded.close_price_decimal,
+          price_type = excluded.price_type,
+          price_basis = excluded.price_basis,
+          carried_from_date = excluded.carried_from_date,
+          source = excluded.source,
+          source_fetched_at = excluded.source_fetched_at,
+          quality_status = excluded.quality_status,
+          raw_payload = excluded.raw_payload,
+          updated_at = now()
+        where user_asset_daily_price_snapshots.raw_payload is distinct from excluded.raw_payload
+      `,
+      [
+        row.userId,
+        row.assetId,
+        row.account || "",
+        row.symbol,
+        row.market || "UNKNOWN",
+        row.currency || "USD",
+        row.priceDate,
+        row.closePrice,
+        row.priceType,
+        row.priceBasis,
+        row.carriedFromDate || null,
+        row.source,
+        row.sourceFetchedAt || null,
+        row.qualityStatus || "ok",
+        JSON.stringify(row)
+      ]
+    );
+    changedCount += result.rowCount;
+  }
+  return changedCount;
+}
+
 export async function upsertMarketDataRows({ instrument, rows, kind }) {
   const pool = await getPool();
   if (!pool) return 0;
@@ -248,6 +321,34 @@ async function createMarketDataSchema(pool) {
       primary key (base_currency, quote_currency, rate_date, source),
       check (rate_decimal > 0)
     );
+
+    create table if not exists user_asset_daily_price_snapshots (
+      user_id text not null,
+      asset_id text not null,
+      account text not null default '',
+      symbol text not null,
+      market text not null,
+      currency char(3) not null,
+      price_date date not null,
+      close_price_decimal numeric(38, 12) not null,
+      price_type text not null,
+      price_basis text not null,
+      carried_from_date date,
+      source text not null,
+      source_fetched_at timestamptz,
+      quality_status text not null default 'ok',
+      raw_payload jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (user_id, asset_id, price_date),
+      check (close_price_decimal > 0),
+      check (price_type in ('close', 'unit_nav')),
+      check (price_basis in ('actual', 'carry_forward')),
+      check (quality_status in ('ok', 'carried_forward', 'missing', 'error'))
+    );
+
+    create index if not exists user_asset_daily_price_symbol_date_idx
+      on user_asset_daily_price_snapshots(user_id, symbol, market, price_date desc);
 
     create table if not exists market_data_runs (
       id text primary key,

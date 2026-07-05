@@ -77,7 +77,7 @@ export function initSettingsEvents(context) {
   elements.authProviderButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const provider = button.dataset.authProvider === "apple" ? "Apple" : "Google";
-      setAuthStatus(elements, `${provider} 登录尚未接入；请先使用邮箱和密码。`, "info");
+      setAuthStatus(elements, `${provider} OAuth 尚未接入；当前只能使用 Supabase 邮箱和密码登录。`, "info");
     });
   });
 

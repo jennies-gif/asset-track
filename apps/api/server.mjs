@@ -15,6 +15,7 @@ import {
 import {
   benchmarkInstruments,
   buildDataTasks,
+  defaultBenchmarkSyncSymbols,
   buildHistorySeries,
   inferUniverse,
   marketUniverses,
@@ -22,8 +23,11 @@ import {
 } from "../../src/domain/marketData.js";
 import {
   isMarketDataDatabaseEnabled,
-  readMarketDataRows
+  readMarketDataRows,
+  readUserAssetDailyPriceRows,
+  upsertUserAssetDailyPriceRows
 } from "../../src/server/marketDataDatabase.js";
+import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
 const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
@@ -120,6 +124,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/instruments/search") return searchInstruments(url, response);
     if (request.method === "GET" && url.pathname === "/api/positions") return listPositions(url, response);
     if (request.method === "GET" && url.pathname === "/api/market-data/history") return getMarketHistory(url, response);
+    if (request.method === "GET" && url.pathname === "/api/asset-prices/daily") return getAssetDailyPrices(url, response);
     if (request.method === "GET" && url.pathname === "/api/market-data/fx-rates") return getFxRates(url, response);
     if (request.method === "POST" && url.pathname === "/api/market-data/fetch-recent") return fetchRecentMarketData(request, response);
     if (request.method === "POST" && url.pathname === "/api/market-data/sync-daily") return syncDailyMarketData(request, response);
@@ -289,17 +294,24 @@ async function syncDailyMarketData(request, response) {
 
 async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   const requestedSymbols = parseSymbols(body.symbols || body.symbol);
+  const benchmarkSymbols = body.includeBenchmarks
+    ? defaultBenchmarkSyncSymbols.map((symbol) => symbol.toUpperCase())
+    : [];
+  const symbolsToSync = requestedSymbols.length
+    ? [...new Set([...requestedSymbols, ...benchmarkSymbols])]
+    : [];
+  const externalSymbolsToSync = [...new Set([...symbolsToSync, ...benchmarkSymbols])];
   const account = String(body.account || "").trim();
   const stateCandidates = state.assets.filter((asset) => {
     if (asset.closed || !asset.symbol) return false;
     if (account && asset.account !== account) return false;
-    if (requestedSymbols.length && !requestedSymbols.includes(asset.symbol.toUpperCase())) return false;
+    if (symbolsToSync.length && !symbolsToSync.includes(asset.symbol.toUpperCase())) return false;
     return true;
   });
   const stateSymbols = new Set(stateCandidates.map((asset) => asset.symbol.toUpperCase()));
-  const requestedExternalCandidates = requestedSymbols.length
+  const requestedExternalCandidates = externalSymbolsToSync.length
     ? await Promise.all(
-        requestedSymbols
+        externalSymbolsToSync
           .filter((symbol) => !stateSymbols.has(symbol))
           .map(async (symbol) => {
             const asset = await assetFromSymbol(symbol);
@@ -311,6 +323,8 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   const syncedAt = new Date().toISOString();
   const results = [];
   let fetchResult = null;
+  let dailyPriceRowsUpserted = 0;
+  let dailyPriceGapCount = 0;
 
   if (body.autoFetch !== false) {
     try {
@@ -365,6 +379,15 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
       asset.priceSource = latest.source;
       asset.priceStatus = "synced";
       asset.updatedAt = syncedAt;
+      const dailyPrices = buildUserAssetDailyPriceSnapshots({
+        userId: demoUser.id,
+        asset,
+        history,
+        dateFrom: body.dateFrom,
+        dateTo: body.dateTo
+      });
+      dailyPriceGapCount += dailyPrices.missingDates.length;
+      dailyPriceRowsUpserted += await persistUserAssetDailyPrices(dailyPrices.rows);
     }
     results.push({
       symbol: asset.symbol,
@@ -386,11 +409,50 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
     requestedCount: candidates.length,
     syncedCount: results.filter((item) => item.status === "synced").length,
     missingCount: results.filter((item) => item.status === "missing").length,
-    skippedCount: Math.max(0, requestedSymbols.length - candidates.length)
+    skippedCount: Math.max(0, externalSymbolsToSync.length - candidates.length),
+    dailyPriceRowsUpserted,
+    dailyPriceGapCount
   };
   const payload = { trigger, syncedAt, summary, results, fetch: fetchResult };
   state.auditLogs.push(audit("sync_daily_market_data", "market_data", `sync-${Date.now()}`, payload));
   return payload;
+}
+
+async function getAssetDailyPrices(url, response) {
+  const assetId = String(url.searchParams.get("assetId") || "").trim();
+  const symbol = String(url.searchParams.get("symbol") || "").trim().toUpperCase();
+  const dateFrom = normalizeDateParam(url.searchParams.get("dateFrom"));
+  const dateTo = normalizeDateParam(url.searchParams.get("dateTo"));
+  const asset = state.assets.find((item) => (
+    (assetId && item.id === assetId) ||
+    (symbol && String(item.symbol || "").toUpperCase() === symbol)
+  ));
+  if (!asset) return sendError(response, 404, "asset_not_found", "未找到用户资产");
+
+  const stored = await readPersistedUserAssetDailyPrices({ userId: demoUser.id, assetId: asset.id, dateFrom, dateTo });
+  if (stored.length) {
+    return sendJson(response, {
+      userId: demoUser.id,
+      assetId: asset.id,
+      symbol: asset.symbol,
+      points: stored,
+      source: isMarketDataDatabaseEnabled() ? "postgres-user-asset-daily-prices" : "storage/user-asset-prices"
+    });
+  }
+
+  const history = await readStoredMarketHistory(asset);
+  const dailyPrices = buildUserAssetDailyPriceSnapshots({ userId: demoUser.id, asset, history, dateFrom, dateTo });
+  const changedCount = await persistUserAssetDailyPrices(dailyPrices.rows);
+  return sendJson(response, {
+    userId: demoUser.id,
+    assetId: asset.id,
+    symbol: asset.symbol,
+    points: dailyPrices.rows,
+    status: dailyPrices.status,
+    changedCount,
+    missingDates: dailyPrices.missingDates,
+    source: isMarketDataDatabaseEnabled() ? "postgres-user-asset-daily-prices" : "storage/user-asset-prices"
+  });
 }
 
 function scheduleDailyMarketSync() {
@@ -403,7 +465,7 @@ function scheduleDailyMarketSync() {
   console.log(`Next daily market data sync scheduled at ${nextRunAt.toLocaleString()} local time`);
   setTimeout(async () => {
     try {
-      const result = await runDailyMarketDataSync({ days: 7 }, "scheduled");
+      const result = await runDailyMarketDataSync({ days: 7, includeBenchmarks: true }, "scheduled");
       console.log(
         `Daily market data sync finished: ${result.summary.syncedCount} synced, ${result.summary.missingCount} missing`
       );
@@ -542,6 +604,7 @@ async function readStoredMarketHistory(asset) {
     .map((row) => ({
       date: row.tradeDate || row.navDate,
       close: Number(row.closePrice || row.unitNav),
+      closeDecimal: String(row.closePrice || row.unitNav || ""),
       source: row.source,
       sourceFetchedAt: row.sourceFetchedAt,
       type: row.navDate ? "单位净值" : "日收盘价",
@@ -549,6 +612,55 @@ async function readStoredMarketHistory(asset) {
     }))
     .filter((row) => row.date && Number.isFinite(row.close) && row.close > 0)
     .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+async function persistUserAssetDailyPrices(rows) {
+  if (!rows.length) return 0;
+  if (isMarketDataDatabaseEnabled()) return upsertUserAssetDailyPriceRows(rows);
+
+  let changedCount = 0;
+  const byAsset = new Map();
+  for (const row of rows) {
+    const key = `${row.userId}:${row.assetId}`;
+    const current = byAsset.get(key) || [];
+    current.push(row);
+    byAsset.set(key, current);
+  }
+
+  for (const assetRows of byAsset.values()) {
+    const first = assetRows[0];
+    const file = userAssetDailyPricePath(first.userId, first.assetId);
+    const target = await readJsonArray(file);
+    const byDate = new Map(target.map((row) => [row.priceDate, row]));
+    for (const row of assetRows) {
+      const before = byDate.get(row.priceDate);
+      if (JSON.stringify(before) !== JSON.stringify(row)) {
+        byDate.set(row.priceDate, row);
+        changedCount += 1;
+      }
+    }
+    await writeJson(file, [...byDate.values()].sort((left, right) => left.priceDate.localeCompare(right.priceDate)));
+  }
+  return changedCount;
+}
+
+async function readPersistedUserAssetDailyPrices({ userId, assetId, dateFrom, dateTo }) {
+  const rows = isMarketDataDatabaseEnabled()
+    ? await readUserAssetDailyPriceRows({ userId, assetId, dateFrom, dateTo })
+    : await readJsonArray(userAssetDailyPricePath(userId, assetId));
+  return rows
+    .filter((row) => !dateFrom || row.priceDate >= dateFrom)
+    .filter((row) => !dateTo || row.priceDate <= dateTo)
+    .sort((left, right) => left.priceDate.localeCompare(right.priceDate));
+}
+
+function userAssetDailyPricePath(userId, assetId) {
+  return path.join(
+    marketStorageDir,
+    "user-asset-prices",
+    sanitizePathSegment(userId),
+    `${sanitizePathSegment(assetId)}.json`
+  );
 }
 
 function latestUsableHistoryPoint(points) {
@@ -644,6 +756,8 @@ async function assetFromSymbol(symbol) {
 
 function inferInstrumentFromSymbol(symbol) {
   const normalized = String(symbol || "").trim().toUpperCase();
+  const benchmark = benchmarkInstruments.find((item) => item.symbol.toUpperCase() === normalized);
+  if (benchmark) return benchmark;
   if (/^\d{5}$/.test(normalized)) {
     return { symbol: normalized, name: normalized, type: "股票", universe: "manual-hk", market: "HK", currency: "HKD" };
   }
@@ -787,6 +901,11 @@ async function readJsonArray(file) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
+}
+
+async function writeJson(file, data) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify(data, null, 2)}\n`);
 }
 
 function stringifyBigInts(value) {

@@ -110,6 +110,85 @@ export function renderDrawdownChart(points, buildEvenlySpacedXAxisLabels) {
   `;
 }
 
+export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLabels) {
+  const normalizedSeries = series
+    .map((item, index) => ({
+      ...item,
+      colorIndex: index + 1,
+      points: item.points.filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && point.returnBps !== null && point.returnBps !== undefined)
+    }));
+  const visibleSeries = normalizedSeries.filter((item) => item.points.length >= 2);
+  const missingBenchmarkLabels = normalizedSeries
+    .filter((item) => item.label !== "我的组合" && item.points.length < 2)
+    .map((item) => item.label);
+  if (!visibleSeries.length) {
+    return `<p class="empty-state">暂无走势对比数据。同步已选基准后，这里会展示组合与基准的归一化收益曲线。</p>`;
+  }
+
+  const width = 720;
+  const height = 260;
+  const pad = 28;
+  const leftPad = 66;
+  const rightPad = 18;
+  const chartTop = pad;
+  const chartBottom = height - 46;
+  const allPoints = visibleSeries.flatMap((item) => item.points);
+  const firstDate = allPoints.reduce((current, point) => point.date < current ? point.date : current, allPoints[0].date);
+  const lastDate = allPoints.reduce((current, point) => point.date > current ? point.date : current, allPoints[0].date);
+  const minReturn = allPoints.reduce((current, point) => BigInt(point.returnBps) < current ? BigInt(point.returnBps) : current, 0n);
+  const maxReturn = allPoints.reduce((current, point) => BigInt(point.returnBps) > current ? BigInt(point.returnBps) : current, 0n);
+  const range = maxReturn === minReturn ? 1n : maxReturn - minReturn;
+  const startMs = Date.parse(`${firstDate}T00:00:00.000Z`);
+  const endMs = Date.parse(`${lastDate}T00:00:00.000Z`);
+  const timeRange = Math.max(1, endMs - startMs);
+  const yFor = (returnBps) => chartTop + Number(((maxReturn - BigInt(returnBps)) * BigInt(chartBottom - chartTop)) / range);
+  const xFor = (date) => {
+    const dateMs = Date.parse(`${date}T00:00:00.000Z`);
+    return leftPad + ((width - leftPad - rightPad) * (dateMs - startMs)) / timeRange;
+  };
+  const yTicks = [
+    { value: maxReturn, label: formatPercent(maxReturn), className: "chart-grid" },
+    { value: 0n, label: "0%", className: "chart-axis" },
+    { value: minReturn, label: formatPercent(minReturn), className: "chart-grid" }
+  ]
+    .map((tick) => ({ ...tick, y: yFor(tick.value) }))
+    .sort((left, right) => left.y - right.y)
+    .filter((tick, index, ticks) => {
+      const duplicateValue = ticks.findIndex((item) => item.value === tick.value) !== index;
+      const overlapsPrevious = index > 0 && Math.abs(tick.y - ticks[index - 1].y) < 18;
+      return !duplicateValue && !overlapsPrevious;
+    });
+  const xAxisPoints = buildEvenlySpacedXAxisLabels(
+    [{ date: firstDate, x: leftPad }, { date: lastDate, x: width - rightPad }],
+    2
+  );
+
+  return `
+    <div class="analysis-chart-title">走势对比（筛选范围内首个可用点归一为 0%）</div>
+    <svg class="analysis-line-chart benchmark-line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="组合和已选基准走势对比">
+      ${yTicks.map((tick) => `
+        <line x1="${leftPad}" y1="${tick.y.toFixed(1)}" x2="${width - rightPad}" y2="${tick.y.toFixed(1)}" class="${tick.className}"></line>
+        <text x="${leftPad - 12}" y="${tick.y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" class="chart-y-label">${escapeHtml(tick.label)}</text>
+      `).join("")}
+      ${visibleSeries.map((item) => {
+        const path = item.points.map((point) => `${xFor(point.date).toFixed(1)},${yFor(point.returnBps).toFixed(1)}`).join(" ");
+        return `<polyline points="${path}" class="benchmark-series-line benchmark-series-${item.colorIndex}"></polyline>`;
+      }).join("")}
+      ${visibleSeries.map((item) => {
+        const last = item.points.at(-1);
+        return `<circle cx="${xFor(last.date).toFixed(1)}" cy="${yFor(last.returnBps).toFixed(1)}" r="3.8" class="benchmark-series-point benchmark-series-${item.colorIndex}"></circle>`;
+      }).join("")}
+      ${xAxisPoints.map((point) => `<text x="${point.x.toFixed(1)}" y="${height - 15}" text-anchor="${point.anchor}" class="chart-x-label">${escapeHtml(formatShortDate(point.date))}</text>`).join("")}
+    </svg>
+    <div class="benchmark-chart-legend">
+      ${visibleSeries.map((item) => `
+        <span><i class="benchmark-series-${item.colorIndex}"></i>${escapeHtml(item.label)}</span>
+      `).join("")}
+    </div>
+    ${missingBenchmarkLabels.length ? `<p class="benchmark-chart-note">${escapeHtml(`${missingBenchmarkLabels.join("、")} 在当前筛选范围内没有足够历史点，暂未进入走势图。`)}</p>` : ""}
+  `;
+}
+
 export function renderAllocationBars(rows) {
   if (!rows.length) return `<p class="empty-state">暂无配置数据。先添加股票、基金、现金等资产后查看配置偏离。</p>`;
   return `

@@ -12,7 +12,7 @@ export function validateAssetFormByMode(existingAsset) {
   const mode = form.dataset.mode || "create";
   const isTransaction = mode === "transaction" || mode === "adjust";
   let firstError = "";
-  const requiredFields = isTransaction ? [] : ["name", "type", "account", "currency", "quantity", "costPrice", "purchaseDate"];
+  const requiredFields = isTransaction ? [] : ["name", "type", "account", "currency", "quantity"];
   for (const fieldName of requiredFields) {
     const field = form.elements[fieldName];
     if (!String(field?.value || "").trim()) {
@@ -24,7 +24,7 @@ export function validateAssetFormByMode(existingAsset) {
   const dateField = isTransaction
     ? form.elements[(form.elements.adjustmentType?.value || "buy") === "buy" ? "addDate" : "closedDate"]
     : form.elements.purchaseDate;
-  if (dateField && !String(dateField.value || "").trim()) {
+  if (isTransaction && dateField && !String(dateField.value || "").trim()) {
     setFieldError(dateField.name, "请选择交易日期。");
     firstError ||= "请选择交易日期。";
   }
@@ -57,11 +57,27 @@ export function validateAssetFormByMode(existingAsset) {
   }
 
   firstError ||= validatePositiveDecimalField("quantity", "持有数量必须大于 0。");
-  firstError ||= validatePositiveDecimalField("costPrice", "成本价必须大于 0。");
+  if (String(form.elements.costPrice?.value || "").trim()) {
+    firstError ||= validatePositiveDecimalField("costPrice", "成本价必须大于 0。");
+  }
+  if (String(form.elements.previousPrice?.value || "").trim()) {
+    firstError ||= validatePositiveDecimalField("previousPrice", "期初价必须大于 0。");
+  }
   if (String(form.elements.currentPrice?.value || "").trim()) {
     firstError ||= validatePositiveDecimalField("currentPrice", "当前价格必须大于 0。");
   }
   firstError ||= validatePositiveDecimalField("fxRate", "币种或汇率缺失会导致估值不完整。");
+  if (String(form.elements.previousFxRate?.value || "").trim()) {
+    firstError ||= validatePositiveDecimalField("previousFxRate", "期初汇率必须大于 0。");
+  }
+  for (const [fieldName, message] of [
+    ["fees", "费用不能为负数。"],
+    ["taxes", "税费不能为负数。"],
+    ["dividends", "分红不能为负数。"],
+    ["interest", "利息不能为负数。"]
+  ]) {
+    firstError ||= validateNonNegativeDecimalField(fieldName, message);
+  }
   return firstError;
 }
 
@@ -73,6 +89,21 @@ export function validatePositiveDecimalField(fieldName, message) {
   }
   try {
     if (parseDecimalToScaledInt(value, fieldName.includes("Price") || fieldName.includes("Rate") ? RATE_SCALE : QUANTITY_SCALE) <= 0n) {
+      setFieldError(fieldName, message);
+      return message;
+    }
+  } catch {
+    setFieldError(fieldName, "请输入有效数字。");
+    return "金额、数量和汇率必须是有效数字。";
+  }
+  return "";
+}
+
+export function validateNonNegativeDecimalField(fieldName, message) {
+  const value = String(ctx.elements.assetForm.elements[fieldName]?.value || "").trim();
+  if (!value) return "";
+  try {
+    if (parseDecimalToScaledInt(value, fieldName.includes("Rate") ? RATE_SCALE : QUANTITY_SCALE) < 0n) {
       setFieldError(fieldName, message);
       return message;
     }
@@ -113,7 +144,10 @@ export function humanizeAssetError(error) {
     costPrice: "平均成本价",
     previousPrice: "期初价",
     currentPrice: "当前价格/最新净值",
-    fxRate: "当前汇率到 USD"
+    fxRate: "当前汇率到 USD",
+    previousFxRate: "期初汇率",
+    type: "资产类型",
+    currency: "币种"
   };
   return Object.entries(fieldLabels).reduce((message, [field, label]) => message.replace(field, label), error);
 }

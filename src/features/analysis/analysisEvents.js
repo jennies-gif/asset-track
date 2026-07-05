@@ -4,9 +4,11 @@ export function initAnalysisEvents({
   setAnalysisFilter,
   getAnalysisReturnMetric,
   setAnalysisReturnMetric,
+  getSelectedBenchmarkKeys,
+  setSelectedBenchmarkKeys,
   renderAttribution,
   handleInlineCurrencyChange,
-  syncBenchmarkMarketPrices
+  loadBenchmarkPerformance
 }) {
   elements.analysisAccountFilter?.addEventListener("change", () => {
     setAnalysisFilter({
@@ -42,8 +44,13 @@ export function initAnalysisEvents({
     });
   });
 
-  elements.syncBenchmarkDataButton?.addEventListener("click", () => {
-    syncBenchmarkMarketPrices();
+  elements.analysisBenchmarkSelector?.addEventListener("change", (event) => {
+    if (!(event.target instanceof HTMLInputElement)) return;
+    const checked = [...elements.analysisBenchmarkSelector.querySelectorAll("input:checked")].map((input) => input.value);
+    const nextKeys = checked.length ? checked : getSelectedBenchmarkKeys();
+    setSelectedBenchmarkKeys(nextKeys);
+    renderAttribution();
+    loadBenchmarkPerformance({ force: true });
   });
 
   elements.attributionMetrics?.addEventListener("change", handleInlineCurrencyChange);

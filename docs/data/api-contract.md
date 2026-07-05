@@ -207,9 +207,57 @@
 }
 ```
 
+### `GET /api/asset-prices/daily`
+
+用途：读取当前用户某个资产从首次持有日期开始的每日价格快照，供历史收益走势、回撤和归因复算使用。该接口读取用户资产维度的价格表，不直接暴露其他用户资产。
+
+查询参数：
+
+- `assetId`：用户资产记录 ID，优先使用。
+- `symbol`：资产代码，未传 `assetId` 时可用。
+- `dateFrom`
+- `dateTo`
+
+响应：
+
+```json
+{
+  "userId": "demo-user",
+  "assetId": "asset-00700",
+  "symbol": "00700",
+  "source": "storage/user-asset-prices",
+  "points": [
+    {
+      "priceDate": "2026-06-01",
+      "closePrice": "338",
+      "priceType": "close",
+      "priceBasis": "actual",
+      "source": "Tencent finance kline",
+      "sourceFetchedAt": "2026-06-01T10:00:00.000Z",
+      "qualityStatus": "ok"
+    },
+    {
+      "priceDate": "2026-06-02",
+      "closePrice": "338",
+      "priceType": "close",
+      "priceBasis": "carry_forward",
+      "carriedFromDate": "2026-06-01",
+      "qualityStatus": "carried_forward"
+    }
+  ]
+}
+```
+
+口径：
+
+- 股票、ETF 和指数使用日收盘价；基金使用单位净值；贵金属和虚拟货币使用数据源提供的日价格。
+- 价格表按用户资产维护，主键语义为 `userId + assetId + priceDate`。
+- 非交易日或单日缺缓存时可沿用上一条可用价格，但必须标记 `priceBasis=carry_forward` 和 `carriedFromDate`，不得伪装成当日真实成交价。
+- 首次持有日前的行情不写入用户资产价格表；首次持有日之后仍无可用历史行情的日期必须在响应或任务结果中显式标记缺口。
+
 ### `POST /api/market-data/sync-daily`
 
-用途：手动同步最新价格。默认先按传入代码抓取近 7 天行情缓存，再从本地行情缓存读取最新可用价格或净值，并应用到当前内存资产状态。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时，也会默认按本机时区每天 `22:00` 调用同一套同步逻辑。
+用途：手动同步最新价格。默认先按传入代码抓取近 7 天行情缓存，再从本地行情缓存读取最新可用价格或净值，并应用到当前内存资产状态；同步成功后刷新当前用户资产的每日价格快照。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时，也会默认按本机时区每天 `22:00` 调用同一套同步逻辑。
 
 请求：
 
@@ -231,7 +279,9 @@
     "requestedCount": 1,
     "syncedCount": 1,
     "missingCount": 0,
-    "skippedCount": 0
+    "skippedCount": 0,
+    "dailyPriceRowsUpserted": 2,
+    "dailyPriceGapCount": 0
   },
   "results": [
     {

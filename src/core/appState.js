@@ -8,6 +8,7 @@ let state = loadState();
 let portfolioFilter = { account: "all", type: "all", status: "all" };
 let analysisFilter = { account: "all", assetId: "all", startDate: "", endDate: "" };
 let analysisReturnMetric = "mwr";
+let selectedBenchmarkKeys = ["csi300", "sp500", "qqq"];
 let marketSyncState = { status: "idle", message: "", results: [], syncedAt: "" };
 let benchmarkPerformanceState = { status: "idle", histories: {}, error: "" };
 
@@ -53,6 +54,14 @@ export function getAnalysisReturnMetric() {
 
 export function setAnalysisReturnMetric(nextMetric) {
   analysisReturnMetric = nextMetric;
+}
+
+export function getSelectedBenchmarkKeys() {
+  return selectedBenchmarkKeys;
+}
+
+export function setSelectedBenchmarkKeys(nextKeys) {
+  selectedBenchmarkKeys = Array.isArray(nextKeys) && nextKeys.length ? [...new Set(nextKeys)] : ["csi300", "sp500", "qqq"];
 }
 
 export function getMarketSyncState() {

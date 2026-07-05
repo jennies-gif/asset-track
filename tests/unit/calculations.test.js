@@ -10,11 +10,22 @@ import {
   calculateRealizedPnl,
   calculateSellPreview,
   formatPercent,
+  normalizeAsset,
   parseDecimalToScaledInt,
-  scaledIntToDecimal
+  scaledIntToDecimal,
+  validateAsset
 } from "../../src/domain/calculations.js";
-import { buildDataTasks, buildHistorySeries, inferUniverse, lookupSecurity } from "../../src/domain/marketData.js";
+import {
+  benchmarkInstruments,
+  buildDataTasks,
+  buildHistorySeries,
+  defaultBenchmarkSyncSymbols,
+  inferUniverse,
+  lookupSecurity
+} from "../../src/domain/marketData.js";
+import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
+import { priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
 import {
   cryptoInstruments,
   defaultFxPairs,
@@ -28,6 +39,8 @@ import {
 } from "../../src/domain/marketDataSources.js";
 import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.js";
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
+import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
+import { noteDisplayTagsFor, noteTypeFromTags } from "../../src/features/notes/notesRender.js";
 
 test("parses decimal values with deterministic rounding", () => {
   assert.equal(parseDecimalToScaledInt("12.345", 2), 1235n);
@@ -35,14 +48,172 @@ test("parses decimal values with deterministic rounding", () => {
   assert.equal(scaledIntToDecimal(123500n, 4), "12.35");
 });
 
+test("keeps custom review tags visible instead of replacing them with note type", () => {
+  const note = {
+    type: "交易复盘",
+    tags: ["自建标签", "交易复盘"]
+  };
+
+  assert.equal(noteTypeFromTags(note.tags), "交易复盘");
+  assert.deepEqual(noteDisplayTagsFor(note), ["自建标签", "交易复盘"]);
+});
+
 test("formats invalid percent inputs as unavailable data", () => {
+  assert.equal(formatPercent(null), "暂无数据");
   assert.equal(formatPercent(Number.NaN), "暂无数据");
   assert.equal(formatPercent(Number.POSITIVE_INFINITY), "暂无数据");
+});
+
+test("validates asset records before they enter calculations", () => {
+  const validAsset = {
+    name: "Test Asset",
+    type: "股票",
+    account: "测试账户",
+    currency: "USD",
+    quantity: "1",
+    costPrice: "100.00",
+    previousPrice: "99.00",
+    currentPrice: "101.00",
+    fxRate: "1",
+    previousFxRate: "1",
+    purchaseDate: "2026-07-01",
+    fees: "0",
+    taxes: "0"
+  };
+  assert.equal(validateAsset(validAsset), "");
+  assert.equal(validateAsset({ ...validAsset, currency: "" }), "currency 不能为空");
+  assert.equal(validateAsset({ ...validAsset, purchaseDate: "07/01/2026" }), "交易日期格式无效");
+  assert.equal(validateAsset({ ...validAsset, costPrice: "" }), "");
+  assert.equal(validateAsset({ ...validAsset, purchaseDate: "" }), "");
+  assert.equal(validateAsset({ ...validAsset, currentPrice: "0" }), "");
+  assert.equal(validateAsset({ ...validAsset, costPrice: "-1" }), "成本价不能为负数");
+  assert.equal(validateAsset({ ...validAsset, fees: "-0.01" }), "费用不能为负数");
+});
+
+test("keeps missing cost basis from producing fake returns", () => {
+  const asset = normalizeAsset({
+    name: "Unknown Cost Asset",
+    type: "股票",
+    account: "测试账户",
+    currency: "USD",
+    quantity: "2",
+    costPrice: "",
+    previousPrice: "10",
+    currentPrice: "120",
+    fxRate: "1"
+  });
+  const portfolio = calculatePortfolio([asset]);
+  const position = portfolio.positions[0];
+
+  assert.equal(validateAsset(asset), "");
+  assert.equal(position.hasCostBasis, false);
+  assert.equal(position.marketValueCents, 24000n);
+  assert.equal(position.costValueCents, 0n);
+  assert.equal(position.unrealizedPnlCents, 0n);
+  assert.equal(position.returnBps, null);
+  assert.equal(portfolio.totals.returnBps, null);
+});
+
+test("does not label omitted current prices as user-entered prices", () => {
+  const asset = normalizeAsset({
+    name: "No Price Asset",
+    type: "股票",
+    account: "测试账户",
+    currency: "USD",
+    quantity: "1",
+    costPrice: "100",
+    previousPrice: "100",
+    currentPrice: "",
+    fxRate: "1"
+  });
+
+  assert.equal(asset.priceStatus, "pending");
+  assert.equal(asset.priceSource, "");
 });
 
 test("calculates position value with quantity and FX rate", () => {
   const value = calculateMoneyFromQuantity("10.5", "100.00", "0.5");
   assert.equal(value, 52500n);
+});
+
+test("classifies price status without hiding missing or stale prices", () => {
+  assert.deepEqual(resolvePriceStatus({
+    currentPrice: "100",
+    costPrice: "100",
+    priceStatus: "pending",
+    pricedAt: "",
+    priceSource: ""
+  }, { today: "2026-07-05" }), {
+    key: "pending",
+    label: "按成本价暂估",
+    className: "data-warning",
+    needsReview: true
+  });
+  assert.equal(priceUsesCostFallback({
+    currentPrice: "100",
+    costPrice: "100",
+    priceStatus: "pending"
+  }), true);
+  assert.equal(resolvePriceStatus({
+    currentPrice: "101",
+    costPrice: "100",
+    priceStatus: "synced",
+    pricedAt: "2026-06-20",
+    priceSource: "test source"
+  }, { today: "2026-07-05" }).key, "stale");
+  assert.equal(resolvePriceStatus({
+    currentPrice: "101",
+    costPrice: "100",
+    priceStatus: "synced",
+    pricedAt: "2026-07-04",
+    priceSource: "test source"
+  }, { today: "2026-07-05" }).key, "synced");
+  assert.equal(resolvePriceStatus({
+    currentPrice: "101",
+    costPrice: "100",
+    priceStatus: "error",
+    pricedAt: "2026-07-04",
+    priceSource: "test source"
+  }).key, "error");
+});
+
+test("builds auditable daily user asset prices from first holding date", () => {
+  const result = buildUserAssetDailyPriceSnapshots({
+    userId: "demo-user",
+    asset: {
+      id: "asset-00700",
+      account: "港股账户",
+      symbol: "00700",
+      market: "HK",
+      currency: "HKD",
+      type: "股票",
+      purchaseDate: "2026-06-01"
+    },
+    history: [
+      {
+        date: "2026-06-01",
+        closeDecimal: "338.00",
+        source: "test price source",
+        sourceFetchedAt: "2026-06-01T10:00:00.000Z",
+        qualityStatus: "ok"
+      },
+      {
+        date: "2026-06-03",
+        closeDecimal: "341.50",
+        source: "test price source",
+        sourceFetchedAt: "2026-06-03T10:00:00.000Z",
+        qualityStatus: "ok"
+      }
+    ],
+    dateTo: "2026-06-03"
+  });
+
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.rows.map((row) => row.priceDate), ["2026-06-01", "2026-06-02", "2026-06-03"]);
+  assert.equal(result.rows[1].closePrice, "338");
+  assert.equal(result.rows[1].priceBasis, "carry_forward");
+  assert.equal(result.rows[1].carriedFromDate, "2026-06-01");
+  assert.equal(result.rows[2].qualityStatus, "ok");
 });
 
 test("calculates realized PnL for partial sells with fees and taxes", () => {
@@ -154,6 +325,48 @@ test("calculates portfolio totals without floating point arithmetic", () => {
   assert.equal(portfolio.totals.unrealizedPnlCents, 5000n);
 });
 
+test("handles zero values, negative cash flows and multi-currency fees deterministically", () => {
+  const portfolio = calculatePortfolio([
+    {
+      name: "USD Asset",
+      type: "股票",
+      account: "美股账户",
+      currency: "USD",
+      quantity: "0.125",
+      costPrice: "80.00",
+      previousPrice: "80.00",
+      currentPrice: "88.00",
+      previousFxRate: "1",
+      fxRate: "1",
+      contribution: "-1.25",
+      fees: "0.10",
+      taxes: "0"
+    },
+    {
+      name: "HKD Asset",
+      type: "股票",
+      account: "港股账户",
+      currency: "HKD",
+      quantity: "3",
+      costPrice: "10.00",
+      previousPrice: "10.00",
+      currentPrice: "9.50",
+      previousFxRate: "0.12",
+      fxRate: "0.13",
+      contribution: "0",
+      dividends: "0.20",
+      fees: "0",
+      taxes: "0.01"
+    }
+  ]);
+
+  assert.equal(portfolio.totals.marketValueCents, 1471n);
+  assert.equal(portfolio.totals.costValueCents, 1390n);
+  assert.equal(portfolio.totals.contributionCents, -125n);
+  assert.equal(portfolio.totals.feesCents, 10n);
+  assert.equal(portfolio.totals.taxesCents, 1n);
+});
+
 test("keeps attribution reconciled to portfolio value change", () => {
   const attribution = calculateAttribution([
     {
@@ -229,6 +442,13 @@ test("maps first-version market coverage to data tasks and price series", () => 
   });
   assert.ok(series.length > 40);
   assert.equal(series.at(-1).close, 320);
+});
+
+test("keeps analysis benchmark symbols in the default market sync set", () => {
+  assert.deepEqual(
+    [...new Set(defaultBenchmarkSyncSymbols)].sort(),
+    [...new Set(benchmarkInstruments.map((benchmark) => benchmark.symbol))].sort()
+  );
 });
 
 test("searches the generated instrument registry for mainstream assets", () => {
@@ -378,6 +598,28 @@ test("groups current market value by asset category", () => {
       ["现金", 8000n, 2500n]
     ]
   );
+});
+
+test("collects saved account names from existing assets for future asset entry", () => {
+  const accounts = savedAccountOptionsFromAssets([
+    { account: "长期账户", accountType: "long_term" },
+    { account: "长期账户", accountType: "long_term" },
+    { account: "美股账户", type: "股票" },
+    { account: "冷钱包", type: "数字资产" },
+    { account: "  " }
+  ]);
+
+  assert.deepEqual(accounts, [
+    { name: "冷钱包", accountType: "crypto", saved: true },
+    { name: "美股账户", accountType: "securities", saved: true },
+    { name: "长期账户", accountType: "long_term", saved: true }
+  ]);
+});
+
+test("normalizes legacy account type form values", () => {
+  assert.equal(normalizeAccountTypeFormValue("brokerage"), "securities");
+  assert.equal(normalizeAccountTypeFormValue("custom", "家庭账户"), "custom:家庭账户");
+  assert.equal(normalizeAccountTypeFormValue("__custom__", "长期实验账户"), "custom:长期实验账户");
 });
 
 test("formats basis point returns with explicit sign", () => {

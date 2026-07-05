@@ -1,5 +1,7 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
+import { priceUsesCostFallback, resolvePriceStatus } from "../../domain/priceStatus.js";
 import { escapeHtml } from "../../utils/dom.js";
+import { formatShortDate } from "../../utils/date.js";
 import { trustBadge } from "../../ui/badges.js";
 import { emptyStateInner } from "../../ui/emptyState.js";
 import {
@@ -22,16 +24,11 @@ export function configureAssetRender(context) {
 }
 
 export function priceStatusLabel(asset) {
-  if (asset.priceStatus === "synced") return "同步价格";
-  if (asset.priceStatus === "pending") return "按成本价暂估";
-  if (!asset.currentPrice || asset.currentPrice === asset.costPrice) return "手动价格";
-  return "手动价格";
+  return resolvePriceStatus(asset).label;
 }
 
 export function priceStatusClass(asset) {
-  if (asset.priceStatus === "synced") return "positive";
-  if (asset.priceStatus === "pending") return "warning";
-  return "";
+  return resolvePriceStatus(asset).className;
 }
 
 export function renderPortfolioFilters(openAssets) {
@@ -108,7 +105,7 @@ export function renderPortfolio() {
     ? visiblePositions
     .map((position) => {
       const asset = openAssets.find((item) => item.id === position.id) || position;
-      const pnlClass = toneClassForValue(position.unrealizedPnlCents);
+      const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
       const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
       return `
         <tr data-asset-row-id="${escapeHtml(asset.id)}">
@@ -118,25 +115,21 @@ export function renderPortfolio() {
           </td>
           <td>${escapeHtml(position.account)}</td>
           <td>${escapeHtml([position.type, marketLabel(position.market)].filter(Boolean).join(" / "))}</td>
-          <td>${escapeHtml(formatUnitPrice(asset.costPrice, asset.currency))}</td>
+          <td>${escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</td>
           <td>${renderPriceCell(asset)}</td>
           <td>${escapeHtml(formatHoldingDays(asset))}</td>
           <td>${formatDisplayCurrency(position.marketValueCents)}</td>
           <td>
             <div class="return-cell">
-              <strong class="${pnlClass}">${formatPercent(position.returnBps)}</strong>
-              <span class="${pnlClass}">${formatSignedAmountOnly(position.unrealizedPnlCents)}</span>
+              <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
+              <span class="${pnlClass}">${position.hasCostBasis ? formatSignedAmountOnly(position.unrealizedPnlCents) : "暂无法计算"}</span>
             </div>
           </td>
           <td>${formatShare(weightBps)}</td>
           <td>${renderDataStatus(asset)}</td>
           <td>
             <div class="row-actions">
-              ${renderTransactionMenu(position.id)}
-              <details class="row-more-menu">
-                <summary aria-label="更多操作">···</summary>
-                <button data-edit-asset-id="${position.id}" type="button">编辑资产</button>
-              </details>
+              ${renderRowActions(position.id)}
             </div>
           </td>
         </tr>
@@ -188,11 +181,44 @@ export function renderAssetChangeRows() {
 }
 
 function renderPriceCell(asset) {
+  const status = resolvePriceStatus(asset);
+  const shortMeta = shortPriceMeta(asset, status);
+  const detail = priceDetailTitle(asset, status);
   return `
-    <div class="price-cell">
-      <span>${escapeHtml(formatUnitPrice(asset.currentPrice || asset.costPrice, asset.currency))}</span>
+    <div class="price-cell" title="${escapeHtml(detail)}">
+      <span>${escapeHtml(formatUnitPrice(asset.currentPrice || asset.costPrice, asset.currency, "待补价格"))}</span>
+      <small class="${escapeHtml(status.className)}">${escapeHtml(shortMeta)}</small>
     </div>
   `;
+}
+
+function shortPriceMeta(asset, status) {
+  const date = asset.pricedAt ? formatShortDate(asset.pricedAt) : "";
+  const label = shortPriceStatusLabel(asset, status);
+  return [date, label].filter(Boolean).join(" · ") || label;
+}
+
+function shortPriceStatusLabel(asset, status) {
+  if (priceUsesCostFallback(asset)) return "待同步";
+  return {
+    synced: "同步",
+    manual: "手动",
+    pending: "待同步",
+    stale: "过期",
+    missing: "缺缓存",
+    error: "失败"
+  }[status.key] || status.label;
+}
+
+function priceDetailTitle(asset, status) {
+  const source = asset.priceSource || (priceUsesCostFallback(asset) ? "成本价兜底" : "");
+  return [
+    `状态：${status.label}`,
+    asset.pricedAt ? `价格日期：${asset.pricedAt}` : "",
+    source ? `来源：${source}` : "",
+    asset.updatedAt ? `更新时间：${formatMonthDayTimeMinute(asset.updatedAt)}` : "",
+    asset.priceError ? `原因：${asset.priceError}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function renderCurrentPriceHeadings(openAssets, closedAssets) {
@@ -204,38 +230,34 @@ function renderCurrentPriceHeadings(openAssets, closedAssets) {
 }
 
 function renderCurrentPriceHeading(assets) {
-  const latestLabel = latestPriceUpdateLabel(assets);
-  return `当前价${latestLabel ? `<small class="column-sync-time">最新同步 ${escapeHtml(latestLabel)}</small>` : ""}`;
+  return "当前价";
 }
 
-function latestPriceUpdateLabel(assets) {
-  const latest = assets
-    .flatMap((asset) => [asset.updatedAt, asset.pricedAt])
-    .map((value) => new Date(value).getTime())
-    .filter((time) => Number.isFinite(time))
-    .sort((left, right) => right - left)[0];
-  return latest ? formatMonthDayTimeMinute(new Date(latest).toISOString()) : "";
-}
-
-function renderTransactionMenu(assetId) {
-  const actions = [
-    ["buy", "买入", false],
-    ["sell", "卖出", false],
+function renderRowActions(assetId) {
+  const secondaryActions = [
+    ["close", "清仓", false],
+    ["edit", "编辑资产", false],
     ["dividend", "分红", true],
     ["transfer-in", "转入", true],
     ["transfer-out", "转出", true],
-    ["adjust-cost", "调整成本", true],
-    ["close", "清仓", false]
+    ["adjust-cost", "调整成本", true]
   ];
   return `
-    <details class="transaction-menu">
-      <summary>记录交易</summary>
-      <div class="transaction-menu-panel">
-        ${actions.map(([action, label, disabled]) => `
-          <button data-asset-id="${escapeHtml(assetId)}" data-transaction-action="${escapeHtml(action)}" ${disabled ? "disabled aria-disabled=\"true\" title=\"后续支持\"" : ""} type="button">
-            ${escapeHtml(disabled ? `${label}（后续支持）` : label)}
-          </button>
-        `).join("")}
+    <button class="row-action-button" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="buy" type="button">买入</button>
+    <button class="row-action-button" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="sell" type="button">卖出</button>
+    <details class="row-more-menu">
+      <summary aria-label="更多操作">更多</summary>
+      <div class="row-more-panel">
+        ${secondaryActions.map(([action, label, disabled]) => {
+          if (action === "edit") {
+            return `<button data-edit-asset-id="${escapeHtml(assetId)}" type="button">${escapeHtml(label)}</button>`;
+          }
+          return `
+            <button data-asset-id="${escapeHtml(assetId)}" data-transaction-action="${escapeHtml(action)}" ${disabled ? "disabled aria-disabled=\"true\" title=\"后续支持\"" : ""} type="button">
+              ${escapeHtml(disabled ? `${label}（后续支持）` : label)}
+            </button>
+          `;
+        }).join("")}
       </div>
     </details>
   `;
@@ -275,9 +297,9 @@ function renderClosedAssetRow(asset) {
   `;
 }
 
-export function formatUnitPrice(price, currency = "") {
+export function formatUnitPrice(price, currency = "", emptyLabel = "-") {
   const value = String(price || "").trim();
-  return value ? `${value} ${currency || ""}`.trim() : "-";
+  return value && value !== "0" ? `${value} ${currency || ""}`.trim() : emptyLabel;
 }
 
 function renderDataStatus(asset) {

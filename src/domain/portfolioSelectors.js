@@ -26,10 +26,12 @@ export function calculateDisplayPortfolio(assets) {
     const costValueCents = displayAssetValue(position, "costPrice");
     const previousValueCents = displayAssetValue(position, "previousPrice");
     const marketValueCents = displayAssetValue(position, "currentPrice");
-    const unrealizedPnlCents = marketValueCents - costValueCents;
-    const returnBps = costValueCents === 0n ? 0n : roundDivide(unrealizedPnlCents * 10000n, costValueCents);
+    const hasCostBasis = Boolean(position.hasCostBasis);
+    const unrealizedPnlCents = hasCostBasis ? marketValueCents - costValueCents : 0n;
+    const returnBps = hasCostBasis && costValueCents !== 0n ? roundDivide(unrealizedPnlCents * 10000n, costValueCents) : null;
     return {
       ...position,
+      hasCostBasis,
       costValueCents,
       previousValueCents,
       marketValueCents,
@@ -48,7 +50,7 @@ export function calculateDisplayPortfolio(assets) {
     { costValueCents: 0n, previousValueCents: 0n, marketValueCents: 0n, unrealizedPnlCents: 0n }
   );
   totals.returnBps =
-    totals.costValueCents === 0n ? 0n : roundDivide(totals.unrealizedPnlCents * 10000n, totals.costValueCents);
+    totals.costValueCents === 0n ? null : roundDivide(totals.unrealizedPnlCents * 10000n, totals.costValueCents);
   return { positions, totals };
 }
 

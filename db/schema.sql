@@ -315,6 +315,32 @@ create table valuation_snapshots (
   unique (user_id, account_id, snapshot_date, display_currency)
 );
 
+create table user_asset_daily_price_snapshots (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  account_id uuid references accounts(id) on delete cascade,
+  position_id uuid not null references positions(id) on delete cascade,
+  instrument_id uuid not null references instruments(id),
+  price_date date not null,
+  close_price_decimal numeric(38, 12) not null,
+  price_type text not null,
+  price_basis text not null,
+  carried_from_date date,
+  source text not null,
+  source_fetched_at timestamptz,
+  quality_status text not null default 'ok',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, position_id, instrument_id, price_date),
+  check (close_price_decimal > 0),
+  check (price_type in ('close', 'unit_nav')),
+  check (price_basis in ('actual', 'carry_forward')),
+  check (quality_status in ('ok', 'carried_forward', 'missing', 'error'))
+);
+
+create index user_asset_daily_prices_user_instrument_date_idx
+  on user_asset_daily_price_snapshots(user_id, instrument_id, price_date desc);
+
 create table attribution_runs (
   id uuid primary key,
   user_id uuid not null references users(id) on delete cascade,

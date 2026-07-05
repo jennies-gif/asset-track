@@ -13,6 +13,7 @@ import {
   startSellAsset,
   submitAssetForm,
   syncAdjustmentMode,
+  syncOptionalEntryPanels,
   updateAssetMatchPanel,
   updateAssetLiveSummary,
   updateTransactionLiveSummary
@@ -39,6 +40,12 @@ export function initAssetEvents(ctx) {
     clearAssetFieldErrors();
     updateAssetLiveSummary();
     updateTransactionLiveSummary();
+  });
+  elements.assetForm.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
+    toggle.addEventListener("change", () => {
+      syncOptionalEntryPanels();
+      updateAssetLiveSummary();
+    });
   });
   elements.assetForm.elements.name?.addEventListener("change", () => {
     applyAssetQuickMatch();

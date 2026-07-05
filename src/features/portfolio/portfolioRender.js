@@ -109,12 +109,12 @@ export function renderOverviewBreakdownDetail() {
       </div>
       ${topPositions
         .map((position) => {
-          const pnlClass = toneClassForValue(position.unrealizedPnlCents);
+          const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
           return `
             <div class="mini-holdings-row">
               <strong>${escapeHtml(position.name)}</strong>
               <span>${formatDisplayCurrency(position.marketValueCents)}</span>
-              <span class="${pnlClass}">${formatDisplayCurrency(position.unrealizedPnlCents)}</span>
+              <span class="${pnlClass}">${position.hasCostBasis ? formatDisplayCurrency(position.unrealizedPnlCents) : "成本缺失"}</span>
             </div>
           `;
         })
@@ -282,8 +282,8 @@ export function renderAccounts() {
               <td>${escapeHtml(position.type)}</td>
               <td>${formatDisplayCurrency(position.marketValueCents)}</td>
               <td>
-                <strong class="${pnlClass}">${formatPercent(position.returnBps)}</strong>
-                <span class="${pnlClass}">${formatDisplayCurrency(position.unrealizedPnlCents)}</span>
+                <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
+                <span class="${pnlClass}">${position.hasCostBasis ? formatDisplayCurrency(position.unrealizedPnlCents) : "暂无法计算"}</span>
               </td>
             </tr>
           `;

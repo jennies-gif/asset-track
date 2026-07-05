@@ -21,6 +21,27 @@ export function accountNamePresets() {
   ];
 }
 
+export function savedAccountOptionsFromAssets(assets = []) {
+  const accounts = new Map();
+  for (const asset of assets) {
+    const name = String(asset?.account || "").trim();
+    if (!name) continue;
+    const accountType = asset.accountType || inferAccountType(asset);
+    const key = `${accountType}:${name}`;
+    if (!accounts.has(key)) accounts.set(key, { name, accountType, saved: true });
+  }
+  return [...accounts.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function mergeAccountOptions(assets = []) {
+  const accounts = new Map(accountNamePresets().map((account) => [`${account.accountType}:${account.name}`, account]));
+  for (const account of savedAccountOptionsFromAssets(assets)) {
+    const key = `${account.accountType}:${account.name}`;
+    if (!accounts.has(key)) accounts.set(key, account);
+  }
+  return [...accounts.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function inferAccountType(asset = {}) {
   const type = String(asset.type || "");
   const account = String(asset.account || asset.name || "").toLowerCase();
@@ -46,9 +67,10 @@ export function accountTypeLabel(type) {
 }
 
 export function normalizeAccountTypeFormValue(type, customName) {
-  if (type === "__custom__") {
+  const normalizedType = type === "brokerage" ? "securities" : type === "custom" ? "__custom__" : type;
+  if (normalizedType === "__custom__") {
     const label = String(customName || "").trim();
     return label ? `custom:${label}` : "";
   }
-  return String(type || "");
+  return String(normalizedType || "");
 }

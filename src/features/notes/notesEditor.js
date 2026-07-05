@@ -335,15 +335,19 @@ function startEditingCustomNoteTag(tagControl) {
   if (!input || !chip || tagControl.querySelector(".note-tag-edit-input")) return;
 
   const editor = document.createElement("input");
+  const originalTag = input.value;
+  let isFinishing = false;
   editor.type = "text";
   editor.maxLength = 12;
   editor.className = "note-tag-edit-input";
   editor.value = input.value;
 
   const finish = () => {
-    const nextTag = normalizeNoteTag(editor.value);
+    if (isFinishing) return;
+    isFinishing = true;
+    const nextTag = normalizeNoteTag(editor.value) || originalTag;
     if (!nextTag) {
-      tagControl.remove();
+      editor.replaceWith(chip);
       return;
     }
     const duplicate = [...elements.noteForm.querySelectorAll('input[name="tags"]')]
@@ -361,6 +365,9 @@ function startEditingCustomNoteTag(tagControl) {
   editor.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      isFinishing = true;
+      input.value = originalTag;
+      chip.textContent = `# ${originalTag}`;
       editor.replaceWith(chip);
     }
     if (event.key === "Enter") {

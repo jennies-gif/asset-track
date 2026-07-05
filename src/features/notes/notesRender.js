@@ -46,13 +46,13 @@ export function renderNotes() {
 
   elements.notesList.innerHTML = notes
     .map((note) => {
-      const primaryTag = noteTypeForNote(note);
+      const displayTags = noteDisplayTagsFor(note);
       const isSelected = note.id === selectedId;
       return `
         <article class="note-card${isSelected ? " is-active" : ""}" data-open-note-id="${escapeHtml(note.id)}" tabindex="0" role="button" aria-label="查看复盘：${escapeHtml(note.title)}">
           <div class="note-card-main">
             <div class="note-card-meta">
-              <span>${escapeHtml(`#${primaryTag}`)}</span>
+              ${displayTags.map((tag) => `<span>${escapeHtml(`#${tag}`)}</span>`).join("")}
               <time>${escapeHtml(formatNoteDate(note.updatedAt || note.createdAt))}</time>
             </div>
             <h3>${escapeHtml(note.title)}</h3>
@@ -83,6 +83,15 @@ export function noteTagsFor(note) {
 
 export function noteTypeFromTags(tags) {
   return tags.map(normalizeNoteReviewTag).find((tag) => NOTE_FILTERS.includes(tag) && tag !== "全部") || "交易复盘";
+}
+
+export function noteDisplayTagsFor(note) {
+  const tags = uniqueNoteTags(noteTagsFor(note));
+  const type = noteTypeForNote(note);
+  if (!tags.length) return [type];
+  const customTags = tags.filter((tag) => !NOTE_FILTERS.includes(tag));
+  const orderedTags = customTags.length ? [...customTags, ...tags.filter((tag) => NOTE_FILTERS.includes(tag))] : tags;
+  return orderedTags.slice(0, 3);
 }
 
 export function noteAssetLabel(note) {
@@ -164,7 +173,8 @@ function noteTagSummary() {
 }
 
 function renderNoteFilterTags(tags, activeFilter) {
-  const coreTags = NOTE_FILTERS;
+  const customTags = tags.filter((tag) => tag !== "全部" && !NOTE_FILTERS.includes(tag));
+  const coreTags = [...NOTE_FILTERS, ...customTags];
   const iconFor = (tag) => ({
     全部: "▦",
     交易复盘: "♙",
@@ -183,6 +193,10 @@ function normalizeNoteReviewTag(tag) {
   const normalized = String(tag || "").trim();
   if (normalized === "复盘") return "交易复盘";
   return normalized;
+}
+
+function uniqueNoteTags(tags) {
+  return [...new Set(tags.map(normalizeNoteReviewTag).filter(Boolean))];
 }
 
 function noteTypeForNote(note) {

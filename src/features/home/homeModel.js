@@ -1,4 +1,5 @@
 import { roundDivide } from "../../domain/calculations.js";
+import { resolvePriceStatus } from "../../domain/priceStatus.js";
 import { normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
 import { buildAssetDataIssues } from "../assets/dataQuality.js";
 import { inferAssetMarket } from "../assets/marketOptions.js";
@@ -81,7 +82,7 @@ export function portfolioHealthSnapshot() {
 export function priceCompletenessLabel() {
   const assets = ctx.overviewAssets();
   if (!assets.length) return "暂无价格数据";
-  const pending = assets.filter((asset) => asset.priceStatus === "pending" || !asset.pricedAt || !asset.priceSource).length;
+  const pending = assets.filter((asset) => resolvePriceStatus(asset).needsReview).length;
   if (pending) return `${pending} 项价格待核对`;
   const synced = assets.filter((asset) => asset.priceStatus === "synced").length;
   if (synced) return `含 ${synced} 项同步价格`;
@@ -91,7 +92,7 @@ export function priceCompletenessLabel() {
 export function priceCompletenessClass() {
   const assets = ctx.overviewAssets();
   if (!assets.length) return "";
-  return assets.some((asset) => asset.priceStatus === "pending" || !asset.pricedAt || !asset.priceSource) ? "warning" : "positive";
+  return assets.some((asset) => resolvePriceStatus(asset).needsReview) ? "warning" : "positive";
 }
 
 export function fxRateSummary() {

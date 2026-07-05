@@ -165,7 +165,9 @@ async function selectInstruments(args, asOfDate) {
   const symbols = parseList(args.symbols || "").map((item) => item.toUpperCase());
   const universes = parseList(args.universes || "");
   const source = universes.length ? await loadUniverseInstruments(universes, asOfDate) : securityWhitelist;
-  if (!symbols.length) return source;
+  if (!symbols.length) {
+    return universes.length ? source : dedupeInstruments([...source, ...benchmarkInstruments]);
+  }
   const matched = source.filter((item) => symbols.includes(item.symbol.toUpperCase()));
   const matchedSymbols = new Set(matched.map((item) => item.symbol.toUpperCase()));
   const inferred = symbols
@@ -571,7 +573,7 @@ function normalizeNasdaqRow(instrument, row) {
 
 function toTencentSymbol(instrument) {
   const symbol = instrument.symbol.toUpperCase();
-  if (String(instrument.type || "") === "指数" && instrument.market === "CN" && symbol === "000300") return "sh000300";
+  if (String(instrument.type || "") === "指数" && instrument.market === "CN" && ["000016", "000300", "000905"].includes(symbol)) return `sh${symbol}`;
   if (instrument.market === "HK") return `hk${symbol.padStart(5, "0")}`;
   if (symbol.startsWith("6") || symbol.startsWith("5")) return `sh${symbol}`;
   return `sz${symbol}`;

@@ -45,6 +45,7 @@ export function formatCurrency(cents, currency = "USD") {
 }
 
 export function formatPercent(basisPoints) {
+  if (basisPoints === null || basisPoints === undefined) return "暂无数据";
   const value = Number(basisPoints) / 100;
   if (!Number.isFinite(value)) return "暂无数据";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -160,6 +161,12 @@ export function calculateSellPreview({
 }
 
 export function normalizeAsset(formAsset) {
+  const priceStatus = String(formAsset.priceStatus || (formAsset.currentPrice ? "manual" : "pending")).trim();
+  const priceSource = formAsset.priceSource !== undefined
+    ? String(formAsset.priceSource).trim()
+    : priceStatus === "manual"
+      ? "用户录入"
+      : "";
   return {
     id: formAsset.id || cryptoRandomId(),
     name: String(formAsset.name || "").trim(),
@@ -186,7 +193,8 @@ export function normalizeAsset(formAsset) {
     assetRegistryId: String(formAsset.assetRegistryId || "").trim(),
     assetMatchStatus: String(formAsset.assetMatchStatus || "unmatched").trim(),
     marketDataSupported: String(formAsset.marketDataSupported || "false").trim(),
-    priceSource: String(formAsset.priceSource || "用户录入").trim(),
+    priceStatus,
+    priceSource,
     pricedAt: String(formAsset.pricedAt || "").trim(),
     attachmentName: String(formAsset.attachmentName || "").trim(),
     buyReason: String(formAsset.buyReason || "").trim(),
@@ -197,32 +205,40 @@ export function normalizeAsset(formAsset) {
 }
 
 export function validateAsset(asset) {
-  const required = ["name", "account", "quantity", "costPrice", "previousPrice", "currentPrice", "fxRate"];
+  const required = ["name", "type", "account", "currency", "quantity", "fxRate"];
   for (const field of required) {
     if (!String(asset[field] ?? "").trim()) {
       return `${field} 不能为空`;
     }
   }
+  if (asset.purchaseDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(asset.purchaseDate))) {
+    return "交易日期格式无效";
+  }
 
   try {
     const quantity = parseDecimalToScaledInt(asset.quantity, QUANTITY_SCALE);
     const fxRate = parseDecimalToScaledInt(asset.fxRate, RATE_SCALE);
-    parseDecimalToScaledInt(asset.costPrice, CENT_SCALE);
-    parseDecimalToScaledInt(asset.previousPrice, CENT_SCALE);
-    parseDecimalToScaledInt(asset.currentPrice, CENT_SCALE);
-    parseDecimalToScaledInt(asset.previousFxRate || asset.fxRate || "1", RATE_SCALE);
+    const costPrice = parseDecimalToScaledInt(asset.costPrice || "0", CENT_SCALE);
+    const previousPrice = parseDecimalToScaledInt(asset.previousPrice || "0", CENT_SCALE);
+    const currentPrice = parseDecimalToScaledInt(asset.currentPrice || "0", CENT_SCALE);
+    const previousFxRate = parseDecimalToScaledInt(asset.previousFxRate || asset.fxRate || "1", RATE_SCALE);
     parseDecimalToScaledInt(asset.contribution || "0", CENT_SCALE);
-    parseDecimalToScaledInt(asset.dividends || "0", CENT_SCALE);
-    parseDecimalToScaledInt(asset.interest || "0", CENT_SCALE);
-    parseDecimalToScaledInt(asset.fees || "0", CENT_SCALE);
-    parseDecimalToScaledInt(asset.taxes || "0", CENT_SCALE);
+    const dividends = parseDecimalToScaledInt(asset.dividends || "0", CENT_SCALE);
+    const interest = parseDecimalToScaledInt(asset.interest || "0", CENT_SCALE);
+    const fees = parseDecimalToScaledInt(asset.fees || "0", CENT_SCALE);
+    const taxes = parseDecimalToScaledInt(asset.taxes || "0", CENT_SCALE);
     parseDecimalToScaledInt(asset.manualAdjustment || "0", CENT_SCALE);
 
     if (quantity <= 0n) return "数量必须大于 0";
+    if (costPrice < 0n) return "成本价不能为负数";
+    if (previousPrice < 0n) return "期初价不能为负数";
+    if (currentPrice < 0n) return "当前价格不能为负数";
     if (fxRate <= 0n) return "汇率必须大于 0";
-    if (parseDecimalToScaledInt(asset.previousFxRate || asset.fxRate || "1", RATE_SCALE) <= 0n) {
-      return "期初汇率必须大于 0";
-    }
+    if (previousFxRate <= 0n) return "期初汇率必须大于 0";
+    if (dividends < 0n) return "分红不能为负数";
+    if (interest < 0n) return "利息不能为负数";
+    if (fees < 0n) return "费用不能为负数";
+    if (taxes < 0n) return "税费不能为负数";
   } catch {
     return "金额、数量和汇率必须是有效数字";
   }
@@ -231,7 +247,8 @@ export function validateAsset(asset) {
 }
 
 export function calculatePosition(asset) {
-  const costValueCents = calculateMoneyFromQuantity(asset.quantity, asset.costPrice, asset.fxRate);
+  const hasCostBasis = hasPositiveDecimal(asset.costPrice, CENT_SCALE);
+  const costValueCents = hasCostBasis ? calculateMoneyFromQuantity(asset.quantity, asset.costPrice, asset.fxRate) : 0n;
   const previousValueCents = calculateMoneyFromQuantity(
     asset.quantity,
     asset.previousPrice,
@@ -244,11 +261,12 @@ export function calculatePosition(asset) {
   const feesCents = parseDecimalToScaledInt(asset.fees || "0", CENT_SCALE);
   const taxesCents = parseDecimalToScaledInt(asset.taxes || "0", CENT_SCALE);
   const manualAdjustmentCents = parseDecimalToScaledInt(asset.manualAdjustment || "0", CENT_SCALE);
-  const unrealizedPnlCents = marketValueCents - costValueCents;
-  const returnBps = costValueCents === 0n ? 0n : roundDivide(unrealizedPnlCents * 10000n, costValueCents);
+  const unrealizedPnlCents = hasCostBasis ? marketValueCents - costValueCents : 0n;
+  const returnBps = hasCostBasis && costValueCents !== 0n ? roundDivide(unrealizedPnlCents * 10000n, costValueCents) : null;
 
   return {
     ...asset,
+    hasCostBasis,
     costValueCents,
     previousValueCents,
     marketValueCents,
@@ -261,6 +279,14 @@ export function calculatePosition(asset) {
     unrealizedPnlCents,
     returnBps
   };
+}
+
+function hasPositiveDecimal(value, scale) {
+  try {
+    return parseDecimalToScaledInt(value || "0", scale) > 0n;
+  } catch {
+    return false;
+  }
 }
 
 export function calculatePortfolio(assets) {
@@ -294,7 +320,7 @@ export function calculatePortfolio(assets) {
   );
 
   totals.returnBps =
-    totals.costValueCents === 0n ? 0n : roundDivide(totals.unrealizedPnlCents * 10000n, totals.costValueCents);
+    totals.costValueCents === 0n ? null : roundDivide(totals.unrealizedPnlCents * 10000n, totals.costValueCents);
 
   return { positions, totals };
 }

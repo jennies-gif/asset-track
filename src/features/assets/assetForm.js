@@ -2,7 +2,7 @@ import { calculateBuyPreview, calculateMoneyFromQuantity, calculateSellPreview, 
 import { escapeHtml } from "../../utils/dom.js";
 import { todayIsoDate } from "../../utils/date.js";
 import { formatDisplayCurrency, formatSignedAmountOnly } from "../../ui/formatters.js";
-import { accountNamePresets, accountTypeLabel, inferAccountType, normalizeAccountTypeFormValue } from "./accountOptions.js";
+import { accountTypeLabel, inferAccountType, mergeAccountOptions, normalizeAccountTypeFormValue } from "./accountOptions.js";
 import { assetQuickMatchOptions, findAssetQuickMatch, findAssetQuickMatches, isManualCashMatch, normalizeQuickMatchText } from "./assetQuickMatch.js";
 import { inferAssetMarket, marketLabel } from "./marketOptions.js";
 import { buildAssetFormPayload, defaultAssetFxRate } from "./assetFormPayload.js";
@@ -22,6 +22,7 @@ export function startQuickAsset() {
   ctx.elements.assetForm.reset();
   syncAccountPickerToName("");
   setDefaultAssetFormValues();
+  syncOptionalEntryPanels();
   applyCashAssetFormMode();
   updateAssetMatchPanel();
   updateAssetLiveSummary();
@@ -97,6 +98,7 @@ export function submitAssetForm() {
   ctx.elements.assetForm.reset();
   resetAssetFormMode("create");
   setDefaultAssetFormValues();
+  syncOptionalEntryPanels();
   applyCashAssetFormMode();
   updateAssetMatchPanel();
   updateAssetLiveSummary();
@@ -124,7 +126,7 @@ export function setDefaultAssetFormValues() {
   if (ctx.elements.assetForm.elements.assetRegistryId) ctx.elements.assetForm.elements.assetRegistryId.value = "";
   if (ctx.elements.assetForm.elements.assetMatchStatus) ctx.elements.assetForm.elements.assetMatchStatus.value = "unmatched";
   if (ctx.elements.assetForm.elements.marketDataSupported) ctx.elements.assetForm.elements.marketDataSupported.value = "false";
-  if (ctx.elements.assetForm.elements.purchaseDate) ctx.elements.assetForm.elements.purchaseDate.value = todayIsoDate();
+  if (ctx.elements.assetForm.elements.purchaseDate) ctx.elements.assetForm.elements.purchaseDate.value = "";
 }
 
 export function updateAssetLiveSummary() {
@@ -143,23 +145,37 @@ export function updateAssetLiveSummary() {
     ["当前估值", "-"],
     ["浮动收益", "-"]
   ];
-  if (quantity && costPrice) {
+  if (quantity && (costPrice || currentPrice)) {
     try {
-      const cost = calculateMoneyFromQuantity(quantity, costPrice, fxRate);
       const market = calculateMoneyFromQuantity(quantity, currentPrice, fxRate);
-      rows = [
-        ["初始成本", formatDisplayCurrency(ctx.convertUsdToDisplay(cost))],
-        ["当前估值", formatDisplayCurrency(ctx.convertUsdToDisplay(market))],
-        ["浮动收益", formatSignedAmountOnly(ctx.convertUsdToDisplay(market - cost))]
-      ];
+      if (costPrice) {
+        const cost = calculateMoneyFromQuantity(quantity, costPrice, fxRate);
+        rows = [
+          ["初始成本", formatDisplayCurrency(ctx.convertUsdToDisplay(cost))],
+          ["当前估值", formatDisplayCurrency(ctx.convertUsdToDisplay(market))],
+          ["浮动收益", formatSignedAmountOnly(ctx.convertUsdToDisplay(market - cost))]
+        ];
+      } else {
+        rows = [
+          ["初始成本", "成本缺失"],
+          ["当前估值", formatDisplayCurrency(ctx.convertUsdToDisplay(market))],
+          ["浮动收益", "暂无法计算"]
+        ];
+      }
     } catch {
       rows[0][1] = "待检查输入";
     }
   }
   ctx.elements.assetLiveSummary.innerHTML = `
     ${rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
-    <p>${String(ctx.elements.assetForm.elements.currentPrice?.value || "").trim() ? `按当前价格估值，币种：${escapeHtml(currency)}` : "不填当前价格时，将暂按成本价估值。"}</p>
+    <p>${assetLiveSummaryHint(costPrice, ctx.elements.assetForm.elements.currentPrice?.value, currency)}</p>
   `;
+}
+
+function assetLiveSummaryHint(costPrice, currentPrice, currency) {
+  if (String(currentPrice || "").trim()) return `按当前价格估值，币种：${escapeHtml(currency)}`;
+  if (costPrice) return "不填当前价格时，将暂按成本价估值。";
+  return "成本价和当前价格都可后续补充；缺成本时收益和归因暂无法计算。";
 }
 
 export function updateTransactionLiveSummary() {
@@ -401,6 +417,25 @@ export function applyCashAssetFormMode() {
   if (transactionTypeField && isCash && transactionTypeField.value === "买入") transactionTypeField.value = "转入";
 }
 
+export function syncOptionalEntryPanels() {
+  ctx.elements.assetForm?.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
+    const panel = ctx.elements.assetForm.querySelector(`[data-optional-panel="${toggle.dataset.optionalToggle}"]`);
+    const isEnabled = Boolean(toggle.checked);
+    panel?.classList.toggle("is-hidden", !isEnabled);
+    panel?.querySelectorAll("input, select, textarea").forEach((field) => {
+      if (!isEnabled) resetOptionalFieldValue(field);
+      field.disabled = !isEnabled;
+    });
+  });
+}
+
+function resetOptionalFieldValue(field) {
+  if (field.name === "fees" || field.name === "taxes") field.value = "0";
+  if (field.name === "fxRate" || field.name === "previousFxRate") {
+    field.value = defaultAssetFxRate(ctx.elements.assetForm.elements.currency?.value || "USD");
+  }
+}
+
 export function setFieldLabel(field, text) {
   const label = field?.closest("label");
   const marker = label?.querySelector("em")?.outerHTML || "";
@@ -425,22 +460,23 @@ export function syncAccountPickerToName(accountName) {
 export function renderAccountPicker() {
   if (!ctx.elements.accountNameOptions) return;
   const type = selectedAccountType();
-  const options = buildAccountOptions().filter((account) => account.accountType === type);
+  const options = buildAccountOptions().sort((left, right) => {
+    if (left.accountType === type && right.accountType !== type) return -1;
+    if (left.accountType !== type && right.accountType === type) return 1;
+    return left.name.localeCompare(right.name);
+  });
   ctx.elements.accountNameOptions.innerHTML = options
-    .map((account) => `<option value="${escapeHtml(account.name)}">${escapeHtml(accountTypeLabel(account.accountType))}</option>`)
+    .map((account) => {
+      const label = account.accountType === type
+        ? accountTypeLabel(account.accountType)
+        : `${accountTypeLabel(account.accountType)} · 历史账户`;
+      return `<option value="${escapeHtml(account.name)}">${escapeHtml(label)}</option>`;
+    })
     .join("");
 }
 
 export function buildAccountOptions() {
-  const accounts = new Map(accountNamePresets().map((account) => [`${account.accountType}:${account.name}`, account]));
-  for (const asset of ctx.getState().assets) {
-    const name = String(asset.account || "").trim();
-    const accountType = asset.accountType || inferAccountType(asset);
-    const key = `${accountType}:${name}`;
-    if (!name || accounts.has(key)) continue;
-    accounts.set(key, { name, accountType });
-  }
-  return [...accounts.values()].sort((left, right) => left.name.localeCompare(right.name));
+  return mergeAccountOptions(ctx.getState().assets);
 }
 
 export function handleAccountTypeChange() {
@@ -485,8 +521,9 @@ export function editAsset(id) {
   ctx.elements.assetSubmitButton.textContent = "更新资产";
   ctx.elements.assetError.textContent = "";
   updateAssetLiveSummary();
+  setOptionalEntryPanelsFromValues(asset);
   ctx.activateTab("assets");
-  showAssetFormPanel("完整编辑资产", "补充价格来源、费用、税费、备注和复盘线索。");
+  showAssetFormPanel("编辑资产", "更新关键持仓信息；如需记录新的买入、卖出或清仓，请从持仓行进入“记录交易”。");
   ctx.elements.assetForm.elements.name.focus();
 }
 
@@ -574,7 +611,7 @@ export function hideAssetFormPanel() {
 function isAssetFormDirty() {
   if (ctx.elements.assetFormSection?.classList.contains("is-hidden")) return false;
   const form = Object.fromEntries(new FormData(ctx.elements.assetForm));
-  const ignoredValues = new Set(["0", "1", "买入", "brokerage", "unmatched", "false"]);
+  const ignoredValues = new Set(["0", "1", "买入", "securities", "unmatched", "false"]);
   return Object.entries(form).some(([key, value]) => {
     if (["assetRegistryId", "assetMatchStatus", "marketDataSupported"].includes(key)) return !ignoredValues.has(String(value || "").trim());
     if (["adjustmentType", "fxRate", "previousFxRate", "contribution", "dividends", "interest", "fees", "taxes", "manualAdjustment", "transactionType", "accountType"].includes(key)) {
@@ -647,9 +684,40 @@ export function resetAssetFormMode(mode = "create") {
   assetMatchCandidates = [];
   if (ctx.elements.assetForm.elements.accountTypeCustom) ctx.elements.assetForm.elements.accountTypeCustom.value = "";
   updateCustomAccountTypeVisibility();
+  resetOptionalEntryPanels();
   applyCashAssetFormMode();
   if (ctx.elements.assetForm.elements.adjustmentType) ctx.elements.assetForm.elements.adjustmentType.value = "buy";
   ctx.elements.assetSubmitButton.textContent = mode === "edit" ? "更新资产" : isTransactionModeName(mode) ? "确认买入" : "保存资产";
+}
+
+function resetOptionalEntryPanels() {
+  ctx.elements.assetForm?.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
+    toggle.checked = false;
+  });
+  syncOptionalEntryPanels();
+}
+
+function setOptionalEntryPanelsFromValues(asset) {
+  const form = ctx.elements.assetForm;
+  const hasCosts = hasNonZeroValue(asset.fees) || hasNonZeroValue(asset.taxes);
+  const defaultFx = defaultAssetFxRate(asset.currency);
+  const hasFx = hasNonDefaultValue(asset.fxRate, defaultFx) || hasNonDefaultValue(asset.previousFxRate, asset.fxRate || defaultFx);
+  const feesToggle = form.querySelector('[data-optional-toggle="fees"]');
+  const fxToggle = form.querySelector('[data-optional-toggle="fx"]');
+  if (feesToggle) feesToggle.checked = hasCosts;
+  if (fxToggle) fxToggle.checked = hasFx;
+  syncOptionalEntryPanels();
+}
+
+function hasNonZeroValue(value) {
+  const normalized = String(value || "").trim();
+  return normalized !== "" && normalized !== "0" && normalized !== "0.0" && normalized !== "0.00";
+}
+
+function hasNonDefaultValue(value, defaultValue) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return false;
+  return normalized !== String(defaultValue || "").trim();
 }
 
 export function syncAdjustmentMode() {
@@ -704,11 +772,11 @@ export function updateAssetAdjustmentSummary(asset) {
     </div>
     <div>
       <span>平均成本价</span>
-      <strong>${escapeHtml(asset.costPrice || "0")} ${escapeHtml(asset.currency || "")}</strong>
+      <strong>${escapeHtml(asset.costPrice && asset.costPrice !== "0" ? asset.costPrice : "未填写")} ${escapeHtml(asset.costPrice && asset.costPrice !== "0" ? asset.currency || "" : "")}</strong>
     </div>
     <div>
       <span>当前价格</span>
-      <strong>${escapeHtml(asset.currentPrice || asset.costPrice || "0")} ${escapeHtml(asset.currency || "")}</strong>
+      <strong>${escapeHtml((asset.currentPrice && asset.currentPrice !== "0" ? asset.currentPrice : asset.costPrice && asset.costPrice !== "0" ? asset.costPrice : "待补价格"))} ${escapeHtml(asset.currency || "")}</strong>
     </div>
     <div>
       <span>总市值</span>

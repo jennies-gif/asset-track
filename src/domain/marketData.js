@@ -157,6 +157,30 @@ export const benchmarkInstruments = [
     source: "Tencent finance index kline"
   },
   {
+    key: "csi500",
+    label: "中证500",
+    symbol: "000905",
+    name: "中证500指数",
+    type: "指数",
+    universe: "benchmark",
+    market: "CN",
+    currency: "CNY",
+    meta: "指数点位 · 腾讯证券日线",
+    source: "Tencent finance index kline"
+  },
+  {
+    key: "sse50",
+    label: "上证50",
+    symbol: "000016",
+    name: "上证50指数",
+    type: "指数",
+    universe: "benchmark",
+    market: "CN",
+    currency: "CNY",
+    meta: "指数点位 · 腾讯证券日线",
+    source: "Tencent finance index kline"
+  },
+  {
     key: "sp500",
     label: "标普500",
     symbol: "SPY",
@@ -166,6 +190,18 @@ export const benchmarkInstruments = [
     market: "US",
     currency: "USD",
     meta: "SPY ETF 代理 · Nasdaq 历史日线",
+    source: "Nasdaq historical public API"
+  },
+  {
+    key: "qqq",
+    label: "QQQ",
+    symbol: "QQQ",
+    name: "Invesco QQQ Trust",
+    type: "ETF",
+    universe: "benchmark",
+    market: "US",
+    currency: "USD",
+    meta: "纳斯达克100 ETF 代理 · Nasdaq 历史日线",
     source: "Nasdaq historical public API"
   },
   {
@@ -179,8 +215,54 @@ export const benchmarkInstruments = [
     currency: "USD",
     meta: "指数点位 · Nasdaq 历史日线",
     source: "Nasdaq historical public API"
+  },
+  {
+    key: "iwm",
+    label: "罗素2000",
+    symbol: "IWM",
+    name: "iShares Russell 2000 ETF",
+    type: "ETF",
+    universe: "benchmark",
+    market: "US",
+    currency: "USD",
+    meta: "IWM ETF 代理 · Nasdaq 历史日线",
+    source: "Nasdaq historical public API"
+  },
+  {
+    key: "vt",
+    label: "全球股票",
+    symbol: "VT",
+    name: "Vanguard Total World Stock ETF",
+    type: "ETF",
+    universe: "benchmark",
+    market: "US",
+    currency: "USD",
+    meta: "VT ETF 代理 · Nasdaq 历史日线",
+    source: "Nasdaq historical public API"
+  },
+  {
+    key: "gld",
+    label: "黄金",
+    symbol: "GLD",
+    name: "SPDR Gold Shares",
+    type: "ETF",
+    universe: "benchmark",
+    market: "US",
+    currency: "USD",
+    meta: "GLD ETF 代理 · Nasdaq 历史日线",
+    source: "Nasdaq historical public API"
   }
 ];
+
+export const defaultBenchmarkKeys = ["csi300", "sp500", "qqq"];
+
+export const defaultBenchmarkSyncSymbols = benchmarkInstruments.map((benchmark) => benchmark.symbol);
+
+export function selectedBenchmarkInstruments(keys = defaultBenchmarkKeys) {
+  const selected = new Set((Array.isArray(keys) ? keys : defaultBenchmarkKeys).filter(Boolean));
+  const matches = benchmarkInstruments.filter((benchmark) => selected.has(benchmark.key));
+  return matches.length ? matches : benchmarkInstruments.filter((benchmark) => defaultBenchmarkKeys.includes(benchmark.key));
+}
 
 export function lookupSecurity(symbol) {
   const normalized = normalizeSymbol(symbol);

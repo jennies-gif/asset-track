@@ -42,7 +42,8 @@ export function assetValueAtTrendDate(asset, date, index, end) {
   const start = assetTrendStartDate(asset);
   if (date < start) return 0n;
 
-  const costValueCents = calculateMoneyFromQuantity(asset.quantity, asset.costPrice, asset.fxRate || "1");
+  const basisPrice = Number(String(asset.costPrice || "0")) > 0 ? asset.costPrice : asset.currentPrice || "0";
+  const costValueCents = calculateMoneyFromQuantity(asset.quantity, basisPrice, asset.fxRate || "1");
   const progress = dateProgress(start, end, date);
   const targetBps = assetTrendReturnBps(asset);
   const returnBps = trendReturnAtProgress(targetBps, progress, index);

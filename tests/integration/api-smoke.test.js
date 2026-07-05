@@ -214,14 +214,39 @@ test("api skeleton serves health, positions and attribution", async () => {
     const sync = await postJson("/api/market-data/sync-daily", { symbols: ["00700"], autoFetch: false });
     assert.equal(sync.summary.syncedCount, 1);
     assert.equal(sync.fetch, null);
+    assert.equal(sync.summary.dailyPriceRowsUpserted, 2);
+    assert.equal(sync.summary.dailyPriceGapCount, 0);
     assert.equal(sync.results[0].after.currentPrice, "341.5");
     assert.equal(sync.results[0].after.previousPrice, "338");
     assert.equal(sync.results[0].after.priceStatus, "synced");
     assert.equal(sync.results[0].after.sourceFetchedAt, "2026-06-02T10:00:00.000Z");
 
+    const dailyPrices = await getJson("/api/asset-prices/daily?assetId=asset-00700");
+    assert.equal(dailyPrices.userId, "demo-user");
+    assert.equal(dailyPrices.assetId, "asset-00700");
+    assert.equal(dailyPrices.points.length, 2);
+    assert.equal(dailyPrices.points[0].priceDate, "2026-06-01");
+    assert.equal(dailyPrices.points[0].closePrice, "338");
+    assert.equal(dailyPrices.points[0].priceBasis, "actual");
+    assert.equal(dailyPrices.points[1].closePrice, "341.5");
+
+    const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["SPY"], autoFetch: false });
+    assert.equal(missingSync.fetch, null);
+    assert.equal(missingSync.summary.syncedCount, 0);
+    assert.equal(missingSync.summary.missingCount, 1);
+    assert.equal(missingSync.results[0].status, "missing");
+    assert.match(missingSync.results[0].message, /价格缓存/);
+
     const benchmarkSync = await postJson("/api/market-data/sync-daily", { symbols: ["000300", "NDX"], autoFetch: false });
     assert.equal(benchmarkSync.summary.syncedCount, 2);
     assert.equal(benchmarkSync.results[0].after.priceStatus, "synced");
+
+    const assetAndBenchmarkSync = await postJson("/api/market-data/sync-daily", { includeBenchmarks: true, autoFetch: false });
+    const syncedSymbols = assetAndBenchmarkSync.results
+      .filter((result) => result.status === "synced")
+      .map((result) => result.symbol);
+    assert.ok(syncedSymbols.includes("00700"));
+    assert.ok(syncedSymbols.includes("000300"));
 
     const attribution = await postJson("/api/attribution/runs", {
       startDate: "2026-01-29",

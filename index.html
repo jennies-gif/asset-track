@@ -34,13 +34,13 @@
               <p class="auth-intro" id="auth-intro">登录资产轨迹，继续记录、分析和复盘你的资产。</p>
 
               <div class="auth-provider-list" aria-label="第三方登录">
-                <button class="auth-provider-button" data-auth-provider="google" type="button">
+                <button class="auth-provider-button auth-provider-button-unavailable" data-auth-provider="google" type="button" aria-disabled="true">
                   <span class="auth-provider-icon auth-provider-icon-google" aria-hidden="true">G</span>
-                  <span>使用 Google 继续</span>
+                  <span>Google 登录暂未接入</span>
                 </button>
-                <button class="auth-provider-button" data-auth-provider="apple" type="button">
+                <button class="auth-provider-button auth-provider-button-unavailable" data-auth-provider="apple" type="button" aria-disabled="true">
                   <span class="auth-provider-icon auth-provider-icon-apple" aria-hidden="true"></span>
-                  <span>使用 Apple 继续</span>
+                  <span>Apple 登录暂未接入</span>
                 </button>
               </div>
 
@@ -160,8 +160,6 @@
             </form>
           </div>
           <div class="trend-chart" id="trend-chart"></div>
-          <div class="benchmark-table-wrap"><table class="benchmark-table"><tbody id="benchmark-rows"></tbody></table></div>
-          <p class="empty-state benchmark-empty-state is-hidden" id="benchmark-empty">暂无基准数据。</p>
         </section>
         <section class="home-section allocation-section home-dashboard-section" aria-labelledby="allocation-title">
           <div class="panel-heading">
@@ -296,7 +294,7 @@
                 <label>账户 <input name="account" id="account-picker" list="account-name-options" placeholder="账户名称"><datalist id="account-name-options"></datalist></label>
                 <label class="advanced-field">账户类型
                   <select name="accountType">
-                    <option value="brokerage">证券账户</option><option value="fund">基金账户</option><option value="cash">现金账户</option><option value="crypto">数字资产账户</option><option value="custom">自定义</option>
+                    <option value="securities">证券账户</option><option value="fund">基金账户</option><option value="cash">现金账户</option><option value="crypto">数字资产账户</option><option value="long_term">养老金/长期账户</option><option value="watch">模拟/观察账户</option><option value="other">其他</option><option value="__custom__">自定义</option>
                   </select>
                 </label>
                 <label id="account-type-custom-field" class="advanced-field is-hidden">自定义账户类型 <input name="accountTypeCustom"></label>
@@ -304,39 +302,51 @@
                   <select name="currency"><option value="CNY">CNY</option><option value="USD">USD</option><option value="HKD">HKD</option><option value="BTC">BTC</option></select>
                 </label>
                 <label>持有数量 <input name="quantity" required inputmode="decimal" placeholder="0"></label>
-                <label>成本价 <input name="costPrice" required inputmode="decimal" placeholder="0"></label>
-                <label>开仓日期 <input name="purchaseDate" type="date"></label>
+                <label>平均成本价 <input name="costPrice" inputmode="decimal" placeholder="可后续补充"></label>
+                <label>首次持有日期 <input name="purchaseDate" type="date"></label>
                 <label>当前价格 <input name="currentPrice" inputmode="decimal" placeholder="可选"></label>
                 <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
-                <label class="advanced-field">当前汇率到 USD <input name="fxRate" inputmode="decimal" value="1"></label>
               </div>
               <input name="assetRegistryId" type="hidden">
               <input name="assetMatchStatus" type="hidden" value="unmatched">
               <input name="marketDataSupported" type="hidden" value="false">
-              <p class="form-help" data-price-fallback>不填当前价格时，将暂按成本价估值。</p>
+              <input name="contribution" type="hidden" value="0">
+              <input name="dividends" type="hidden" value="0">
+              <input name="interest" type="hidden" value="0">
+              <input name="manualAdjustment" type="hidden" value="0">
+              <input name="transactionType" type="hidden" value="买入">
+              <input name="priceSource" type="hidden">
+              <input name="pricedAt" type="hidden">
+              <input name="priceStatus" type="hidden">
+              <p class="form-help" data-price-fallback>成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>
-            <details class="form-section advanced-asset-section">
-              <summary>完整资产字段</summary>
-              <p>用于补充估值来源、费用、备注和复盘线索；添加资产时可以先跳过，后续再编辑。</p>
-              <div class="form-section-grid">
-                <label>期初汇率到 USD <input name="previousFxRate" inputmode="decimal" value="1"></label>
-                <label>净投入 <input name="contribution" inputmode="decimal" value="0"></label>
-                <label>分红 <input name="dividends" inputmode="decimal" value="0"></label>
-                <label>利息 <input name="interest" inputmode="decimal" value="0"></label>
-                <label>费用 <input name="fees" inputmode="decimal" value="0"></label>
-                <label>税费 <input name="taxes" inputmode="decimal" value="0"></label>
-                <label>手动调整 <input name="manualAdjustment" inputmode="decimal" value="0"></label>
-                <label>交易类型 <input name="transactionType" value="买入"></label>
-                <label>价格来源 <input name="priceSource" placeholder="用户录入"></label>
-                <label>价格时间 <input name="pricedAt" type="date"></label>
-                <label>价格状态 <input name="priceStatus"></label>
-                <label>附件名 <input name="attachmentName"></label>
-                <label>买入理由 <input name="buyReason"></label>
-                <label>上行情景 <input name="upsideReasons"></label>
-                <label>下行情景 <input name="downsideReasons"></label>
+            <fieldset class="form-section optional-entry-section">
+              <legend>可选项</legend>
+              <div class="optional-toggle-list">
+                <label class="form-switch-row">
+                  <span><strong>税费/手续费</strong><small>本次建仓产生费用时再打开。</small></span>
+                  <input type="checkbox" data-optional-toggle="fees">
+                </label>
+                <div class="optional-entry-panel is-hidden" data-optional-panel="fees">
+                  <div class="form-section-grid">
+                    <label>手续费 <input name="fees" inputmode="decimal" value="0"></label>
+                    <label>税费 <input name="taxes" inputmode="decimal" value="0"></label>
+                  </div>
+                </div>
+                <label class="form-switch-row">
+                  <span><strong>汇率</strong><small>外币资产或需要固定成交汇率时再打开。</small></span>
+                  <input type="checkbox" data-optional-toggle="fx">
+                </label>
+                <div class="optional-entry-panel is-hidden" data-optional-panel="fx">
+                  <p class="form-help">当前汇率用于把资产原始币种折算到 USD；留空时按币种使用默认汇率。</p>
+                  <div class="form-section-grid">
+                    <label>当前汇率到 USD <input name="fxRate" inputmode="decimal" value="1"></label>
+                    <label>期初汇率到 USD <input name="previousFxRate" inputmode="decimal" value="1"></label>
+                  </div>
+                </div>
               </div>
-            </details>
+            </fieldset>
             <fieldset class="form-section close-fields is-hidden" id="close-fields">
               <legend class="close-fields-title"><strong>减仓详情</strong><span>只填写本次减仓相关字段。</span></legend>
               <div class="form-section-grid">
@@ -396,8 +406,9 @@
           <section class="analysis-card analysis-card-wide"><h3>关键指标</h3><div class="analysis-health-list" id="analysis-health-list"></div></section>
           <section class="analysis-card analysis-card-wide" data-analysis-requires-assets>
             <div class="analysis-card-heading"><h3>收益表现对比</h3><div class="analysis-toggle" role="tablist" aria-label="收益表现口径"><button class="is-active" data-analysis-return-metric="mwr" type="button">MWR</button><button data-analysis-return-metric="twr" type="button">TWR</button><button data-analysis-return-metric="sr" type="button">SR</button></div></div>
+            <div class="benchmark-selector" id="analysis-benchmark-selector" aria-label="选择收益对比基准"></div>
             <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
-            <div class="benchmark-empty-panel is-hidden" id="analysis-benchmark-empty"><strong>暂无可用基准数据</strong><p>同步市场指数后，可对比主要基准。</p><button class="secondary-button compact-button" id="sync-benchmark-data" type="button">同步基准数据</button></div>
+            <div class="benchmark-comparison-chart" id="analysis-benchmark-trend-chart"></div>
           </section>
           <section class="analysis-card analysis-card-wide"><div class="analysis-card-heading"><h3>资产变动归因</h3><div class="analysis-mini-metrics" id="stage-comparison-grid"></div></div><div class="waterfall-chart" id="analysis-cashflow-chart"></div></section>
           <section class="analysis-card"><h3>资产贡献排行</h3><div class="attribution-list" id="analysis-top-return-assets"></div><p class="analysis-auto-summary" id="analysis-contribution-summary"></p></section>
