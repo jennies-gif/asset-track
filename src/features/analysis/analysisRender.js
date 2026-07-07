@@ -19,7 +19,6 @@ import {
   analysisStatusClass,
   analysisStatusLabel,
   renderBenchmarkComparisonChart,
-  renderAllocationBars,
   renderDrawdownChart,
   renderWaterfallChart
 } from "./analysisUi.js";
@@ -101,7 +100,6 @@ function latestOverviewUpdateLabel() { return ctx.latestOverviewUpdateLabel(); }
 function fxRateSummary() { return ctx.fxRateSummary(); }
 function calculateTrendValueChangeForRange(range) { return ctx.calculateTrendValueChangeForRange(range); }
 function buildEvenlySpacedXAxisLabels(points, maxLabels) { return ctx.buildEvenlySpacedXAxisLabels(points, maxLabels); }
-function allocationWeightBps(positions, totalValueCents, predicate) { return ctx.allocationWeightBps(positions, totalValueCents, predicate); }
 function renderAttributionInternal() {
   renderAnalysisFilters();
   const assets = selectedAnalysisAssets();
@@ -134,7 +132,6 @@ function renderAttributionInternal() {
   if (analysisElements.attributionList) analysisElements.attributionList.innerHTML = "";
   renderAttributionWaterfall(analysis, convertedStart, convertedEnd);
   renderAnalysisQuality(analysis);
-  renderAnalysisAllocation(analysis);
   renderAnalysisConcentration(analysis);
   renderAnalysisRisk(analysis);
   renderAnalysisDataTrust(analysis, dataIssues);
@@ -172,9 +169,6 @@ function renderEmptyAnalysis() {
   }
   if (analysisElements.analysisMonthlyReturnChart) analysisElements.analysisMonthlyReturnChart.innerHTML = "";
   if (analysisElements.analysisBenchmarkTrendChart) analysisElements.analysisBenchmarkTrendChart.innerHTML = "";
-  if (analysisElements.analysisAllocationChart) analysisElements.analysisAllocationChart.innerHTML = "";
-  if (analysisElements.analysisAllocationRows) analysisElements.analysisAllocationRows.innerHTML = "";
-  if (analysisElements.analysisAllocationNote) analysisElements.analysisAllocationNote.textContent = "";
   if (analysisElements.analysisConcentrationMetrics) analysisElements.analysisConcentrationMetrics.innerHTML = "";
   if (analysisElements.analysisTopHoldings) analysisElements.analysisTopHoldings.innerHTML = "";
   if (analysisElements.analysisConcentrationNote) analysisElements.analysisConcentrationNote.textContent = "";
@@ -185,13 +179,13 @@ function renderEmptyAnalysis() {
 
 function renderAnalysisJudgement(analysis, dataIssues) {
   if (!analysisElements.analysisJudgementTitle || !analysisElements.analysisJudgementList) return;
-  const riskHigh = analysis.allocation.highRiskBps >= 3000n || analysis.drawdown.maxDrawdownBps <= -1500n || analysis.concentration.status === "high";
+  const riskHigh = analysis.exposure.highRiskBps >= 3000n || analysis.drawdown.maxDrawdownBps <= -1500n || analysis.concentration.status === "high";
   const qualityOkay = analysis.realReturnBps >= 0n || analysis.investmentResultCents >= 0n;
   analysisElements.analysisJudgementTitle.textContent = riskHigh
     ? `风险与收益结论：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
     : `风险与收益结论：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`;
-  const cryptoBps = cryptoAllocationBps(analysis.portfolio.positions, analysis.portfolio.totals.marketValueCents);
-  const cashBps = analysis.allocation.cashBps;
+  const cryptoBps = analysis.exposure.digitalBps;
+  const cashBps = analysis.exposure.cashBps;
   const topDriver = topVolatileDriver(analysis);
   const yearChange = calculateTrendValueChangeForRange("ytd");
   const items = [
@@ -204,10 +198,6 @@ function renderAnalysisJudgement(analysis, dataIssues) {
   analysisElements.analysisJudgementList.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 }
 
-function cryptoAllocationBps(positions, totalValueCents) {
-  return allocationWeightBps(positions, totalValueCents, (position) => position.type === "数字资产" || inferAssetMarket(position) === "WEB3");
-}
-
 function topVolatileDriver(analysis) {
   const candidate = [...analysis.portfolio.positions]
     .filter((position) => position.unrealizedPnlCents !== 0n)
@@ -217,7 +207,7 @@ function topVolatileDriver(analysis) {
 }
 
 function renderAnalysisHealthMetrics(analysis, dataIssues, topConcentration) {
-  const cryptoBps = cryptoAllocationBps(analysis.portfolio.positions, analysis.portfolio.totals.marketValueCents);
+  const cryptoBps = analysis.exposure.digitalBps;
   const metrics = [
     {
       label: "当前资产",
@@ -355,7 +345,7 @@ function analysisInsufficientDataCard() {
 }
 
 function analysisOverallStatus(analysis, dataIssues) {
-  if (analysis.drawdown.currentDrawdownBps <= -1000n || analysis.concentration.status === "high" || analysis.allocation.highRiskBps >= 7000n) return "high";
+  if (analysis.drawdown.currentDrawdownBps <= -1000n || analysis.concentration.status === "high" || analysis.exposure.highRiskBps >= 7000n) return "high";
   if (dataIssues.length || analysis.realReturnBps < 0n || analysis.drawdown.currentDrawdownBps <= -500n || analysis.concentration.status === "medium") return "medium";
   return "low";
 }
@@ -523,23 +513,6 @@ function summarizeAnalysisIssues(dataIssues) {
   return `${rows.join("；")}${suffix}`;
 }
 
-function renderAnalysisAllocation(analysis) {
-  if (!analysisElements.analysisAllocationRows) return;
-  analysisElements.analysisAllocationChart.innerHTML = `${chartSourceLine("当前录入", "基于当前持仓估值和 MVP 内置目标配置对比，不构成配置建议。", "positive")}${renderAllocationBars(analysis.allocation.rows)}`;
-  analysisElements.analysisAllocationRows.innerHTML = analysis.allocation.rows.length
-    ? analysis.allocation.rows.map((row) => `
-        <tr>
-          <td><strong>${escapeHtml(row.type)}</strong><span>${escapeHtml(row.status)}</span></td>
-          <td>${formatShare(row.currentBps)}</td>
-          <td>${formatShare(row.targetBps)}</td>
-          <td class="${row.deviationBps > 0n ? "positive" : row.deviationBps < 0n ? "negative" : ""}">${row.deviationBps > 0n ? "+" : ""}${formatShare(row.deviationBps)}</td>
-          <td>${formatDisplayCurrency(row.deviationAmountCents)}</td>
-        </tr>
-      `).join("")
-    : `<tr><td colspan="5" class="empty-cell">暂无配置数据。先录入资产并同步或补全当前价格后，可查看当前配置与目标配置偏离。</td></tr>`;
-  analysisElements.analysisAllocationNote.innerHTML = `${escapeHtml(analysis.allocation.maxDeviationLabel)}。当前高风险资产占比 ${escapeHtml(formatShare(analysis.allocation.highRiskBps))}，现金占比 ${escapeHtml(formatShare(analysis.allocation.cashBps))}。目标配置为 MVP 内置参考，后续可扩展为用户自定义。`;
-}
-
 function chartSourceLine(label, description, tone = "") {
   return `
     <div class="chart-source-line compact">
@@ -666,7 +639,7 @@ function renderAnalysisHealthList(concentration, dataIssues, analysis) {
   const unexplained = convertUsdToDisplay(
     analysis.attribution.items.find((item) => item.key === "unexplained")?.amountCents || 0n
   );
-  const digitalBps = analysis.allocation.rows.find((item) => item.type === "数字资产")?.currentBps || 0n;
+  const digitalBps = analysis.exposure.digitalBps;
   const qualityStatus = analysis.realReturnBps < 0n || absBigInt(unexplained) > 0n ? "medium" : "low";
   const statusItems = [
     {
@@ -679,7 +652,7 @@ function renderAnalysisHealthList(concentration, dataIssues, analysis) {
       label: "数字资产配置偏高",
       value: formatShare(digitalBps),
       status: digitalBps >= 1500n ? "high" : digitalBps >= 800n ? "medium" : "low",
-      hint: "目标参考 5%，偏离时建议复核风险暴露"
+      hint: "数字资产通常波动较高，占比变化需要结合自身记录复盘"
     },
     {
       label: "Top 5 集中度过高",

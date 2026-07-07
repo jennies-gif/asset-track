@@ -1,9 +1,11 @@
 import { buildHistorySeries, inferUniverse } from "../../domain/marketData.js";
 import { formatShortDate } from "../../utils/date.js";
 import { escapeHtml } from "../../utils/dom.js";
+import { buildSmoothAreaPath, buildSmoothLinePath } from "../../ui/charts.js";
 import { formatMonthDayTimeMinute } from "../../ui/formatters.js";
 
 let ctx = {};
+let assetPriceChartRequestId = 0;
 
 export function configureMarketRender(context) {
   ctx = context;
@@ -57,7 +59,17 @@ export function renderAssetPriceChart() {
     elements.assetPriceChart.innerHTML = `<p class="empty-state">暂无资产。先到“资产”页录入一笔资产，再查看单资产历史价格曲线。</p>`;
     return;
   }
-  const series = buildHistorySeries(asset);
+  const requestId = ++assetPriceChartRequestId;
+  const fallbackSeries = buildHistorySeries(asset);
+  renderAssetPriceChartSeries(asset, fallbackSeries, "fallback");
+  loadDailyAssetPriceSeries(asset).then((series) => {
+    if (requestId !== assetPriceChartRequestId || !series.length) return;
+    renderAssetPriceChartSeries(asset, series, "daily");
+  });
+}
+
+function renderAssetPriceChartSeries(asset, series, sourceKind) {
+  const { elements } = ctx;
   const values = series.map((point) => BigInt(Math.round(point.close * 10000)));
   const min = values.reduce((current, value) => (value < current ? value : current), values[0]);
   const max = values.reduce((current, value) => (value > current ? value : current), values[0]);
@@ -76,12 +88,13 @@ export function renderAssetPriceChart() {
     const y = pad + usableHeight - yRatio * usableHeight;
     return { ...point, x, y, scaled };
   });
-  const path = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const areaPath = `${leftPad},${height - pad} ${path} ${width - rightPad},${height - pad}`;
+  const path = buildSmoothLinePath(points);
+  const areaPath = buildSmoothAreaPath(points, height - pad, leftPad, width - rightPad);
   const latest = series.at(-1);
   const first = series[0];
   const change = latest.close - first.close;
   const universe = inferUniverse(asset);
+  const sourceLabel = sourceKind === "daily" ? "每日价格快照" : universe?.label || "用户录入";
 
   elements.assetPriceChart.innerHTML = `
     <div class="trend-summary">
@@ -95,7 +108,7 @@ export function renderAssetPriceChart() {
       </div>
       <div>
         <span>数据来源</span>
-        <strong>${escapeHtml(universe?.label || "用户录入")}</strong>
+        <strong>${escapeHtml(sourceLabel)}</strong>
       </div>
     </div>
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(asset.name)}历史价格曲线">
@@ -103,14 +116,37 @@ export function renderAssetPriceChart() {
       <line x1="${leftPad}" y1="${pad}" x2="${leftPad}" y2="${height - pad}" class="chart-axis"></line>
       <text x="${leftPad - 8}" y="${pad + 4}" text-anchor="end">${escapeHtml(String(seriesMax(series)))}</text>
       <text x="${leftPad - 8}" y="${height - pad}" text-anchor="end">${escapeHtml(String(seriesMin(series)))}</text>
-      <polyline points="${areaPath}" class="chart-area"></polyline>
-      <polyline points="${path}" class="chart-line"></polyline>
+      <path d="${areaPath}" class="chart-area"></path>
+      <path d="${path}" class="chart-line"></path>
       ${points
         .filter((_, index) => index === 0 || index === points.length - 1 || index % 16 === 0)
         .map((point) => `<text x="${point.x.toFixed(1)}" y="${height - 6}" text-anchor="middle">${escapeHtml(formatShortDate(point.date))}</text>`)
         .join("")}
     </svg>
   `;
+}
+
+async function loadDailyAssetPriceSeries(asset) {
+  if (!ctx.marketApiBaseUrl || !asset.id) return [];
+  try {
+    const response = await fetch(`${ctx.marketApiBaseUrl}/api/asset-prices/daily?assetId=${encodeURIComponent(asset.id)}`);
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return (payload.points || [])
+      .map((point) => ({
+        date: point.priceDate,
+        close: Number(point.closePrice),
+        source: point.source,
+        sourceFetchedAt: point.sourceFetchedAt,
+        type: point.priceType === "unit_nav" ? "单位净值" : "日收盘价",
+        priceBasis: point.priceBasis,
+        carriedFromDate: point.carriedFromDate
+      }))
+      .filter((point) => point.date && Number.isFinite(point.close) && point.close > 0)
+      .sort((left, right) => left.date.localeCompare(right.date));
+  } catch {
+    return [];
+  }
 }
 
 function renderMarketSyncRow(result) {

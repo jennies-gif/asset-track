@@ -7717,6 +7717,27 @@ th,
   margin: 14px 0 16px;
 }
 
+#notes-panel .note-reader-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#notes-panel .note-reader-tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: color-mix(in srgb, var(--primary) 86%, var(--ink));
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 450;
+}
+
 #notes-panel .note-reader-meta-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

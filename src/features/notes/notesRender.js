@@ -235,6 +235,12 @@ function formatNoteDate(value) {
 }
 
 function renderNoteReaderMeta(note, details) {
+  const tags = renderNoteReaderTags(noteDisplayTagsFor(note));
+  const status = note.status === "draft" ? "<span class=\"note-status-pill\">草稿</span>" : "";
+  if (isBlankTemplateNote(note)) {
+    return [tags, status].filter(Boolean).join("");
+  }
+
   const realizedReturn = noteRealizedReturnLabel(note, details.linkedChange);
   const linkedAssetId = note.assetId || inferNoteAssetId(note);
   const rows = [
@@ -257,6 +263,7 @@ function renderNoteReaderMeta(note, details) {
     { label: "实现收益", value: realizedReturn }
   ];
   return `
+    ${tags}
     <dl class="note-reader-meta-grid">
       ${rows.map((row) => `
         <div>
@@ -265,8 +272,22 @@ function renderNoteReaderMeta(note, details) {
         </div>
       `).join("")}
     </dl>
-    ${note.status === "draft" ? "<span class=\"note-status-pill\">草稿</span>" : ""}
+    ${status}
   `;
+}
+
+function renderNoteReaderTags(tags) {
+  if (!tags.length) return "";
+  return `
+    <div class="note-reader-tags" aria-label="笔记标签">
+      ${tags.map((tag) => `<span>${escapeHtml(`#${tag}`)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function isBlankTemplateNote(note) {
+  if (note.template) return note.template === "blank";
+  return !note.asset && !note.assetId && note.realizedPnlCents === undefined;
 }
 
 function noteRealizedReturnLabel(note, linkedChange = null) {

@@ -132,7 +132,8 @@ export function showNoteEditor(note = null) {
     setNoteAssetLink(note.assetId || inferNoteAssetId(note));
     elements.noteForm.elements.format.value = note.format || "plain";
     elements.noteForm.elements.status.value = note.status || "published";
-    setNoteTemplateSelection("blank");
+    elements.noteForm.dataset.template = note.template || "blank";
+    setNoteTemplateSelection(note.template || "blank");
     elements.noteForm.elements.content.value = note.content || "";
     if (note.asset) setNoteTransactionLink(note.asset);
     noteTagsFor(note).forEach((tag) => {

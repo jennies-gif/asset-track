@@ -40,7 +40,7 @@ import {
 import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.js";
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
-import { noteDisplayTagsFor, noteTypeFromTags } from "../../src/features/notes/notesRender.js";
+import { configureNotesRender, noteDisplayTagsFor, noteTypeFromTags, showNoteReader } from "../../src/features/notes/notesRender.js";
 
 test("parses decimal values with deterministic rounding", () => {
   assert.equal(parseDecimalToScaledInt("12.345", 2), 1235n);
@@ -56,6 +56,44 @@ test("keeps custom review tags visible instead of replacing them with note type"
 
   assert.equal(noteTypeFromTags(note.tags), "交易复盘");
   assert.deepEqual(noteDisplayTagsFor(note), ["自建标签", "交易复盘"]);
+});
+
+test("renders blank note reader tags without the review detail grid", () => {
+  const classList = () => ({ add() {}, remove() {}, toggle() {} });
+  const elements = {
+    notesReader: { dataset: {}, classList: classList(), scrollIntoView() {} },
+    noteReaderTitle: { textContent: "" },
+    noteReaderMeta: { innerHTML: "" },
+    noteReaderAsset: { innerHTML: "", classList: classList() },
+    noteReaderContent: { innerHTML: "" },
+    notesEditor: { classList: classList() },
+    notesHome: { classList: classList() },
+    notesList: { querySelectorAll: () => [] }
+  };
+  configureNotesRender({
+    elements,
+    getState: () => ({
+      assets: [],
+      notes: [{
+        id: "note-blank",
+        title: "空白笔记",
+        template: "blank",
+        type: "理财学习",
+        tags: ["闪念"],
+        content: "只记录正文。",
+        createdAt: "2026-05-28T00:00:00.000Z"
+      }]
+    }),
+    buildAssetChangeRecords: () => [],
+    noteTransactionLabel: () => "",
+    convertUsdToDisplay: (value) => value
+  });
+
+  showNoteReader("note-blank", { scroll: false });
+
+  assert.match(elements.noteReaderMeta.innerHTML, /#闪念/);
+  assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /note-reader-meta-grid/);
+  assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /日期|关联资产|实现收益/);
 });
 
 test("formats invalid percent inputs as unavailable data", () => {

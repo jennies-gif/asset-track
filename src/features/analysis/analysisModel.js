@@ -1,8 +1,6 @@
 import { roundDivide } from "../../domain/calculations.js";
-import { absBigInt } from "../../utils/bigint.js";
 import { addMonths, formatDate, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
 import { marketLabel } from "../assets/marketOptions.js";
-import { formatShare } from "../../ui/formatters.js";
 
 let ctx = {};
 
@@ -33,7 +31,7 @@ export function buildAnalysisModel(assets, portfolio, attribution) {
   const realReturnBps = realReturnBase === 0n ? 0n : roundDivide(investmentResultCents * 10000n, realReturnBase);
   const monthlyReturns = buildMonthlyAnalysisReturns(assets);
   const drawdown = calculateDrawdownStats(buildAnalysisTrendPoints(assets));
-  const allocation = buildAllocationAnalysis(portfolio.positions, portfolio.totals.marketValueCents);
+  const exposure = buildExposureAnalysis(portfolio.positions, portfolio.totals.marketValueCents);
   const concentration = buildConcentrationAnalysis(portfolio.positions, portfolio.totals.marketValueCents);
 
   return {
@@ -50,7 +48,7 @@ export function buildAnalysisModel(assets, portfolio, attribution) {
     annualizedReturnBps: annualizedAnalysisReturnBps(returnBps, assets),
     monthlyReturns,
     drawdown,
-    allocation,
+    exposure,
     concentration
   };
 }
@@ -173,8 +171,7 @@ export function daysBetween(start, end) {
   return Math.max(0, Math.round((endMs - startMs) / 86400000));
 }
 
-function buildAllocationAnalysis(positions, totalValueCents) {
-  const targets = defaultAllocationTargets();
+function buildExposureAnalysis(positions, totalValueCents) {
   const groups = new Map();
   for (const position of positions) {
     const type = assetTypeKey(position);
@@ -182,47 +179,17 @@ function buildAllocationAnalysis(positions, totalValueCents) {
     current.marketValueCents += position.marketValueCents;
     groups.set(type, current);
   }
-  for (const type of Object.keys(targets)) {
-    if (!groups.has(type)) groups.set(type, { type, marketValueCents: 0n });
-  }
-
-  const rows = [...groups.values()]
-    .map((item) => {
-      const currentBps = totalValueCents === 0n ? 0n : roundDivide(item.marketValueCents * 10000n, totalValueCents);
-      const targetBps = BigInt(targets[item.type] || 0);
-      const deviationBps = currentBps - targetBps;
-      return {
-        ...item,
-        currentBps,
-        targetBps,
-        deviationBps,
-        deviationAmountCents: roundDivide(totalValueCents * deviationBps, 10000n),
-        status: absBigInt(deviationBps) >= 1500n ? "明显偏离" : absBigInt(deviationBps) >= 800n ? "轻微偏离" : "正常"
-      };
-    })
-    .filter((item) => item.marketValueCents !== 0n || item.targetBps !== 0n)
-    .sort((left, right) => absBigInt(right.deviationBps) > absBigInt(left.deviationBps) ? 1 : -1);
-
-  const max = rows[0] || { type: "暂无", deviationBps: 0n, currentBps: 0n, targetBps: 0n, deviationAmountCents: 0n };
+  const rows = [...groups.values()].map((item) => ({
+    ...item,
+    currentBps: totalValueCents === 0n ? 0n : roundDivide(item.marketValueCents * 10000n, totalValueCents)
+  }));
   return {
     rows,
-    maxAbsDeviationBps: absBigInt(max.deviationBps),
-    maxDeviationLabel: max.deviationBps === 0n ? "接近目标" : `${max.type} ${max.deviationBps > 0n ? "高" : "低"} ${formatShare(absBigInt(max.deviationBps))}`,
-    maxDeviationDetail: `当前 ${formatShare(max.currentBps)} / 目标 ${formatShare(max.targetBps)}`,
     highRiskBps: rows
       .filter((item) => !["现金", "债券/固收"].includes(item.type))
       .reduce((sum, item) => sum + item.currentBps, 0n),
+    digitalBps: rows.find((item) => item.type === "数字资产")?.currentBps || 0n,
     cashBps: rows.find((item) => item.type === "现金")?.currentBps || 0n
-  };
-}
-
-function defaultAllocationTargets() {
-  return {
-    "基金": 3500,
-    "股票": 3000,
-    "债券/固收": 1500,
-    "现金": 1500,
-    "数字资产": 500
   };
 }
 

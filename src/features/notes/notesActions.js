@@ -21,6 +21,7 @@ export function saveNoteFromForm(status = "published") {
   const asset = String(formData.get("asset") || "").trim();
   const assetId = String(formData.get("assetId") || "").trim();
   const format = String(formData.get("format") || "plain");
+  const template = String(formData.get("template") || elements.noteForm.dataset.template || "blank");
   const type = ctx.noteTypeFromTags(tags);
 
   if (status !== "draft" && (!title || !content)) {
@@ -46,6 +47,7 @@ export function saveNoteFromForm(status = "published") {
             assetId,
             type,
             tags,
+            template,
             format,
             status,
             content,
@@ -61,6 +63,7 @@ export function saveNoteFromForm(status = "published") {
       assetId,
       type,
       tags,
+      template,
       format,
       status,
       content,

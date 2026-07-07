@@ -81,7 +81,6 @@ import {
 import { buildEvenlySpacedXAxisLabels, configureTrendRender, renderTrendChart } from "./features/trends/trendRender.js";
 import { initPortfolioEvents } from "./features/portfolio/portfolioEvents.js";
 import {
-  allocationWeightBps,
   assetTypeKey,
   configurePortfolioRender,
   renderAccounts,
@@ -433,7 +432,6 @@ configureAnalysisRender({
   fxRateSummary,
   calculateTrendValueChangeForRange,
   buildEvenlySpacedXAxisLabels,
-  allocationWeightBps,
   benchmarkReturnPeriods,
   benchmarkHistoryPeriodReturnBps,
   assetTypeKey

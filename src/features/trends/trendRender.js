@@ -1,4 +1,5 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
+import { buildSmoothAreaPath, buildSmoothLinePath } from "../../ui/charts.js";
 import { emptyActionState, emptyStateInner } from "../../ui/emptyState.js";
 import {
   formatCompactCurrency,
@@ -56,8 +57,8 @@ export function renderTrendChart() {
     return { ...point, x, y };
   });
 
-  const path = chartPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const areaPath = `${leftPad},${height - pad} ${path} ${width - rightPad},${height - pad}`;
+  const path = buildSmoothLinePath(chartPoints);
+  const areaPath = buildSmoothAreaPath(chartPoints, height - pad, leftPad, width - rightPad);
   const xAxisLabels = buildEvenlySpacedXAxisLabels(chartPoints);
   const latest = points.at(-1);
   const chartSummary = buildTrendChartSummary(rawPoints);
@@ -90,8 +91,8 @@ export function renderTrendChart() {
           `;
         })
         .join("")}
-      <polyline points="${areaPath}" class="chart-area"></polyline>
-      <polyline points="${path}" class="chart-line"></polyline>
+      <path d="${areaPath}" class="chart-area"></path>
+      <path d="${path}" class="chart-line"></path>
       ${xAxisLabels
         .map((label) => {
           return `<text x="${label.x.toFixed(1)}" y="${height - 7}" text-anchor="${label.anchor}" class="chart-x-label">${escapeHtml(label.date)}</text>`;

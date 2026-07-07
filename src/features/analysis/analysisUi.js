@@ -5,7 +5,6 @@ import { escapeHtml } from "../../utils/dom.js";
 import {
   formatDisplayAmountOnly,
   formatDisplayCurrency,
-  formatShare,
   formatSignedCurrency,
   toneClassForValue
 } from "../../ui/formatters.js";
@@ -186,24 +185,6 @@ export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLab
       `).join("")}
     </div>
     ${missingBenchmarkLabels.length ? `<p class="benchmark-chart-note">${escapeHtml(`${missingBenchmarkLabels.join("、")} 在当前筛选范围内没有足够历史点，暂未进入走势图。`)}</p>` : ""}
-  `;
-}
-
-export function renderAllocationBars(rows) {
-  if (!rows.length) return `<p class="empty-state">暂无配置数据。先添加股票、基金、现金等资产后查看配置偏离。</p>`;
-  return `
-    <div class="allocation-bars">
-      ${rows.map((row) => `
-        <article class="allocation-row">
-          <strong>${escapeHtml(row.type)}</strong>
-          <div>
-            <span class="allocation-track"><b class="allocation-current" style="width: ${Math.min(100, Number(row.currentBps) / 100).toFixed(2)}%"></b></span>
-            <span class="allocation-track"><b class="allocation-target" style="width: ${Math.min(100, Number(row.targetBps) / 100).toFixed(2)}%"></b></span>
-          </div>
-          <small>当前 ${escapeHtml(formatShare(row.currentBps))} / 目标 ${escapeHtml(formatShare(row.targetBps))}</small>
-        </article>
-      `).join("")}
-    </div>
   `;
 }
 

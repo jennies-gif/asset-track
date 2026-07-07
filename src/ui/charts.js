@@ -73,6 +73,40 @@ export function renderDonutChart(categories, label = "占比图") {
   `;
 }
 
+export function buildSmoothLinePath(points) {
+  if (!Array.isArray(points) || !points.length) return "";
+  if (points.length === 1) return `M ${formatPoint(points[0])}`;
+  if (points.length === 2) return `M ${formatPoint(points[0])} L ${formatPoint(points[1])}`;
+
+  const commands = [`M ${formatPoint(points[0])}`];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[Math.max(0, index - 1)];
+    const current = points[index];
+    const next = points[index + 1];
+    const nextNext = points[Math.min(points.length - 1, index + 2)];
+    const controlOne = {
+      x: current.x + (next.x - previous.x) / 6,
+      y: current.y + (next.y - previous.y) / 6
+    };
+    const controlTwo = {
+      x: next.x - (nextNext.x - current.x) / 6,
+      y: next.y - (nextNext.y - current.y) / 6
+    };
+    commands.push(`C ${formatPoint(controlOne)} ${formatPoint(controlTwo)} ${formatPoint(next)}`);
+  }
+  return commands.join(" ");
+}
+
+export function buildSmoothAreaPath(points, baselineY, leftX, rightX) {
+  const linePath = buildSmoothLinePath(points);
+  if (!linePath) return "";
+  return `M ${leftX.toFixed(1)},${baselineY.toFixed(1)} ${linePath.replace(/^M /u, "L ")} L ${rightX.toFixed(1)},${baselineY.toFixed(1)} Z`;
+}
+
+function formatPoint(point) {
+  return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+}
+
 function layoutDonutCallouts(items, minY, maxY, minGap) {
   const arranged = [...items];
   ["left", "right"].forEach((side) => {
