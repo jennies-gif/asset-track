@@ -148,24 +148,24 @@ function setAnalysisAssetCardsVisible(isVisible) {
 function renderEmptyAnalysis() {
   if (analysisElements.analysisJudgementTitle) analysisElements.analysisJudgementTitle.textContent = "分析数据不足";
   if (analysisElements.analysisJudgementList) {
-    analysisElements.analysisJudgementList.innerHTML = "<li>添加资产和交易记录后，这里会解释组合价值变化来源。</li><li>收益、回撤和归因仅用于记录与复盘，不构成投资建议。</li>";
+    analysisElements.analysisJudgementList.innerHTML = "<li>收益、回撤和归因仅用于记录与复盘，不构成投资建议。</li>";
   }
   if (analysisElements.analysisHealthList) {
-    analysisElements.analysisHealthList.innerHTML = emptyActionState("暂无分析数据", "录入资产、价格和交易后，这里会展示总资产、收益率、回撤、集中度和数据质量。", "添加第一笔资产", "add-asset");
+    analysisElements.analysisHealthList.innerHTML = emptyActionState("暂无分析数据", "", "添加第一笔资产", "add-asset");
   }
   if (analysisElements.stageComparisonGrid) analysisElements.stageComparisonGrid.innerHTML = "";
   if (analysisElements.analysisCashflowChart) {
-    analysisElements.analysisCashflowChart.innerHTML = emptyStateInner("暂无归因拆解", "有交易和估值记录后，这里会区分净投入、价格变动、汇率、费用和未归因差异。");
+    analysisElements.analysisCashflowChart.innerHTML = emptyStateInner("暂无归因拆解", "");
   }
   if (analysisElements.analysisTopReturnAssets) {
-    analysisElements.analysisTopReturnAssets.innerHTML = emptyStateInner("暂无贡献排行", "补充资产当前价格后，这里会展示贡献最大和拖累最大的资产。");
+    analysisElements.analysisTopReturnAssets.innerHTML = emptyStateInner("暂无贡献排行", "");
   }
   if (analysisElements.analysisContributionSummary) analysisElements.analysisContributionSummary.textContent = "";
   if (analysisElements.analysisRiskNote) {
     analysisElements.analysisRiskNote.innerHTML = `${trustBadge("本地保存")} ${trustBadge("数据未上传")} ${trustBadge("仅供记录与复盘")}`;
   }
   if (analysisElements.analysisContributionRows) {
-    analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "录入资产后，这里会列出价格、汇率、权重和待核对状态。")}</td></tr>`;
+    analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "")}</td></tr>`;
   }
   if (analysisElements.analysisMonthlyReturnChart) analysisElements.analysisMonthlyReturnChart.innerHTML = "";
   if (analysisElements.analysisBenchmarkTrendChart) analysisElements.analysisBenchmarkTrendChart.innerHTML = "";
@@ -560,7 +560,7 @@ function renderTopReturnAssets(analysis) {
     .slice(0, 3);
   const rows = [...gainRows, ...dragRows];
   const max = rows.reduce((current, item) => absBigInt(item.unrealizedPnlCents) > current ? absBigInt(item.unrealizedPnlCents) : current, 1n);
-  if (!rows.length) return `<p class="empty-state">暂无收益贡献数据。先录入资产并同步或补全当前价格后，再查看贡献最大和拖累最大的资产。</p>`;
+  if (!rows.length) return `<p class="empty-state">暂无收益贡献数据。</p>`;
   return `
     <div class="contribution-groups">
       ${renderContributionGroup("贡献最大", gainRows, max, "暂无正贡献资产。同步最新价格或补录当前价格后再检查。")}
@@ -576,14 +576,14 @@ function renderContributionSummary(analysis) {
     .sort((left, right) => left.unrealizedPnlCents < right.unrealizedPnlCents ? 1 : -1)
     .slice(0, 2);
   if (!dragRows.length) {
-    analysisElements.analysisContributionSummary.textContent = "当前组合暂无明显负贡献资产，后续仍需观察高波动资产是否改变收益来源。";
+    analysisElements.analysisContributionSummary.textContent = "当前组合暂无明显负贡献资产。";
     return;
   }
   const names = dragRows.map((position) => position.name).join("和");
   const hasHighRisk = dragRows.some((position) => position.type === "数字资产" || inferAssetMarket(position) === "WEB3" || absBigInt(position.returnBps) >= 1000n);
   analysisElements.analysisContributionSummary.textContent = hasHighRisk
-    ? `当前组合主要拖累来自${names}，说明组合短期波动主要集中在高风险资产。`
-    : `当前组合主要拖累来自${names}，建议结合账户、市场和持仓权重复盘是否需要调整。`;
+    ? `当前组合主要拖累来自${names}，波动集中在高风险资产。`
+    : `当前组合主要拖累来自${names}。`;
 }
 
 function renderContributionGroup(title, rows, max, emptyText) {
@@ -622,7 +622,7 @@ function analysisDataIssues(assets) {
 
 function topHoldingConcentration(positions, totalValueCents) {
   if (!positions.length || totalValueCents === 0n) {
-    return { status: "empty", message: "暂无当前持仓，先录入资产后查看集中度", weightBps: 0n };
+    return { status: "empty", message: "暂无当前持仓", weightBps: 0n };
   }
   const top = [...positions].sort((left, right) => Number(right.marketValueCents - left.marketValueCents))[0];
   const weightBps = roundDivide(top.marketValueCents * 10000n, totalValueCents);
@@ -721,5 +721,5 @@ function renderAnalysisContributionRows(portfolio) {
           `;
         })
         .join("")
-    : `<tr><td colspan="4" class="empty-cell">暂无当前资产。先到“资产”页添加资产，或导入 JSON 备份后查看贡献排行。</td></tr>`;
+    : `<tr><td colspan="4" class="empty-cell">暂无当前资产。</td></tr>`;
 }

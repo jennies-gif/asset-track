@@ -1,0 +1,182 @@
+/* P1 analysis page restructuring. */
+.analysis-judgement-card {
+  margin-bottom: 16px;
+}
+
+.analysis-judgement-card h3 {
+  margin: 0 0 12px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: var(--type-title-weight);
+}
+
+.analysis-judgement-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#analysis-panel .analysis-health-layout {
+  display: block;
+}
+
+#analysis-panel .analysis-health-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#analysis-panel .analysis-health-item {
+  min-height: 156px;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+#analysis-panel .analysis-health-item strong {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+#analysis-panel .analysis-health-item small {
+  color: var(--muted);
+}
+
+.benchmark-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.benchmark-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--bg-card);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.benchmark-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.benchmark-option.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+}
+
+.waterfall-chart {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.waterfall-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) minmax(150px, auto);
+  gap: 14px;
+  align-items: center;
+}
+
+.waterfall-row > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.waterfall-row strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.waterfall-row strong.positive {
+  color: var(--positive);
+}
+
+.waterfall-row strong.negative {
+  color: var(--negative);
+}
+
+#stage-comparison-grid .analysis-mini-metric strong {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.waterfall-track {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+
+.waterfall-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--chart-muted);
+}
+
+.waterfall-row.positive .waterfall-track i {
+  background: var(--chart-3);
+}
+
+.waterfall-row.negative .waterfall-track i {
+  background: var(--negative);
+}
+
+.waterfall-row.total .waterfall-track i {
+  background: var(--chart-1);
+}
+
+.waterfall-row.muted {
+  opacity: 0.55;
+}
+
+.analysis-auto-summary {
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  #analysis-panel .analysis-health-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  #analysis-panel .analysis-health-list,
+  .waterfall-row {
+    grid-template-columns: 1fr;
+  }
+
+  .waterfall-row strong {
+    text-align: left;
+  }
+}

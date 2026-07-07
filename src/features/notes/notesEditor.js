@@ -1,4 +1,4 @@
-import { formatDisplayCurrency } from "../../ui/formatters.js";
+import { formatDisplayCurrency, formatUnitPrice } from "../../ui/formatters.js";
 import { formatDate } from "../../utils/date.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { inferNoteAssetId, noteTagsFor } from "./notesRender.js";
@@ -230,8 +230,8 @@ function buildBuyReviewTemplate(asset = {}, change = null) {
   const factLines = [
     `买入事实：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"} / ${change?.date || formatDate(asset.purchaseDate || asset.updatedAt)}`,
     `数量：${change?.quantity || asset.quantity || "未填写"}`,
-    `买入价格：${change?.changePrice || asset.costPrice || "未填写"} ${asset.currency || ""}`.trim(),
-    `资金来源：${asset.contribution ? `${asset.contribution} ${asset.currency || ""}`.trim() : "未填写"}`
+    `买入价格：${formatUnitPrice(change?.changePrice || asset.costPrice, asset.currency, "未填写")}`,
+    `资金来源：${formatUnitPrice(asset.contribution, asset.currency, "未填写")}`
   ];
   return [
     ...factLines,
@@ -250,8 +250,8 @@ function buildBuyReviewTemplate(asset = {}, change = null) {
 function buildHoldReviewTemplate(asset = {}) {
   return [
     `观察对象：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"}`,
-    `当前价格：${asset.currentPrice || "未填写"} ${asset.currency || ""}`.trim(),
-    `成本价格：${asset.costPrice || "未填写"} ${asset.currency || ""}`.trim(),
+    `当前价格：${formatUnitPrice(asset.currentPrice, asset.currency, "未填写")}`,
+    `成本价格：${formatUnitPrice(asset.costPrice, asset.currency, "未填写")}`,
     "",
     "持有理由是否仍成立：",
     "",
@@ -269,7 +269,7 @@ function buildCloseReviewTemplate(asset = {}, type = "close", change = null) {
     asset.realizedPnlCents !== undefined ? formatDisplayCurrency(ctx.convertUsdToDisplay(BigInt(asset.realizedPnlCents || "0"))) : "待核对";
   const factLines = [
     `${actionLabel}事实：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"} / ${change?.date || formatDate(asset.closedAt || asset.purchaseDate || asset.updatedAt)}`,
-    `成交价格：${change?.changePrice || asset.closePrice || asset.currentPrice || asset.costPrice || "未填写"} ${asset.currency || ""}`.trim()
+    `成交价格：${formatUnitPrice(change?.changePrice || asset.closePrice || asset.currentPrice || asset.costPrice, asset.currency, "未填写")}`
   ];
   if (type !== "buy") factLines.push(`已实现收益：${realizedPnl}`);
   return [

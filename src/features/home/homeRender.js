@@ -35,8 +35,8 @@ export function renderMetrics(elements, context) {
         </div>
         ${hasAssets ? "" : `
           <div class="home-empty-intro">
-            <strong>添加第一笔资产后，这里会展示总资产、收益表现、主要持仓和待补全数据。</strong>
-            <p>当前数据保存在本浏览器本地。你也可以加载示例数据，先了解记录、分析和复盘的基本路径。</p>
+            <strong>当前暂无资产。</strong>
+            <p>数据保存在本浏览器本地。</p>
           </div>
         `}
         <div class="snapshot-actions">
@@ -81,7 +81,7 @@ export function renderHomeHoldings(elements, context) {
     .sort((left, right) => Number(right.marketValueCents - left.marketValueCents))
     .slice(0, 5);
   if (!rows.length) {
-    elements.homeHoldingsList.innerHTML = emptyActionState("暂无当前持仓", "添加资产后，这里会展示主要持仓、市值、收益和价格状态。", "添加第一笔资产", "add-asset");
+    elements.homeHoldingsList.innerHTML = emptyActionState("暂无当前持仓", "", "添加第一笔资产", "add-asset");
     return;
   }
   elements.homeHoldingsList.innerHTML = rows.map((position) => {
@@ -111,7 +111,7 @@ export function renderHomeTransactions(elements, context) {
   if (!elements.homeTransactionsList) return;
   const rows = context.buildAssetChangeRecords().slice(0, 5);
   if (!rows.length) {
-    elements.homeTransactionsList.innerHTML = emptyStateInner("暂无交易记录", "记录买入、卖出、分红或清仓后，可以回看每一次资产变化和对应决策。");
+    elements.homeTransactionsList.innerHTML = emptyStateInner("暂无交易记录", "添加资产或记录买卖后，这里会显示最近 5 条资产变化。");
     return;
   }
   elements.homeTransactionsList.innerHTML = rows.map((change) => `
@@ -134,7 +134,7 @@ export function renderHomeNotes(elements, context) {
     .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")))
     .slice(0, 3);
   if (!rows.length) {
-    elements.homeNotesList.innerHTML = emptyActionState("暂无复盘", "复盘用于沉淀投资判断、交易原因和后续验证点，默认不会公开个人资产数据。", "写一条复盘", "write-note");
+    elements.homeNotesList.innerHTML = emptyActionState("暂无复盘", "默认私有，不公开个人资产数据。", "写一条复盘", "write-note");
     return;
   }
   elements.homeNotesList.innerHTML = rows.map((note) => {
@@ -164,17 +164,17 @@ export function renderHomeChecklist(elements, context) {
   const items = [
     {
       label: priceMissing ? `${priceMissing} 个资产缺少可追踪价格` : "价格记录较完整",
-      detail: priceMissing ? "完善价格后，收益和配置会更准确。" : "仍建议定期核对价格来源和时间。",
+      detail: priceMissing ? "会影响收益、配置和归因可信度。" : "价格来源和时间可追踪。",
       done: priceMissing === 0
     },
     {
       label: accountMissing ? `${accountMissing} 个资产未关联账户` : "资产已关联账户",
-      detail: accountMissing ? "补充账户后，资产页筛选和对账会更清楚。" : "账户维度可以支持后续对账。",
+      detail: accountMissing ? "会影响账户维度筛选和对账。" : "账户维度完整。",
       done: accountMissing === 0
     },
     {
       label: unreviewedTransactions ? `${unreviewedTransactions} 条交易尚未关联复盘` : "交易复盘已覆盖",
-      detail: unreviewedTransactions ? "重要交易后写一条简短复盘，后续更容易回看决策。" : "继续保持记录节奏即可。",
+      detail: unreviewedTransactions ? "会影响后续复盘追溯。" : "交易记录已有复盘线索。",
       done: unreviewedTransactions === 0
     },
     {

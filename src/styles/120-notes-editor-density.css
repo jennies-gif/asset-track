@@ -1,0 +1,167 @@
+/* Notes editor density: keep the writing area single-framed and align it with the compact left rail. */
+#notes-panel .note-editor-card {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 20px;
+  row-gap: 0;
+}
+
+#notes-panel .note-title-field,
+#notes-panel .note-template-field,
+#notes-panel .note-tag-field,
+#notes-panel .note-link-card {
+  display: grid;
+  grid-column: 1;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-bottom: 0;
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+#notes-panel .note-template-field,
+#notes-panel .note-tag-field {
+  border-top: 0;
+}
+
+#notes-panel .note-title-field {
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+#notes-panel .note-link-card {
+  border-bottom: 1px solid var(--line-strong);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+#notes-panel .note-title-field > strong,
+#notes-panel .note-template-field legend,
+#notes-panel .note-tag-field legend,
+#notes-panel .note-link-card strong {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+#notes-panel .note-title-field {
+  gap: 6px;
+}
+
+#notes-panel .note-input-shell input {
+  min-height: 36px;
+  font-size: 15px;
+}
+
+#notes-panel .note-input-shell small {
+  top: 9px;
+}
+
+#notes-panel .note-template-field {
+  gap: 8px;
+}
+
+#notes-panel .note-template-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+#notes-panel .note-template-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#notes-panel .note-tag-options {
+  gap: 6px;
+}
+
+#notes-panel .note-tag-options label span,
+#notes-panel .note-dynamic-tag-chip,
+#notes-panel .note-new-tag-button,
+#notes-panel .note-custom-tag input,
+#notes-panel .note-tag-edit-input {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+#notes-panel .note-asset-link-field {
+  padding-left: 0;
+  margin-left: 0;
+}
+
+#notes-panel .note-link-card strong {
+  grid-template-columns: 1fr;
+}
+
+#notes-panel .note-link-card strong::before {
+  display: none;
+}
+
+#notes-panel .note-asset-link-field {
+  gap: 4px;
+}
+
+#notes-panel .note-asset-link-field select,
+#notes-panel #note-transaction-select {
+  min-height: 32px;
+}
+
+#notes-panel .note-content-field {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: start;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#notes-panel .note-content-field > strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#notes-panel .note-textarea-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+#notes-panel .note-textarea-shell textarea {
+  height: 100%;
+  min-height: 430px;
+  padding: 18px 18px 44px;
+  line-height: 1.72;
+}
+
+@media (max-width: 1100px) {
+  #notes-panel .note-editor-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  #notes-panel .note-textarea-shell textarea {
+    min-height: 320px;
+  }
+}

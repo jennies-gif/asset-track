@@ -21,7 +21,7 @@ export function hideMarketSyncResult() {
 export async function syncLatestMarketPrices() {
   await runMarketPriceSync({
     trigger: "manual",
-    loadingMessage: (count) => `正在抓取并同步 ${count} 个代码近 7 天价格...`
+    loadingMessage: (count) => `正在按持有日期回补并同步 ${count} 个代码的历史收盘价...`
   });
 }
 
@@ -36,7 +36,7 @@ export async function syncDailyMarketPricesIfDue() {
   writeAutoSyncState({ ...autoSync, lastAttemptedDate: today, lastAttemptedAt: new Date().toISOString() });
   await runMarketPriceSync({
     trigger: "auto",
-    loadingMessage: (count) => `正在自动同步今日价格，覆盖 ${count} 个代码...`,
+    loadingMessage: (count) => `正在自动补齐历史收盘价，覆盖 ${count} 个代码...`,
     onSettled: (state) => {
       const latest = readAutoSyncState();
       if (state.status === "success" || state.status === "warning") {
@@ -71,7 +71,7 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
     const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols, days: 7, trigger })
+      body: JSON.stringify({ symbols, assets: assetsForMarketSyncPayload(), days: 7, trigger })
     });
     if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
@@ -168,6 +168,9 @@ function applyMarketSyncResults(results, syncedAt) {
       priceSource: result.after.priceSource || asset.priceSource,
       priceStatus: "synced",
       priceError: "",
+      dailyPrices: normalizeDailyPriceRows(result.dailyPrices || asset.dailyPrices),
+      dailyPriceStatus: result.dailyPriceStatus || asset.dailyPriceStatus || "",
+      dailyPriceMissingDates: Array.isArray(result.dailyPriceMissingDates) ? result.dailyPriceMissingDates : asset.dailyPriceMissingDates || [],
       updatedAt: syncedAt || new Date().toISOString()
     };
   });
@@ -177,6 +180,21 @@ function applyMarketSyncResults(results, syncedAt) {
     }
   }
   return { appliedCount, missingCount, benchmarkSyncedCount };
+}
+
+function normalizeDailyPriceRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      priceDate: String(row.priceDate || row.date || "").slice(0, 10),
+      closePrice: String(row.closePrice || row.closeDecimal || row.close || "").trim(),
+      priceBasis: row.priceBasis || "",
+      carriedFromDate: row.carriedFromDate || "",
+      source: row.source || "",
+      sourceFetchedAt: row.sourceFetchedAt || "",
+      qualityStatus: row.qualityStatus || ""
+    }))
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/u.test(row.priceDate) && Number(row.closePrice) > 0)
+    .sort((left, right) => left.priceDate.localeCompare(right.priceDate));
 }
 
 function markOpenAssetsPriceError(symbols, message) {
@@ -194,14 +212,38 @@ function markOpenAssetsPriceError(symbols, message) {
   });
 }
 
-function symbolsForOpenAssets() {
+function symbolsForRecordedAssets() {
   const state = ctx.getState();
-  const assets = state.assets.filter((asset) => !asset.closed && syncSymbolForAsset(asset) && inferAssetMarket(asset) !== "CASH");
+  const assets = state.assets.filter((asset) => syncSymbolForAsset(asset) && inferAssetMarket(asset) !== "CASH");
   return [...new Set(assets.map(syncSymbolForAsset).filter(Boolean))];
 }
 
 function symbolsForMarketSync() {
-  return [...new Set([...symbolsForOpenAssets(), ...benchmarkSymbolsForAnalysis()].filter(Boolean))];
+  return [...new Set([...symbolsForRecordedAssets(), ...benchmarkSymbolsForAnalysis()].filter(Boolean))];
+}
+
+function assetsForMarketSyncPayload() {
+  return ctx.getState().assets
+    .filter((asset) => syncSymbolForAsset(asset) && inferAssetMarket(asset) !== "CASH")
+    .map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      symbol: syncSymbolForAsset(asset),
+      type: asset.type,
+      market: asset.market,
+      account: asset.account,
+      currency: asset.currency,
+      quantity: asset.quantity,
+      costPrice: asset.costPrice,
+      currentPrice: asset.currentPrice,
+      previousPrice: asset.previousPrice,
+      fxRate: asset.fxRate,
+      purchaseDate: asset.purchaseDate,
+      pricedAt: asset.pricedAt,
+      updatedAt: asset.updatedAt,
+      closed: Boolean(asset.closed),
+      closedAt: asset.closedAt || ""
+    }));
 }
 
 function benchmarkSymbolsForAnalysis() {

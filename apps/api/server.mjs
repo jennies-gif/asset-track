@@ -294,6 +294,8 @@ async function syncDailyMarketData(request, response) {
 
 async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   const requestedSymbols = parseSymbols(body.symbols || body.symbol);
+  const clientAssets = Array.isArray(body.assets) ? body.assets.map(normalizeAsset).filter((asset) => asset.symbol) : [];
+  const assetSource = clientAssets.length ? clientAssets : state.assets;
   const benchmarkSymbols = body.includeBenchmarks
     ? defaultBenchmarkSyncSymbols.map((symbol) => symbol.toUpperCase())
     : [];
@@ -302,8 +304,8 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
     : [];
   const externalSymbolsToSync = [...new Set([...symbolsToSync, ...benchmarkSymbols])];
   const account = String(body.account || "").trim();
-  const stateCandidates = state.assets.filter((asset) => {
-    if (asset.closed || !asset.symbol) return false;
+  const stateCandidates = assetSource.filter((asset) => {
+    if (!asset.symbol) return false;
     if (account && asset.account !== account) return false;
     if (symbolsToSync.length && !symbolsToSync.includes(asset.symbol.toUpperCase())) return false;
     return true;
@@ -325,12 +327,16 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   let fetchResult = null;
   let dailyPriceRowsUpserted = 0;
   let dailyPriceGapCount = 0;
+  const historyDateFrom = normalizeDateParam(body.dateFrom) || earliestAssetHistoryDate(stateCandidates);
+  const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
 
   if (body.autoFetch !== false) {
     try {
       fetchResult = await fetchRecentMarketDataRun({
         ...body,
         symbols: candidates.map((asset) => asset.symbol).filter(Boolean),
+        dateFrom: historyDateFrom,
+        dateTo: historyDateTo || todayIsoDate(),
         days: body.days || 7
       });
       state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
@@ -383,11 +389,14 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
         userId: demoUser.id,
         asset,
         history,
-        dateFrom: body.dateFrom,
-        dateTo: body.dateTo
+        dateFrom: assetHistoryStartDate(asset, body.dateFrom),
+        dateTo: historyDateTo
       });
       dailyPriceGapCount += dailyPrices.missingDates.length;
       dailyPriceRowsUpserted += await persistUserAssetDailyPrices(dailyPrices.rows);
+      asset.dailyPrices = dailyPrices.rows;
+      asset.dailyPriceStatus = dailyPrices.status;
+      asset.dailyPriceMissingDates = dailyPrices.missingDates;
     }
     results.push({
       symbol: asset.symbol,
@@ -401,7 +410,10 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
         priceSource: latest.source,
         priceStatus: "synced",
         sourceFetchedAt: latest.sourceFetchedAt
-      }
+      },
+      dailyPrices: asset.externalOnly ? [] : asset.dailyPrices || [],
+      dailyPriceStatus: asset.externalOnly ? "" : asset.dailyPriceStatus || "",
+      dailyPriceMissingDates: asset.externalOnly ? [] : asset.dailyPriceMissingDates || []
     });
   }
 
@@ -498,8 +510,8 @@ async function fetchRecentMarketDataRun(body) {
     throw new Error("没有可抓取的资产代码");
   }
 
-  const days = Math.min(30, Math.max(1, Number(body.days || 7)));
   const dateTo = normalizeDateParam(body.dateTo) || todayIsoDate();
+  const days = Math.max(1, Number(body.days || 7));
   const dateFrom = normalizeDateParam(body.dateFrom) || addDays(dateTo, -days + 1);
   const args = [
     "scripts/market-data/fetch-market-data.mjs",
@@ -521,6 +533,17 @@ async function fetchRecentMarketDataRun(body) {
     symbols,
     run
   };
+}
+
+function earliestAssetHistoryDate(assets) {
+  return assets
+    .map((asset) => normalizeDateParam(asset.purchaseDate || asset.buyDate || asset.acquiredAt))
+    .filter(Boolean)
+    .sort()[0] || "";
+}
+
+function assetHistoryStartDate(asset, explicitDateFrom) {
+  return normalizeDateParam(explicitDateFrom) || normalizeDateParam(asset.purchaseDate || asset.buyDate || asset.acquiredAt) || "";
 }
 
 async function createBackfillTask(request, response) {

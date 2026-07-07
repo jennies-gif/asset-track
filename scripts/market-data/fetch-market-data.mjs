@@ -313,7 +313,7 @@ async function fetchBinanceCrypto(instrument, range) {
   klineUrl.searchParams.set("interval", "1d");
   klineUrl.searchParams.set("startTime", String(Date.parse(`${range.dateFrom}T00:00:00.000Z`)));
   klineUrl.searchParams.set("endTime", String(Date.parse(`${range.dateTo}T23:59:59.999Z`)));
-  klineUrl.searchParams.set("limit", "10");
+  klineUrl.searchParams.set("limit", String(historyRequestLimit(range, 1000)));
   const klinePayload = await fetchJson(klineUrl, { referer: "https://www.binance.com/" });
   rows.push(...normalizeBinanceKlines(klinePayload, sourceInstrument));
 
@@ -354,7 +354,7 @@ async function fetchFrankfurterFx(pairs, range) {
 
 async function fetchTencentKline(instrument, range) {
   const symbol = toTencentSymbol(instrument);
-  const limit = command === "backfill" ? "140" : "10";
+  const limit = command === "backfill" ? String(historyRequestLimit(range, 800)) : "10";
   const url = new URL("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get");
   url.searchParams.set("param", `${symbol},day,,,${limit},qfq`);
   const payload = await fetchJson(url, { referer: "https://gu.qq.com/" });
@@ -402,7 +402,7 @@ async function fetchEastmoneyKline(instrument, range) {
   url.searchParams.set("fqt", "1");
   url.searchParams.set("beg", compactDate(range.dateFrom));
   url.searchParams.set("end", compactDate(range.dateTo));
-  url.searchParams.set("lmt", "200");
+  url.searchParams.set("lmt", String(historyRequestLimit(range, 5000)));
 
   const payload = await fetchJson(url, { referer: "https://quote.eastmoney.com/" });
   const klines = payload.data?.klines;
@@ -466,7 +466,7 @@ async function fetchNasdaqDaily(instrument, range) {
   url.searchParams.set("assetclass", assetClass);
   url.searchParams.set("fromdate", requestFrom);
   url.searchParams.set("todate", range.dateTo);
-  url.searchParams.set("limit", "500");
+  url.searchParams.set("limit", String(historyRequestLimit(range, 5000)));
   const payload = await fetchJson(url, {
     referer: `https://www.nasdaq.com/market-activity/${assetClass}/${instrument.symbol.toLowerCase()}`,
     origin: "https://www.nasdaq.com"
@@ -577,6 +577,14 @@ function toTencentSymbol(instrument) {
   if (instrument.market === "HK") return `hk${symbol.padStart(5, "0")}`;
   if (symbol.startsWith("6") || symbol.startsWith("5")) return `sh${symbol}`;
   return `sz${symbol}`;
+}
+
+function historyRequestLimit(range, maxLimit) {
+  const start = Date.parse(`${range.dateFrom}T00:00:00.000Z`);
+  const end = Date.parse(`${range.dateTo}T00:00:00.000Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return maxLimit;
+  const calendarDays = Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 10;
+  return Math.max(10, Math.min(maxLimit, calendarDays));
 }
 
 function toTencentSimpleQuoteSymbol(instrument) {

@@ -34,8 +34,8 @@ export function renderCategoryBreakdown() {
   });
   const groups = allocationGroupsForView(selectedAllocationView);
   if (!groups.length) {
-    elements.categoryList.innerHTML = emptyActionState("暂无资产配置", "添加股票、基金、现金等资产后，这里会按类别、市场、账户、币种和风险维度展示组合集中度。", "添加第一笔资产", "add-asset");
-    elements.marketDistributionList.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无配置明细", "录入资产后，这里会列出各维度占比、市值和收益。")}</td></tr>`;
+    elements.categoryList.innerHTML = emptyActionState("暂无资产配置", "", "添加第一笔资产", "add-asset");
+    elements.marketDistributionList.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无配置明细", "添加资产后，这里会按类别、市场、账户、币种和风险展示配置。")}</td></tr>`;
     return;
   }
   const hasSelectedGroup = groups.some((group) => group.key === selectedOverviewBreakdown.key);
@@ -83,7 +83,7 @@ export function renderOverviewBreakdownDetail() {
   if (!elements.distributionDetail) return;
   const assets = selectedOverviewBreakdownAssets();
   if (!assets.length) {
-    elements.distributionDetail.innerHTML = emptyStateInner("暂无分布详情", "选择一个资产类型、市场、账户、币种或风险维度后，这里会展示市值、未实现收益、收益率和 Top 持仓。");
+    elements.distributionDetail.innerHTML = emptyStateInner("暂无分布详情", "选择一个配置维度后，这里会展示对应持仓、市值和收益。");
     return;
   }
 

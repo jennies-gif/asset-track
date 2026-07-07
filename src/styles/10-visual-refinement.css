@@ -1,0 +1,518 @@
+/* Visual refinement pass: calmer cards, lighter type, and denser finance UI. */
+.overview,
+.panel,
+.home-section,
+.metric,
+.analysis-card,
+.data-section,
+.notes-list-shell,
+.note-card,
+.note-reader-card,
+.note-link-card,
+.table-wrap,
+table {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.metric,
+.analysis-card,
+.data-section,
+.note-reader-card {
+  border-radius: var(--radius-panel);
+}
+
+.metric:hover,
+.analysis-card:hover,
+.note-card:hover,
+.note-reader-card:hover {
+  box-shadow: var(--shadow-card);
+}
+
+.panel-heading h2,
+.notes-hero h2,
+.notes-editor-heading h2 {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.25;
+}
+
+.home-section h2,
+.analysis-card h3,
+.trend-section h2 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: var(--type-title-weight);
+}
+
+.metric-title,
+.analysis-health-item span,
+.stage-metric span,
+.stage-metric small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.metric strong,
+#analysis-panel .compact-metrics .metric strong,
+.stage-metric strong {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: var(--type-title-weight);
+  letter-spacing: -0.02em;
+}
+
+.asset-value-line strong,
+.analysis-overall-inner > strong {
+  color: var(--ink);
+  font-size: 40px;
+  font-weight: var(--type-title-weight);
+  letter-spacing: -0.03em;
+}
+
+.metric small,
+.metric p,
+.analysis-health-item small,
+.note-card-preview,
+.note-card-preview small,
+.note-reader-content,
+.note-link-card p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.settings-button,
+.header-add-button,
+.avatar-button {
+  min-height: 40px;
+  border-radius: var(--radius-panel);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sync-price-button,
+.market-sync-header .settings-button {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.header-add-button {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+  padding: 0 18px;
+  box-shadow: none;
+}
+
+.avatar-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.analysis-hero-card {
+  background: var(--surface);
+}
+
+.analysis-health-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.4fr) minmax(0, 0.6fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.analysis-overall-card {
+  min-width: 0;
+}
+
+.analysis-overall-inner {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  height: 100%;
+  min-height: 282px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.analysis-overall-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-overall-inner p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.analysis-overall-inner dl {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+}
+
+.analysis-overall-inner dl div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.analysis-overall-inner dt,
+.analysis-overall-inner dd {
+  margin: 0;
+}
+
+.analysis-overall-inner dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.analysis-overall-inner dd {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: var(--type-title-weight);
+}
+
+.analysis-health-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.analysis-health-item {
+  display: grid;
+  gap: 12px;
+  min-height: 134px;
+  padding: 16px;
+  border-color: var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.analysis-health-item div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analysis-health-item strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: var(--type-title-weight);
+  letter-spacing: -0.02em;
+}
+
+.analysis-health-item.is-high,
+.analysis-health-item.is-medium,
+#analysis-panel .analysis-summary-card.is-high,
+#analysis-panel .analysis-summary-card.is-medium {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.status-tag,
+#analysis-panel .analysis-summary-card b {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.status-tag.is-medium,
+#analysis-panel .analysis-summary-card.is-medium b {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-tag.is-high,
+#analysis-panel .analysis-summary-card.is-high b {
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+.status-tag.is-low,
+#analysis-panel .analysis-summary-card b {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+#analysis-panel .table-wrap {
+  border-color: var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+#analysis-panel .analysis-return-table {
+  min-width: 720px;
+}
+
+#analysis-panel .analysis-return-table th {
+  height: 48px;
+  background: var(--surface-muted);
+  border-bottom-color: var(--line);
+}
+
+#analysis-panel .analysis-return-table td {
+  height: 56px;
+  border-bottom-color: var(--line);
+  vertical-align: middle;
+}
+
+#analysis-panel .analysis-return-table td:not(:first-child),
+#analysis-panel .analysis-return-table th:not(:first-child) {
+  text-align: right;
+}
+
+.placeholder-value {
+  color: var(--muted);
+}
+
+.notes-search {
+  min-height: 44px;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.note-write-button {
+  min-height: 44px;
+  border-radius: var(--radius-panel);
+  border-color: var(--primary);
+  background: var(--primary);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.notes-filter-row {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.note-tag-filters button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.note-tag-filters button.is-active {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--primary);
+}
+
+.note-card {
+  overflow: hidden;
+  border-color: var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.note-card.is-active {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.note-card.is-active::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--primary);
+  content: "";
+}
+
+.note-card.is-active::after {
+  display: none;
+}
+
+.note-card h3 {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: var(--type-title-weight);
+}
+
+.note-card-preview {
+  font-weight: 400;
+}
+
+.note-detail-inner {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.note-reader-card h2 {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.3;
+}
+
+.note-reader-content {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+.note-empty-hint {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.category-section .panel-heading h2,
+.market-section .panel-heading h2,
+.account-section .panel-heading h2 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.25;
+}
+
+.distribution-detail h3 small,
+.distribution-main span,
+.account-card span,
+.account-card small,
+.pie-total span,
+.donut-center-count,
+.category-main span,
+.category-value span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.category-table-head,
+.mini-holdings-head {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.category-table-row > span,
+.distribution-main strong,
+.mini-holdings-row strong,
+.distribution-detail h3,
+.category-main strong {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.distribution-row .category-value strong,
+.distribution-detail-summary strong,
+.account-summary strong,
+.pie-total strong,
+.category-value strong {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.distribution-detail-summary,
+.mini-holdings-row,
+.mini-holdings-row span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.mini-holdings-row .positive,
+.mini-holdings-row .negative,
+.distribution-row .positive,
+.distribution-row .negative {
+  font-weight: 600;
+}
+
+.donut-center-label,
+.donut-callout-label {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.donut-center-count {
+  fill: var(--muted);
+}
+
+.category-table-row,
+.distribution-row,
+.account-card,
+.distribution-detail,
+.account-detail {
+  border-color: var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.category-table-row:hover,
+.distribution-row:hover,
+.account-card:hover {
+  box-shadow: var(--shadow-card);
+}
+
+.category-table-row.is-active,
+.distribution-row.is-active,
+.account-card.is-active {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--primary);
+}
+
+.category-table-row.is-active > span,
+.distribution-row.is-active .distribution-main strong,
+.account-card.is-active strong {
+  color: var(--primary);
+}

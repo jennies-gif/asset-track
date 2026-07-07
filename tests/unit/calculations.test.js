@@ -41,6 +41,8 @@ import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.j
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
 import { configureNotesRender, noteDisplayTagsFor, noteTypeFromTags, showNoteReader } from "../../src/features/notes/notesRender.js";
+import { buildTrendPoints, configureTrendModel } from "../../src/features/trends/trendModel.js";
+import { configureFormatters, formatDisplayCurrency, formatSignedCurrency, formatUnitPrice } from "../../src/ui/formatters.js";
 
 test("parses decimal values with deterministic rounding", () => {
   assert.equal(parseDecimalToScaledInt("12.345", 2), 1235n);
@@ -100,6 +102,17 @@ test("formats invalid percent inputs as unavailable data", () => {
   assert.equal(formatPercent(null), "暂无数据");
   assert.equal(formatPercent(Number.NaN), "暂无数据");
   assert.equal(formatPercent(Number.POSITIVE_INFINITY), "暂无数据");
+});
+
+test("formats displayed prices with one currency-code convention", () => {
+  configureFormatters({ displayCurrency: () => "USD" });
+
+  assert.equal(formatDisplayCurrency(7800n), "USD 78.00");
+  assert.equal(formatSignedCurrency(-1250n), "USD -12.50");
+  assert.equal(formatUnitPrice("500", "CNY"), "CNY 500.00");
+  assert.equal(formatUnitPrice("1.23456789", "USD"), "USD 1.23456789");
+
+  configureFormatters({ displayCurrency: () => "CNY" });
 });
 
 test("validates asset records before they enter calculations", () => {
@@ -252,6 +265,41 @@ test("builds auditable daily user asset prices from first holding date", () => {
   assert.equal(result.rows[1].priceBasis, "carry_forward");
   assert.equal(result.rows[1].carriedFromDate, "2026-06-01");
   assert.equal(result.rows[2].qualityStatus, "ok");
+});
+
+test("builds portfolio trend from synced daily asset prices before falling back to estimates", () => {
+  configureTrendModel({
+    elements: {
+      trendStart: { value: "2026-06-01" },
+      trendEnd: { value: "2026-06-03" },
+      trendRange: { value: "custom" }
+    },
+    getState: () => ({ snapshots: [] }),
+    openAssets: () => [],
+    overviewAssets: () => [
+      {
+        id: "asset-priced",
+        quantity: "10",
+        costPrice: "90",
+        currentPrice: "120",
+        fxRate: "1",
+        purchaseDate: "2026-06-01",
+        dailyPrices: [
+          { priceDate: "2026-06-01", closePrice: "100", priceBasis: "actual" },
+          { priceDate: "2026-06-03", closePrice: "120", priceBasis: "actual" }
+        ]
+      }
+    ],
+    currentOverviewTotalCents: () => 120000n,
+    convertUsdToDisplay: (value) => value
+  });
+
+  const points = buildTrendPoints();
+  assert.deepEqual(points.map((point) => [point.date, point.valueCents]), [
+    ["2026-06-01", 100000n],
+    ["2026-06-02", 100000n],
+    ["2026-06-03", 120000n]
+  ]);
 });
 
 test("calculates realized PnL for partial sells with fees and taxes", () => {
@@ -493,11 +541,18 @@ test("searches the generated instrument registry for mainstream assets", () => {
   assert.ok(activeInstrumentRegistry().length >= 5000);
   assert.equal(lookupInstrument("AAPL").market, "US");
   assert.equal(lookupInstrument("NVDA").type, "股票");
+  assert.ok(activeInstrumentRegistry().filter((item) => item.market === "CN").length >= 2500);
+  assert.equal(lookupInstrument("000001").name, "平安银行");
+  assert.equal(searchInstruments("浦发银行", { limit: 3 })[0].symbol, "600000");
   assert.equal(lookupInstrument("600519").name, "贵州茅台");
   assert.equal(searchInstruments("茅台", { limit: 3 })[0].symbol, "600519");
   assert.equal(searchInstruments("平安", { limit: 3 })[0].symbol, "601318");
   assert.equal(searchInstruments("招行", { limit: 3 })[0].symbol, "600036");
   assert.equal(searchInstruments("宁王", { limit: 3 })[0].symbol, "300750");
+  assert.equal(searchInstruments("寒武纪", { limit: 3 })[0].symbol, "688256");
+  assert.equal(searchInstruments("中芯", { limit: 3 })[0].symbol, "688981");
+  assert.equal(searchInstruments("台积电", { limit: 3 })[0].symbol, "TSM");
+  assert.equal(searchInstruments("帕兰提尔", { limit: 3 })[0].symbol, "PLTR");
   assert.equal(searchInstruments("美光", { limit: 3 })[0].symbol, "MU");
   assert.equal(searchInstruments("狗狗币", { limit: 3 })[0].symbol, "DOGE");
   assert.equal(lookupInstrument("腾讯控股").symbol, "00700");
@@ -511,6 +566,8 @@ test("prioritizes asset entry matches from the instrument registry", () => {
   assert.equal(matches[0].market, "US");
   assert.equal(findAssetQuickMatches("茅台", 5)[0].symbol, "600519");
   assert.equal(findAssetQuickMatches("比亚迪", 5)[0].symbol, "002594");
+  assert.equal(findAssetQuickMatches("寒武纪", 5)[0].symbol, "688256");
+  assert.equal(findAssetQuickMatches("台积电", 5)[0].symbol, "TSM");
   assert.equal(findAssetQuickMatches("美光", 5)[0].symbol, "MU");
   assert.equal(findAssetQuickMatches("狗狗币", 5)[0].symbol, "DOGE");
   assert.equal(findAssetQuickMatches("不存在资产XYZ999", 5).length, 0);

@@ -1,0 +1,176 @@
+/* Final analysis typography alignment with overview/assets density. */
+#analysis-panel > .panel-heading h2 {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+#analysis-panel .analysis-card h3,
+#analysis-panel .analysis-card-heading h3 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+#analysis-panel .analysis-health-item span,
+#analysis-panel .analysis-mini-metric span,
+#analysis-panel .stage-metric span,
+#analysis-panel .stage-metric small,
+#analysis-panel th {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#analysis-panel .analysis-filter label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+#analysis-panel .analysis-filter input,
+#analysis-panel .analysis-filter select {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+#analysis-panel .analysis-overall-inner {
+  gap: 14px;
+  min-height: 0;
+  padding: 20px;
+}
+
+#analysis-panel .analysis-overall-inner > strong {
+  color: var(--ink);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+#analysis-panel .analysis-overall-inner p,
+#analysis-panel .analysis-overall-inner dt,
+#analysis-panel .analysis-health-item small,
+#analysis-panel .analysis-mini-metric small,
+#analysis-panel td,
+#analysis-panel td span,
+#analysis-panel .bar-label small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+#analysis-panel .analysis-overall-inner dd {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+#analysis-panel .analysis-health-item {
+  gap: 10px;
+  min-height: 138px;
+  padding: 16px;
+  border-radius: var(--radius-panel);
+}
+
+#analysis-panel .analysis-health-item div {
+  margin-bottom: 8px;
+}
+
+#analysis-panel .analysis-health-item strong,
+#analysis-panel .analysis-mini-metric strong,
+#analysis-panel .stage-metric strong,
+#analysis-panel .compact-metrics .metric strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+#analysis-panel .analysis-health-item strong {
+  margin: 0;
+}
+
+#analysis-panel .analysis-return-table th {
+  height: 48px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#analysis-panel .analysis-return-table td {
+  height: 56px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+#analysis-panel .analysis-return-table td strong,
+#analysis-panel .bar-label strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+#analysis-panel .analysis-toggle span,
+#analysis-panel .status-tag,
+#analysis-panel .analysis-summary-card b {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+#analysis-panel .positive {
+  color: var(--positive);
+}
+
+#analysis-panel .negative {
+  color: var(--negative);
+}
+
+.asset-summary-grid b.positive,
+.return-breakdown b.positive,
+.trend-summary-strip b.positive,
+.benchmark-table td.positive,
+.category-value .positive,
+.distribution-detail .positive,
+#assets-panel td.positive,
+#assets-panel strong.positive,
+#assets-panel span.positive,
+.analysis-note-card strong.positive {
+  color: var(--positive);
+}
+
+.asset-summary-grid b.negative,
+.return-breakdown b.negative,
+.trend-summary-strip b.negative,
+.benchmark-table td.negative,
+.category-value .negative,
+.distribution-detail .negative,
+#assets-panel td.negative,
+#assets-panel strong.negative,
+#assets-panel span.negative,
+.analysis-note-card strong.negative {
+  color: var(--negative);
+}
+
+@media (max-width: 900px) {
+  #analysis-panel .analysis-health-item {
+    min-height: 128px;
+  }
+}

@@ -1,0 +1,187 @@
+/* Compact auxiliary legal, backup, feedback and release-note surfaces. */
+.site-footer {
+  gap: 5px;
+  padding-top: 14px;
+  padding-bottom: 18px;
+}
+
+.footer-links {
+  gap: 5px 10px;
+}
+
+.footer-links a,
+.footer-link-button,
+.legal-card a {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.site-footer p {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.legal-docs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 20px;
+}
+
+.legal-card {
+  border-radius: 8px;
+}
+
+.legal-card summary {
+  min-height: 30px;
+  padding: 6px 9px;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.legal-card summary::after {
+  font-size: 10px;
+}
+
+.legal-card p {
+  padding: 0 9px 8px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.backup-menu-panel {
+  width: min(500px, calc(100vw - var(--sidebar-current-width, var(--sidebar-width)) - 80px));
+  max-height: min(68vh, 560px);
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+}
+
+.backup-card {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.backup-card-heading {
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+}
+
+.backup-card-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+}
+
+.backup-card h3 {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.backup-card-heading p,
+.backup-risk-note,
+.backup-menu-panel .backup-note {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.backup-card-heading p {
+  margin-top: 4px;
+}
+
+.backup-action-button {
+  min-width: 118px;
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.backup-action-button span {
+  font-size: 15px;
+}
+
+.backup-import-card .backup-card-heading {
+  margin-bottom: 8px;
+}
+
+.backup-risk-note {
+  gap: 8px;
+  padding: 8px 9px;
+}
+
+.backup-risk-note span {
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+}
+
+.backup-menu summary {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.feedback-dialog {
+  width: min(560px, 100%);
+}
+
+.feedback-dialog.modal-dialog {
+  gap: 14px;
+  padding: 18px;
+}
+
+.feedback-dialog h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.feedback-dialog p,
+.feedback-form label {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.feedback-form {
+  gap: 10px;
+}
+
+.feedback-form textarea {
+  min-height: 190px;
+}
+
+@media (max-width: 900px) {
+  .legal-docs {
+    grid-template-columns: 1fr;
+    padding-inline: 14px;
+  }
+
+  .backup-menu-panel {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .backup-card {
+    padding: 12px;
+  }
+
+  .backup-card-heading {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .backup-card-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .backup-card h3 {
+    font-size: 14px;
+  }
+
+  .backup-card-heading p {
+    font-size: 11px;
+  }
+}

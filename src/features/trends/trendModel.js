@@ -42,6 +42,11 @@ export function assetValueAtTrendDate(asset, date, index, end) {
   const start = assetTrendStartDate(asset);
   if (date < start) return 0n;
 
+  const historicalPrice = assetPriceAtTrendDate(asset, date);
+  if (historicalPrice) {
+    return calculateMoneyFromQuantity(asset.quantity, historicalPrice, asset.fxRate || "1");
+  }
+
   const basisPrice = Number(String(asset.costPrice || "0")) > 0 ? asset.costPrice : asset.currentPrice || "0";
   const costValueCents = calculateMoneyFromQuantity(asset.quantity, basisPrice, asset.fxRate || "1");
   const progress = dateProgress(start, end, date);
@@ -234,6 +239,23 @@ function buildAssetTrendPoints(assets, dates) {
 }
 
 function trendSourceForAssets(assets) {
+  const pricedAssetCount = assets.filter((asset) => normalizedDailyPrices(asset).length).length;
+  if (pricedAssetCount === assets.length && assets.length) {
+    return {
+      type: "market-history",
+      label: "历史价格",
+      tone: "positive",
+      description: "曲线基于已同步的资产每日价格快照和当前持仓数量计算；缺交易日价格时使用上一可用交易日顺延。"
+    };
+  }
+  if (pricedAssetCount > 0) {
+    return {
+      type: "partial-market-history",
+      label: "部分历史价格",
+      tone: "warning",
+      description: `已有 ${pricedAssetCount}/${assets.length} 个资产使用历史价格快照；其余资产仍按成本和当前价估算。`
+    };
+  }
   const hasDemoAssets = assets.some((asset) => String(asset.id || "").startsWith("demo-") || String(asset.priceSource || "").includes("模拟"));
   const hasManualPrices = assets.some((asset) => String(asset.priceSource || "").includes("用户录入") || asset.priceStatus === "manual");
   return {
@@ -244,6 +266,23 @@ function trendSourceForAssets(assets) {
       ? "当前包含示例资产；曲线基于演示持仓、成本价、当前价和日期推导，不代表真实历史净值。"
       : `曲线基于${hasManualPrices ? "用户录入价格、" : ""}持仓成本、当前价格和日期推导中间点，不代表真实每日净值。补齐历史价格或估值快照后可生成真实曲线。`
   };
+}
+
+function assetPriceAtTrendDate(asset, date) {
+  const rows = normalizedDailyPrices(asset);
+  if (!rows.length) return "";
+  const matched = [...rows].reverse().find((row) => row.priceDate <= date);
+  return matched?.closePrice || "";
+}
+
+function normalizedDailyPrices(asset) {
+  return (Array.isArray(asset.dailyPrices) ? asset.dailyPrices : [])
+    .map((row) => ({
+      priceDate: normalizeSnapshotDate(row.priceDate || row.date || ""),
+      closePrice: String(row.closePrice || row.closeDecimal || row.close || "").trim()
+    }))
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/u.test(row.priceDate) && Number(row.closePrice) > 0)
+    .sort((left, right) => left.priceDate.localeCompare(right.priceDate));
 }
 
 function trendSourceForSnapshots(snapshots, assets) {

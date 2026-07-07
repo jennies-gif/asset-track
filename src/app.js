@@ -110,7 +110,6 @@ import { configureAssetFormPayload } from "./features/assets/assetFormPayload.js
 import { initAssetEvents } from "./features/assets/assetEvents.js";
 import {
   configureAssetRender,
-  formatUnitPrice,
   priceStatusClass,
   priceStatusLabel,
   renderPortfolio
@@ -182,6 +181,7 @@ import { initializeComposeForms } from "./ui/composeForm.js";
 import {
   configureFormatters,
   formatDateTimeMinute,
+  formatUnitPrice,
   toneClassForValue
 } from "./ui/formatters.js";
 

@@ -16,23 +16,23 @@ export function formatShare(basisPoints) {
 }
 
 export function formatDisplayCurrency(cents) {
-  return `${displayCurrency()} ${displayCurrencySymbol()}${formatSymbolAmount(cents)}`;
+  return formatCurrencyAmount(Number(cents) / 100, displayCurrency());
 }
 
 export function formatDisplayAmountOnly(cents) {
-  return `${displayCurrencySymbol()}${formatSymbolAmount(cents)}`;
+  return formatDecimalAmount(Number(cents) / 100);
 }
 
 export function formatSignedCurrency(cents) {
   const amount = BigInt(cents);
   const sign = amount >= 0n ? "+" : "-";
-  return `${displayCurrency()} ${sign}${displayCurrencySymbol()}${formatSymbolAmount(absBigInt(amount))}`;
+  return `${displayCurrency()} ${sign}${formatDecimalAmount(Number(absBigInt(amount)) / 100)}`;
 }
 
 export function formatSignedAmountOnly(cents) {
   const amount = BigInt(cents);
   const sign = amount >= 0n ? "+" : "-";
-  return `${sign}${displayCurrencySymbol()}${formatSymbolAmount(absBigInt(amount))}`;
+  return `${sign}${formatDecimalAmount(Number(absBigInt(amount)) / 100)}`;
 }
 
 export function formatTrendReturn(basisPoints) {
@@ -41,16 +41,28 @@ export function formatTrendReturn(basisPoints) {
 
 export function formatCompactCurrency(cents, scaleReference = absBigInt(BigInt(cents))) {
   const value = Number(cents) / 100;
-  const currency = displayCurrencySymbol();
+  const currency = displayCurrency();
   const reference = Number(scaleReference) / 100;
   const abs = Math.abs(value);
   if (displayCurrency() === "CNY") {
-    if (reference >= 100000000) return `¥${(value / 100000000).toFixed(abs >= 1000000000 ? 1 : 2)}亿`;
-    if (reference >= 10000) return `¥${(value / 10000).toFixed(abs >= 100000 ? 1 : 2)}万`;
+    if (reference >= 100000000) return `${currency} ${(value / 100000000).toFixed(abs >= 1000000000 ? 1 : 2)}亿`;
+    if (reference >= 10000) return `${currency} ${(value / 10000).toFixed(abs >= 100000 ? 1 : 2)}万`;
   }
-  if (abs >= 1000000) return `${displayCurrency()} ${currency}${Math.round(value / 1000000)}M`;
-  if (abs >= 1000) return `${displayCurrency()} ${currency}${Math.round(value / 1000)}K`;
+  if (abs >= 1000000) return `${currency} ${Math.round(value / 1000000)}M`;
+  if (abs >= 1000) return `${currency} ${Math.round(value / 1000)}K`;
   return formatDisplayCurrency(cents);
+}
+
+export function formatUnitPrice(price, currency = "", emptyLabel = "-") {
+  const value = String(price ?? "").trim();
+  if (!value || value === "0") return emptyLabel;
+  return formatCurrencyAmount(value, currency || displayCurrency(), { maximumFractionDigits: 8 });
+}
+
+export function formatCurrencyAmount(value, currency = "", options = {}) {
+  const currencyCode = String(currency || "").trim().toUpperCase();
+  const amount = formatDecimalAmount(value, options);
+  return currencyCode ? `${currencyCode} ${amount}` : amount;
 }
 
 export function formatOptionalSignedAmount(cents) {
@@ -111,13 +123,19 @@ export function displayCurrencySymbol() {
   return "¥";
 }
 
+export function displayCurrencyCode() {
+  return displayCurrency();
+}
+
 function displayCurrency() {
   return displayCurrencyGetter();
 }
 
-function formatSymbolAmount(cents) {
-  const amount = Math.round(Number(cents) / 100);
+function formatDecimalAmount(value, options = {}) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "暂无数据";
   return new Intl.NumberFormat("zh-CN", {
-    maximumFractionDigits: 0
+    minimumFractionDigits: options.minimumFractionDigits ?? 2,
+    maximumFractionDigits: options.maximumFractionDigits ?? 2
   }).format(amount);
 }

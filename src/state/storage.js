@@ -20,7 +20,7 @@ const emptyState = {
 
 export function loadState() {
   const raw = localStorage.getItem(storageKey);
-  if (!raw) return structuredClone(emptyState);
+  if (!raw) return structuredClone(demoState);
   try {
     const parsed = JSON.parse(raw);
     const loadedAssets = normalizeLoadedAssets(parsed.assets);

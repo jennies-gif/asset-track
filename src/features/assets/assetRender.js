@@ -5,11 +5,12 @@ import { formatShortDate } from "../../utils/date.js";
 import { trustBadge } from "../../ui/badges.js";
 import { emptyStateInner } from "../../ui/emptyState.js";
 import {
-  displayCurrencySymbol,
+  displayCurrencyCode,
   formatDisplayCurrency,
   formatMonthDayTimeMinute,
   formatShare,
   formatSignedAmountOnly,
+  formatUnitPrice,
   toneClassForValue
 } from "../../ui/formatters.js";
 import { buildAssetDataIssues } from "./dataQuality.js";
@@ -99,7 +100,7 @@ export function renderPortfolio() {
       ? `当前显示 ${visiblePositions.length}/${positions.length} 个持仓，${filterText}`
       : `当前显示全部 ${positions.length} 个持仓`;
   }
-  ctx.elements.marketValueHeading.textContent = `市值 ${displayCurrencySymbol()}`;
+  ctx.elements.marketValueHeading.textContent = `市值 ${displayCurrencyCode()}`;
   renderCurrentPriceHeadings(openAssets, closedAssets);
   ctx.elements.portfolioRows.innerHTML = visiblePositions.length
     ? visiblePositions
@@ -295,11 +296,6 @@ function renderClosedAssetRow(asset) {
       </td>
     </tr>
   `;
-}
-
-export function formatUnitPrice(price, currency = "", emptyLabel = "-") {
-  const value = String(price || "").trim();
-  return value && value !== "0" ? `${value} ${currency || ""}`.trim() : emptyLabel;
 }
 
 function renderDataStatus(asset) {

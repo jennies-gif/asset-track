@@ -27,7 +27,7 @@ const now = new Date().toISOString();
 
 const sourceAdapters = {
   core: { market: "MIXED", label: "Asset Trail core instruments", fetch: seedCoreInstruments },
-  cn: { market: "CN", label: "A 股股票", fetch: fetchEastmoneyCn },
+  cn: { market: "CN", label: "A 股官方股票列表", fetch: fetchOfficialCn },
   hk: { market: "HK", label: "港股普通证券", fetch: fetchEastmoneyHk },
   us: { market: "US", label: "美股普通股票", fetch: fetchNasdaqTraderUs }
 };
@@ -63,6 +63,7 @@ for (const source of requestedSources) {
 
 rows.push(...seedCoreInstruments());
 rows = normalizeRegistryRows(rows);
+rows = mergeExistingRowsForThinMarkets(rows, existingRows);
 
 if (rows.length < minCount && existingRows.length >= minCount) {
   rows = normalizeRegistryRows([...rows, ...existingRows]);
@@ -104,6 +105,154 @@ async function fetchSource(source) {
   const adapter = sourceAdapters[source];
   if (!adapter) throw new Error(`Unsupported instrument registry source: ${source}`);
   return adapter.fetch();
+}
+
+async function fetchOfficialCn() {
+  const settled = await Promise.allSettled([fetchSseCnStocks(), fetchSzseCnStocks()]);
+  const rows = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  settled
+    .filter((result) => result.status === "rejected")
+    .forEach((result) => {
+      run.messages.push({
+        source: "cn-official",
+        level: "warn",
+        message: result.reason instanceof Error ? result.reason.message : String(result.reason)
+      });
+    });
+
+  if (rows.length >= 4000) return rows;
+
+  try {
+    const fallbackRows = await fetchEastmoneyCn();
+    run.messages.push({
+      source: "cn-eastmoney-fallback",
+      level: rows.length ? "warn" : "info",
+      message: `official CN coverage ${rows.length}; merged ${fallbackRows.length} Eastmoney fallback rows`
+    });
+    return [...rows, ...fallbackRows];
+  } catch (error) {
+    if (rows.length) {
+      run.messages.push({
+        source: "cn-eastmoney-fallback",
+        level: "warn",
+        message: `official CN coverage ${rows.length}; Eastmoney fallback failed: ${error.message}`
+      });
+      return rows;
+    }
+    throw error;
+  }
+}
+
+async function fetchSseCnStocks() {
+  const cachePrefix = "sse-stock-list-v2";
+  const pageSize = 100;
+  const firstPayload = await fetchAndCacheSseStockListPage({ cachePrefix, page: 1, pageSize });
+  const firstRows = firstPayload.pageHelp?.data;
+  if (!Array.isArray(firstRows)) throw new Error("SSE stock list missing pageHelp.data");
+  const total = Number(firstPayload.pageHelp?.total || firstPayload.pageHelp?.recordCount || firstRows.length);
+  const pageCount = Number(firstPayload.pageHelp?.pageCount || Math.max(1, Math.ceil(total / pageSize)));
+  const rows = [...firstRows];
+  for (let page = 2; page <= pageCount; page += 1) {
+    const payload = await fetchAndCacheSseStockListPage({ cachePrefix, page, pageSize });
+    const pageRows = payload.pageHelp?.data;
+    if (!Array.isArray(pageRows)) throw new Error(`SSE stock list page ${page} missing pageHelp.data`);
+    rows.push(...pageRows);
+  }
+  return rows
+    .map((row) =>
+      registryRow({
+        symbol: row.SECURITY_CODE_A,
+        name: row.SECURITY_ABBR_A || row.COMPANY_ABBR,
+        nameEn: row.ENGLISH_ABBR,
+        type: "股票",
+        market: "CN",
+        exchange: "SSE",
+        currency: "CNY",
+        universe: inferCnUniverse(row.SECURITY_CODE_A),
+        dataSource: "SSE official stock list",
+        sourceUpdatedAt: now
+      })
+    )
+    .filter(Boolean);
+}
+
+async function fetchAndCacheSseStockListPage({ cachePrefix, page, pageSize }) {
+  const cached = await readCachedEastmoneyPage(cachePrefix, page);
+  if (cached) return cached;
+  const query = [
+    "isPagination=true",
+    "stockCode=",
+    "csrcCode=",
+    "areaName=",
+    "stockType=1",
+    "pageHelp.cacheSize=1",
+    `pageHelp.beginPage=${page}`,
+    `pageHelp.pageSize=${pageSize}`,
+    `pageHelp.pageNo=${page}`,
+    `pageHelp.endPage=${page}`
+  ].join("&");
+  const payload = await fetchJson(`https://query.sse.com.cn/security/stock/getStockListData2.do?${query}`, {
+    referer: "https://www.sse.com.cn/assortment/stock/list/share/"
+  });
+  await writeJson(path.join(storageDir, `${cachePrefix}-${page}.json`), payload);
+  return payload;
+}
+
+async function fetchSzseCnStocks() {
+  const cachePrefix = "szse-stock-list";
+  const firstPayload = await fetchAndCacheSzseStockListPage({ cachePrefix, page: 1 });
+  const firstReport = firstPayload[0];
+  const firstRows = firstReport?.data;
+  if (!Array.isArray(firstRows)) throw new Error("SZSE stock list missing report data");
+  const pageCount = Number(firstReport.metadata?.pagecount || 1);
+  const rows = [...firstRows];
+  for (let page = 2; page <= pageCount; page += 1) {
+    try {
+      const payload = await fetchAndCacheSzseStockListPage({ cachePrefix, page });
+      const pageRows = payload[0]?.data;
+      if (!Array.isArray(pageRows)) throw new Error(`SZSE stock list page ${page} missing report data`);
+      rows.push(...pageRows);
+    } catch (error) {
+      run.messages.push({
+        source: "szse-official",
+        level: "warn",
+        message: `SZSE stock list page ${page}/${pageCount} failed; kept ${rows.length} rows: ${error.message}`
+      });
+      break;
+    }
+  }
+  return rows
+    .map((row) =>
+      registryRow({
+        symbol: row.agdm,
+        name: stripHtml(row.agjc),
+        type: "股票",
+        market: "CN",
+        exchange: "SZSE",
+        currency: "CNY",
+        universe: inferCnUniverse(row.agdm),
+        dataSource: "SZSE official A-share list",
+        sourceUpdatedAt: now
+      })
+    )
+    .filter(Boolean);
+}
+
+async function fetchAndCacheSzseStockListPage({ cachePrefix, page }) {
+  const cached = await readCachedEastmoneyPage(cachePrefix, page);
+  if (cached) return cached;
+  const query = [
+    "SHOWTYPE=JSON",
+    "CATALOGID=1110",
+    "TABKEY=tab1",
+    `PAGENO=${page}`,
+    `random=${Date.now()}`
+  ].join("&");
+  const payload = await fetchJson(`https://www.szse.cn/api/report/ShowReport/data?${query}`, {
+    referer: "https://www.szse.cn/market/product/stock/list/index.html"
+  });
+  await writeJson(path.join(storageDir, `${cachePrefix}-${page}.json`), payload);
+  return payload;
 }
 
 async function fetchEastmoneyCn() {
@@ -164,12 +313,11 @@ async function fetchEastmoneyHk() {
 }
 
 async function fetchEastmoneyClistPages({ cachePrefix, fs: fsValue, fields, referer, pageSize, maxPages }) {
-  const cachedPages = await readCachedEastmoneyPages(cachePrefix);
-  if (cachedPages.length) return cachedPages;
-
   const singleCache = await readOptionalText(path.join(storageDir, `${cachePrefix}.json`));
-  const singlePayload = singleCache ? JSON.parse(singleCache) : null;
-  const firstPayload = singlePayload || await fetchEastmoneyClistPage({ page: 1, pageSize, fsValue, fields, referer });
+  const firstPayload =
+    await readCachedEastmoneyPage(cachePrefix, 1) ||
+    (singleCache ? JSON.parse(singleCache) : null) ||
+    await fetchAndCacheEastmoneyClistPage({ cachePrefix, page: 1, pageSize, fsValue, fields, referer });
   const firstRows = firstPayload.data?.diff;
   if (!Array.isArray(firstRows)) throw new Error(`${cachePrefix} 缺少 data.diff`);
 
@@ -178,45 +326,46 @@ async function fetchEastmoneyClistPages({ cachePrefix, fs: fsValue, fields, refe
   const rows = [...firstRows];
   for (let page = 2; page <= pageCount; page += 1) {
     try {
-      const payload = await fetchEastmoneyClistPage({ page, pageSize, fsValue, fields, referer });
+      const payload =
+        await readCachedEastmoneyPage(cachePrefix, page) ||
+        await fetchAndCacheEastmoneyClistPage({ cachePrefix, page, pageSize, fsValue, fields, referer });
       const pageRows = payload.data?.diff;
       if (!Array.isArray(pageRows)) throw new Error(`${cachePrefix} 第 ${page} 页缺少 data.diff`);
       rows.push(...pageRows);
-    } catch {
-      break;
+    } catch (error) {
+      if (rows.length >= pageSize) return rows;
+      throw new Error(`${cachePrefix} 第 ${page}/${pageCount} 页同步失败，已获取 ${rows.length}/${total} 条: ${error.message}`);
     }
   }
   return rows;
 }
 
 async function fetchEastmoneyClistPage({ page, pageSize, fsValue, fields, referer }) {
-  const url = new URL("https://push2.eastmoney.com/api/qt/clist/get");
-  url.searchParams.set("pn", String(page));
-  url.searchParams.set("pz", String(pageSize));
-  url.searchParams.set("po", "1");
-  url.searchParams.set("np", "1");
-  url.searchParams.set("ut", "bd1d9ddb04089700cf9c27f6f7426281");
-  url.searchParams.set("fltt", "2");
-  url.searchParams.set("invt", "2");
-  url.searchParams.set("fid", "f12");
-  url.searchParams.set("fs", fsValue);
-  url.searchParams.set("fields", fields);
+  const query = [
+    `pn=${page}`,
+    `pz=${pageSize}`,
+    "po=1",
+    "np=1",
+    "ut=bd1d9ddb04089700cf9c27f6f7426281",
+    "fltt=2",
+    "invt=2",
+    "fid=f12",
+    `fs=${fsValue}`,
+    `fields=${fields}`
+  ].join("&");
+  const url = `https://push2.eastmoney.com/api/qt/clist/get?${query}`;
   return fetchJson(url, { referer });
 }
 
-async function readCachedEastmoneyPages(cachePrefix) {
-  const files = await fs.readdir(storageDir).catch(() => []);
-  const pagePattern = new RegExp(`^${cachePrefix}-(\\d+)\\.json$`, "u");
-  const pageFiles = files
-    .map((file) => ({ file, match: file.match(pagePattern) }))
-    .filter((item) => item.match)
-    .sort((left, right) => Number(left.match[1]) - Number(right.match[1]));
-  const rows = [];
-  for (const { file } of pageFiles) {
-    const payload = JSON.parse(await fs.readFile(path.join(storageDir, file), "utf8"));
-    if (Array.isArray(payload.data?.diff)) rows.push(...payload.data.diff);
-  }
-  return rows;
+async function readCachedEastmoneyPage(cachePrefix, page) {
+  const cached = await readOptionalText(path.join(storageDir, `${cachePrefix}-${page}.json`));
+  return cached ? JSON.parse(cached) : null;
+}
+
+async function fetchAndCacheEastmoneyClistPage(options) {
+  const payload = await fetchEastmoneyClistPage(options);
+  await writeJson(path.join(storageDir, `${options.cachePrefix}-${options.page}.json`), payload);
+  return payload;
 }
 
 async function readHkexListOfSecurities() {
@@ -483,17 +632,21 @@ async function fetchJson(url, options = {}) {
 }
 
 async function fetchText(url, options = {}) {
+  const target = typeof url === "string" ? new URL(url) : url;
+  const urlText = typeof url === "string" ? url : String(url);
   let response;
   try {
-    response = await fetch(url, { headers: publicHeaders(options) });
-    if (!response.ok) throw new Error(`${url.hostname} HTTP ${response.status}`);
+    response = await fetch(urlText, { headers: publicHeaders(options) });
+    if (!response.ok) throw new Error(`${target.hostname} HTTP ${response.status}`);
     return response.text();
   } catch (error) {
-    return curlText(url, options, error);
+    return curlText(urlText, options, error);
   }
 }
 
 async function curlText(url, options = {}, originalError) {
+  const target = typeof url === "string" ? new URL(url) : url;
+  const urlText = typeof url === "string" ? url : String(url);
   const headers = publicHeaders(options);
   const args = [
     "-L",
@@ -507,13 +660,13 @@ async function curlText(url, options = {}, originalError) {
     `Accept: ${headers.Accept}`,
     "-H",
     `Referer: ${headers.Referer}`,
-    String(url)
+    urlText
   ];
   try {
     const { stdout } = await execFileAsync("curl", args, { maxBuffer: 80 * 1024 * 1024 });
     return stdout;
   } catch (error) {
-    throw new Error(`${url.hostname} fetch failed: ${originalError?.message || ""}; curl fallback failed: ${error.message}`);
+    throw new Error(`${target.hostname} fetch failed: ${originalError?.message || ""}; curl fallback failed: ${error.message}`);
   }
 }
 
@@ -624,6 +777,14 @@ function universeFor({ market, type }) {
   return "manual";
 }
 
+function inferCnUniverse(symbol) {
+  const value = String(symbol || "");
+  if (value.startsWith("688")) return "cn-star";
+  if (value.startsWith("300")) return "cn-chinext";
+  if (value.startsWith("8") || value.startsWith("9")) return "cn-bse";
+  return "cn-main";
+}
+
 function marketDataSupported({ market, type, symbol }) {
   if (!symbol) return false;
   if (["现金", "实物资产", "其他"].includes(type)) return false;
@@ -645,6 +806,14 @@ function typeKey(type) {
 
 function slugName(name) {
   return String(name || "").trim().toUpperCase().replace(/\s+/gu, "-").slice(0, 32);
+}
+
+function stripHtml(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/gu, "")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .trim();
 }
 
 function compareRegistryRows(left, right) {
@@ -672,4 +841,37 @@ function validateCoverage(summary) {
     if (count < minimum) errors.push(`${market} instrument coverage too small: ${count}/${minimum}`);
   }
   return errors;
+}
+
+function mergeExistingRowsForThinMarkets(rows, existingRows) {
+  if (!existingRows.length) return rows;
+  const marketsToProtect = Object.entries(coverageMinimums)
+    .filter(([market, minimum]) => isMarketSourceRequested(market) && minimum > 0)
+    .map(([market, minimum]) => ({ market, minimum }));
+  if (!marketsToProtect.length) return rows;
+
+  const summary = buildSummary(rows);
+  let merged = rows;
+  for (const { market, minimum } of marketsToProtect) {
+    const count = summary.byMarket[market] || 0;
+    if (count >= minimum) continue;
+    const existingMarketRows = existingRows.filter((row) => row.market === market);
+    if (!existingMarketRows.length || existingMarketRows.length <= count) continue;
+    merged = [...merged, ...existingMarketRows];
+    run.messages.push({
+      source: "existing-cache",
+      level: "warn",
+      message: `${market} coverage below minimum ${count}/${minimum}; merged ${existingMarketRows.length} cached ${market} instruments`
+    });
+  }
+  return merged === rows ? rows : normalizeRegistryRows(merged);
+}
+
+function isMarketSourceRequested(market) {
+  return (
+    requestedSources.has(market.toLowerCase()) ||
+    (market === "CN" && requestedSources.has("cn")) ||
+    (market === "HK" && requestedSources.has("hk")) ||
+    (market === "US" && requestedSources.has("us"))
+  );
 }

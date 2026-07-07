@@ -196,12 +196,30 @@ export function normalizeAsset(formAsset) {
     priceStatus,
     priceSource,
     pricedAt: String(formAsset.pricedAt || "").trim(),
+    dailyPrices: normalizeDailyPriceRows(formAsset.dailyPrices),
+    dailyPriceStatus: String(formAsset.dailyPriceStatus || "").trim(),
+    dailyPriceMissingDates: Array.isArray(formAsset.dailyPriceMissingDates) ? formAsset.dailyPriceMissingDates.map((date) => String(date).slice(0, 10)).filter(Boolean) : [],
     attachmentName: String(formAsset.attachmentName || "").trim(),
     buyReason: String(formAsset.buyReason || "").trim(),
     upsideReasons: String(formAsset.upsideReasons || "").trim(),
     downsideReasons: String(formAsset.downsideReasons || "").trim(),
     updatedAt: formAsset.updatedAt || new Date().toISOString()
   };
+}
+
+function normalizeDailyPriceRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      priceDate: String(row.priceDate || row.date || "").slice(0, 10),
+      closePrice: String(row.closePrice || row.closeDecimal || row.close || "").trim(),
+      priceBasis: String(row.priceBasis || "").trim(),
+      carriedFromDate: String(row.carriedFromDate || "").trim(),
+      source: String(row.source || "").trim(),
+      sourceFetchedAt: String(row.sourceFetchedAt || "").trim(),
+      qualityStatus: String(row.qualityStatus || "").trim()
+    }))
+    .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.priceDate) && Number(row.closePrice) > 0)
+    .sort((left, right) => left.priceDate.localeCompare(right.priceDate));
 }
 
 export function validateAsset(asset) {

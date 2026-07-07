@@ -29,9 +29,7 @@ export function renderNotes() {
   if (!notes.length) {
     elements.notesList.innerHTML = emptyActionState(
       state.notes.length ? "没有匹配的复盘" : "暂无复盘",
-      state.notes.length
-        ? "可以调整搜索或标签筛选，回看不同资产和交易对应的判断记录。"
-        : "你可以在买入、卖出或清仓后记录当时的判断、风险和后续验证点，方便之后复盘。",
+      "",
       "写复盘",
       "write-note"
     );

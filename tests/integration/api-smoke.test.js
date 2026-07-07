@@ -220,6 +220,8 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(sync.results[0].after.previousPrice, "338");
     assert.equal(sync.results[0].after.priceStatus, "synced");
     assert.equal(sync.results[0].after.sourceFetchedAt, "2026-06-02T10:00:00.000Z");
+    assert.equal(sync.results[0].dailyPrices.length, 2);
+    assert.equal(sync.results[0].dailyPrices[0].priceDate, "2026-06-01");
 
     const dailyPrices = await getJson("/api/asset-prices/daily?assetId=asset-00700");
     assert.equal(dailyPrices.userId, "demo-user");
@@ -229,6 +231,51 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(dailyPrices.points[0].closePrice, "338");
     assert.equal(dailyPrices.points[0].priceBasis, "actual");
     assert.equal(dailyPrices.points[1].closePrice, "341.5");
+
+    const allRecordedAssetsSync = await postJson("/api/market-data/sync-daily", {
+      symbols: ["00700"],
+      autoFetch: false,
+      assets: [
+        {
+          id: "asset-open-00700",
+          name: "腾讯控股 当前持仓",
+          symbol: "00700",
+          type: "股票",
+          market: "HK",
+          account: "港股账户",
+          currency: "HKD",
+          quantity: "10",
+          costPrice: "330",
+          currentPrice: "338",
+          previousPrice: "338",
+          fxRate: "1",
+          purchaseDate: "2026-06-01"
+        },
+        {
+          id: "asset-closed-00700",
+          name: "腾讯控股 历史持仓",
+          symbol: "00700",
+          type: "股票",
+          market: "HK",
+          account: "港股账户",
+          currency: "HKD",
+          quantity: "5",
+          costPrice: "335",
+          currentPrice: "341.5",
+          previousPrice: "338",
+          fxRate: "1",
+          purchaseDate: "2026-06-02",
+          closed: true,
+          closedAt: "2026-06-02"
+        }
+      ]
+    });
+    assert.equal(allRecordedAssetsSync.summary.syncedCount, 2);
+    assert.equal(allRecordedAssetsSync.results.find((result) => result.name.includes("当前持仓")).dailyPrices.length, 2);
+    const closedAssetResult = allRecordedAssetsSync.results.find((result) => result.name.includes("历史持仓"));
+    assert.equal(closedAssetResult.status, "synced");
+    assert.deepEqual(closedAssetResult.dailyPrices.map((row) => row.priceDate), ["2026-06-02"]);
+    assert.equal(closedAssetResult.dailyPrices[0].priceType, "close");
 
     const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["SPY"], autoFetch: false });
     assert.equal(missingSync.fetch, null);

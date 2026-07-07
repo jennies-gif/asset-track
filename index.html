@@ -286,7 +286,8 @@
                   <label>代码 <input name="symbol" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
                 </div>
                 <label>资产类型
-                  <select name="type">
+                  <select name="type" required>
+                    <option value="" selected>请选择资产类型</option>
                     <option>股票</option><option>ETF</option><option>REIT</option><option>基金</option><option>现金</option><option>数字资产</option><option>贵金属</option><option>实物资产</option><option>其他</option>
                   </select>
                 </label>
@@ -299,9 +300,9 @@
                 </label>
                 <label id="account-type-custom-field" class="advanced-field is-hidden">自定义账户类型 <input name="accountTypeCustom"></label>
                 <label>币种
-                  <select name="currency"><option value="CNY">CNY</option><option value="USD">USD</option><option value="HKD">HKD</option><option value="BTC">BTC</option></select>
+                  <select name="currency" required><option value="" selected>请选择币种</option><option value="CNY">CNY</option><option value="USD">USD</option><option value="HKD">HKD</option><option value="BTC">BTC</option></select>
                 </label>
-                <label>持有数量 <input name="quantity" required inputmode="decimal" placeholder="0"></label>
+                <label>持有数量 <input name="quantity" required inputmode="decimal" placeholder="请输入数量"></label>
                 <label>平均成本价 <input name="costPrice" inputmode="decimal" placeholder="可后续补充"></label>
                 <label>首次持有日期 <input name="purchaseDate" type="date"></label>
                 <label>当前价格 <input name="currentPrice" inputmode="decimal" placeholder="可选"></label>
@@ -327,6 +328,7 @@
                 <label class="form-switch-row">
                   <span><strong>税费/手续费</strong><small>本次建仓产生费用时再打开。</small></span>
                   <input type="checkbox" data-optional-toggle="fees">
+                  <span class="form-switch-control" aria-hidden="true"></span>
                 </label>
                 <div class="optional-entry-panel is-hidden" data-optional-panel="fees">
                   <div class="form-section-grid">
@@ -337,6 +339,7 @@
                 <label class="form-switch-row">
                   <span><strong>汇率</strong><small>外币资产或需要固定成交汇率时再打开。</small></span>
                   <input type="checkbox" data-optional-toggle="fx">
+                  <span class="form-switch-control" aria-hidden="true"></span>
                 </label>
                 <div class="optional-entry-panel is-hidden" data-optional-panel="fx">
                   <p class="form-help">当前汇率用于把资产原始币种折算到 USD；留空时按币种使用默认汇率。</p>

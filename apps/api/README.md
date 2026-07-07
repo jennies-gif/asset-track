@@ -58,7 +58,7 @@ MARKET_DAILY_SYNC_ENABLED=true
 - `GET /api/market-data/history?symbol=00700`
 - `GET /api/market-data/fx-rates?base=USD&quote=CNY`
 - `POST /api/market-data/fetch-recent`
-- `POST /api/market-data/sync-daily`：默认先抓取近 7 天行情，再把本地缓存中的最新价格应用到内存资产；传入 `"autoFetch": false` 可只使用已有缓存。
+- `POST /api/market-data/sync-daily`：默认按每个录入资产的首次持有日期回补历史行情，包含当前持仓和历史持仓；再把本地缓存中的最新价格和用户资产每日价格快照应用到资产；传入 `"autoFetch": false` 可只使用已有缓存。
 - `GET /api/market-data/tasks`
 - `POST /api/market-data/tasks/backfill`
 - `POST /api/attribution/runs`

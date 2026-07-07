@@ -1,0 +1,432 @@
+/* P1 overview and asset ledger restructuring. */
+.metrics {
+  display: block;
+}
+
+.portfolio-snapshot {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+}
+
+.snapshot-main,
+.snapshot-status {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.snapshot-label {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.snapshot-main > strong {
+  display: block;
+  margin: 6px 0 22px;
+  color: var(--text-primary);
+  font-size: 38px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.05;
+}
+
+.snapshot-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.snapshot-kpi,
+.snapshot-status-row {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.snapshot-kpi small,
+.snapshot-status-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.snapshot-kpi b,
+.snapshot-status-row b {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: var(--type-label-weight);
+  overflow-wrap: anywhere;
+}
+
+.snapshot-kpi b.positive,
+.snapshot-status-row b.positive {
+  color: var(--positive);
+}
+
+.snapshot-kpi b.negative,
+.snapshot-status-row b.negative {
+  color: var(--negative);
+}
+
+.snapshot-status {
+  align-content: start;
+  gap: 14px;
+  display: grid;
+}
+
+.warning {
+  color: var(--warning) !important;
+}
+
+.trend-chart-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.trend-plot {
+  min-width: 0;
+}
+
+.trend-chart-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  min-height: auto;
+  margin-bottom: 8px;
+}
+
+.trend-summary-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.trend-summary-panel span {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.trend-summary-panel span:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.trend-summary-panel small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trend-summary-panel b {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trend-summary-panel b.positive {
+  color: var(--positive);
+}
+
+.trend-summary-panel b.negative {
+  color: var(--negative);
+}
+
+.chart-line {
+  stroke-width: 2;
+}
+
+.allocation-section .panel-heading {
+  align-items: center;
+}
+
+.allocation-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.allocation-tab {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 12px;
+}
+
+.allocation-tab.is-active {
+  background: var(--bg-card);
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.allocation-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.allocation-chart {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 280px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.allocation-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.allocation-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.allocation-table tr[data-breakdown-dimension] {
+  cursor: pointer;
+}
+
+.allocation-table tr.is-active td {
+  background: var(--brand-soft);
+}
+
+.allocation-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#assets-panel .sub-tabs {
+  margin: 0 0 14px;
+}
+
+#assets-panel .portfolio-filter {
+  margin-top: 0;
+}
+
+#assets-panel .portfolio-view:not(.is-active) {
+  display: none;
+}
+
+#assets-panel .portfolio-view.is-active {
+  display: block;
+}
+
+#assets-panel .table-wrap {
+  overflow-x: visible;
+}
+
+#assets-panel table {
+  width: 100%;
+  min-width: 0;
+}
+
+#assets-panel th,
+#assets-panel td {
+  padding-right: 8px;
+  padding-left: 8px;
+  overflow-wrap: anywhere;
+}
+
+#open-portfolio-view table {
+  min-width: 0;
+}
+
+#open-portfolio-view th:nth-child(1),
+#open-portfolio-view td:nth-child(1) {
+  width: 15%;
+}
+
+#open-portfolio-view th:nth-child(2),
+#open-portfolio-view td:nth-child(2),
+#open-portfolio-view th:nth-child(3),
+#open-portfolio-view td:nth-child(3) {
+  width: 8%;
+}
+
+#open-portfolio-view th:nth-child(4),
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view th:nth-child(5),
+#open-portfolio-view td:nth-child(5),
+#open-portfolio-view th:nth-child(7),
+#open-portfolio-view td:nth-child(7) {
+  width: 10%;
+}
+
+#open-portfolio-view th:nth-child(6),
+#open-portfolio-view td:nth-child(6),
+#open-portfolio-view th:nth-child(9),
+#open-portfolio-view td:nth-child(9) {
+  width: 6%;
+}
+
+#open-portfolio-view th:nth-child(8),
+#open-portfolio-view td:nth-child(8),
+#open-portfolio-view th:nth-child(10),
+#open-portfolio-view td:nth-child(10) {
+  width: 9%;
+}
+
+#open-portfolio-view th:nth-child(11),
+#open-portfolio-view td:nth-child(11) {
+  width: 9%;
+}
+
+@media (max-width: 900px) {
+  #assets-panel .table-wrap {
+    overflow-x: auto;
+  }
+
+  #assets-panel table {
+    min-width: 860px;
+  }
+
+  #open-portfolio-view table {
+    min-width: 960px;
+  }
+}
+
+#assets-panel .return-cell {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
+#assets-panel .return-cell strong,
+#assets-panel .return-cell span {
+  display: block;
+}
+
+.row-more-menu {
+  position: relative;
+}
+
+.row-more-menu summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  list-style: none;
+  padding: 0 8px;
+}
+
+.row-more-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-more-menu[open] {
+  z-index: 12;
+}
+
+.row-action-button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 9px;
+}
+
+.row-action-button:hover,
+.row-more-menu summary:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.row-more-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  min-width: 142px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.row-more-panel button {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  padding: 0 10px;
+}
+
+.row-more-panel button:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.row-more-panel button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .portfolio-snapshot,
+  .trend-chart-shell,
+  .allocation-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .snapshot-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .snapshot-main > strong {
+    font-size: 30px;
+  }
+
+  .snapshot-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .allocation-section .panel-heading {
+    display: grid;
+  }
+
+  .allocation-tabs {
+    overflow-x: auto;
+  }
+}

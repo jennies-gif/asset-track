@@ -64,7 +64,7 @@ export function analysisBarRow(label, meta, valueCents, max, signed = true) {
 }
 
 export function renderColumnChart(items, label) {
-  if (!items.length) return `<p class="empty-state">暂无图表数据。先录入资产并保留价值快照，再查看趋势。</p>`;
+  if (!items.length) return `<p class="empty-state">暂无图表数据。</p>`;
   const max = items.reduce((current, item) => absBigInt(item.value) > current ? absBigInt(item.value) : current, 1n);
   return `
     <div class="analysis-chart-title">${escapeHtml(label)}</div>
@@ -83,7 +83,7 @@ export function renderColumnChart(items, label) {
 }
 
 export function renderDrawdownChart(points, buildEvenlySpacedXAxisLabels) {
-  if (!points.length) return `<p class="empty-state">暂无回撤数据。先录入资产并积累价值快照，再查看回撤变化。</p>`;
+  if (!points.length) return `<p class="empty-state">暂无回撤数据。</p>`;
   const width = 720;
   const height = 220;
   const pad = 28;
@@ -121,7 +121,7 @@ export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLab
     .filter((item) => item.label !== "我的组合" && item.points.length < 2)
     .map((item) => item.label);
   if (!visibleSeries.length) {
-    return `<p class="empty-state">暂无走势对比数据。同步已选基准后，这里会展示组合与基准的归一化收益曲线。</p>`;
+    return `<p class="empty-state">暂无走势对比数据。</p>`;
   }
 
   const width = 720;

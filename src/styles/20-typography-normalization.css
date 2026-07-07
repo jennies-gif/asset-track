@@ -1,0 +1,795 @@
+/* Typography normalization: keep the app quiet and consistent. */
+:root {
+  --type-title-weight: var(--weight-semibold);
+  --type-label-weight: var(--weight-semibold);
+  --type-body-weight: var(--weight-normal);
+}
+
+.brand-copy strong,
+.panel-heading h2,
+.notes-hero h2,
+.notes-editor-heading h2,
+#note-reader-title {
+  color: var(--ink);
+  font-size: var(--type-page-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.home-section h2,
+.trend-section h2,
+.analysis-card h3,
+.modal-dialog h2,
+.asset-form-section h2,
+.category-section .panel-heading h2,
+.market-section .panel-heading h2,
+.account-section .panel-heading h2,
+.distribution-detail h3,
+.note-title-field > strong,
+.note-template-field > strong,
+.note-content-field > strong,
+.note-tag-field legend,
+.note-link-card strong {
+  color: var(--ink);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.eyebrow,
+.metric-title,
+.analysis-health-item span,
+.analysis-mini-metric span,
+.stage-metric span,
+.stage-metric small,
+.category-table-head,
+.mini-holdings-head,
+.category-table-row > span,
+.distribution-main strong,
+.account-card strong,
+.note-card-meta span,
+.note-card h3,
+th,
+.form-group > span,
+.note-reader-meta span {
+  color: var(--muted);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--type-label-weight);
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body,
+button,
+input,
+select,
+textarea,
+td,
+small,
+.data-source,
+.privacy-note,
+.risk-note,
+.backup-note,
+.market-data-note,
+.metric small,
+.metric p,
+.analysis-health-item small,
+.analysis-mini-metric small,
+.analysis-overall-inner p,
+.analysis-overall-inner dt,
+.distribution-main span,
+.distribution-detail h3 small,
+.distribution-detail-summary,
+.mini-holdings-row,
+.mini-holdings-row span,
+.account-card span,
+.account-card small,
+.category-main span,
+.category-value span,
+.pie-total span,
+.note-card-preview,
+.note-card-preview small,
+.note-reader-content,
+.note-link-card p,
+.notes-hero p,
+.filter-summary,
+.empty-state {
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+}
+
+.metric strong,
+#analysis-panel .compact-metrics .metric strong,
+.analysis-health-item strong,
+.analysis-mini-metric strong,
+.stage-metric strong,
+.distribution-row .category-value strong,
+.distribution-detail-summary strong,
+.account-summary strong,
+.category-value strong,
+.pie-total strong {
+  color: var(--ink);
+  font-size: var(--type-number-size);
+  font-weight: var(--type-title-weight);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.category-table-row strong {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.category-table-row strong:first-of-type {
+  color: var(--muted);
+}
+
+.account-card strong,
+.account-card > span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.account-card strong {
+  color: var(--muted);
+}
+
+.account-card.is-active strong,
+.account-card.is-active > span {
+  color: var(--primary);
+}
+
+.asset-value-line strong,
+.return-value-line strong,
+.analysis-overall-inner > strong {
+  color: var(--ink);
+  font-size: var(--type-number-large-size);
+  font-weight: var(--type-title-weight);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.tab,
+.settings-button,
+.primary-button,
+.secondary-button,
+.danger-button,
+.text-button,
+.sub-tab,
+.range-pill,
+.note-tag-filters button,
+.note-tag-options label span,
+.note-card-menu button,
+.note-card-menu summary,
+.notes-pagination button,
+.compact-button {
+  font-weight: var(--type-label-weight);
+  letter-spacing: 0;
+}
+
+.status-tag,
+#analysis-panel .analysis-summary-card b,
+.note-reader-meta span,
+.note-card-meta span {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.donut-center-label,
+.donut-callout-label {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.donut-center-count {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+#assets-panel .panel-heading h2 {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: var(--type-title-weight);
+  line-height: 1.25;
+}
+
+#assets-panel label,
+#assets-panel .portfolio-filter label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+#assets-panel input,
+#assets-panel select,
+#assets-panel textarea {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+#assets-panel table {
+  font-size: 13px;
+}
+
+#assets-panel th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.column-sync-time {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+#assets-panel td {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+#assets-panel td strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+#assets-panel td span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+#assets-panel .primary-button,
+#assets-panel .secondary-button,
+#assets-panel .danger-button,
+#assets-panel .text-button,
+#assets-panel .compact-button {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    width: min(100% - 32px, 1280px);
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .overview,
+  .panel-heading,
+  .category-main,
+  .category-value {
+    display: grid;
+  }
+
+  .top-nav {
+    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .side-nav {
+    position: static;
+    width: 100%;
+    padding: 8px 22px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    overflow-x: auto;
+  }
+
+  .brand {
+    margin-left: 0;
+    font-size: 22px;
+  }
+
+  .header-actions {
+    justify-self: stretch;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .settings-panel,
+  .auth-panel,
+  .market-sync-popover {
+    right: auto;
+    left: 0;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 18px;
+    justify-content: flex-start;
+    min-width: max-content;
+  }
+
+  .tab {
+    width: auto;
+    min-width: 64px;
+    text-align: center;
+  }
+
+  .tab.is-active::before {
+    display: none;
+  }
+
+  .tab.is-active::after {
+    display: block;
+    width: 18px;
+    height: 2px;
+    margin: 5px auto 0;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    content: "";
+  }
+
+  .overview {
+    grid-template-columns: 1fr;
+  }
+
+  .market-layout,
+  .account-layout,
+  .category-list {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .market-sync-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portfolio-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portfolio-filter .filter-summary {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-card:nth-child(1),
+  .analysis-card:nth-child(2),
+  .analysis-card:nth-child(3),
+  .analysis-card:nth-child(4),
+  .analysis-focus-grid .analysis-card {
+    grid-column: 1 / -1;
+  }
+
+  .analysis-two-column,
+  .analysis-risk-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-mini-metrics,
+  .analysis-risk-layout .analysis-mini-metrics,
+  .analysis-card:not(.analysis-card-wide) .analysis-mini-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .allocation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .universe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .notes-hero,
+  .notes-editor-heading,
+  .notes-filter-row,
+  .note-link-card {
+    display: grid;
+  }
+
+  .notes-toolbar,
+  .notes-search {
+    width: 100%;
+  }
+
+  .notes-toolbar {
+    flex-wrap: wrap;
+  }
+
+  #notes-panel {
+    padding: 26px 22px 0;
+  }
+
+  .notes-filter-row {
+    align-items: stretch;
+  }
+
+  .notes-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-reader-heading {
+    display: grid;
+  }
+
+  .note-reader-top {
+    display: grid;
+  }
+
+  .note-reader-actions {
+    justify-content: flex-start;
+  }
+
+  .notes-sort-control {
+    justify-content: flex-end;
+  }
+
+  .note-editor-card {
+    grid-template-columns: 1fr;
+  }
+
+  .note-content-field {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .note-card {
+    grid-template-columns: 1fr;
+  }
+
+  .note-card-menu {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .metrics,
+  .compact-metrics,
+  .analysis-summary-metrics,
+  .analysis-health-list,
+  .stage-comparison-grid,
+  .analysis-cashflow-grid,
+  .asset-form,
+  .form-section-grid,
+  .asset-adjustment-summary,
+  .asset-live-summary,
+  .transaction-live-summary,
+  .adjustment-options,
+  .writing-form,
+  .note-form,
+  .post-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wide-row {
+    grid-column: 1 / -1;
+  }
+
+}
+
+@media (max-width: 620px) {
+  .shell {
+    width: min(100% - 16px, 1320px);
+    margin-top: 12px;
+  }
+
+  .overview,
+  .panel,
+  .home-section {
+    padding: 16px;
+  }
+
+  .top-nav {
+    gap: 12px;
+  }
+
+  .tabs {
+    width: 100%;
+    gap: 18px;
+    padding-bottom: 2px;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .market-sync-header,
+  .auth,
+  .settings {
+    width: 100%;
+  }
+
+  .settings-button,
+  .market-sync-header .settings-button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .settings-panel,
+  .auth-panel,
+  .market-sync-popover {
+    width: min(100vw - 32px, 420px);
+  }
+
+  .auth-dialog {
+    align-items: start;
+    overflow-y: auto;
+    padding: 18px 12px;
+  }
+
+  .auth-card {
+    width: min(100%, 420px);
+    gap: 13px;
+    padding: 34px 20px 26px;
+  }
+
+  .auth-logo {
+    width: 58px;
+    height: 58px;
+    padding: 11px;
+  }
+
+  .auth-card h2 {
+    font-size: 26px;
+  }
+
+  .auth-intro {
+    font-size: 15px;
+  }
+
+  .auth-provider-button,
+  .auth-field input,
+  .auth-submit-button,
+  .auth-logout-button {
+    min-height: 54px;
+    font-size: 16px;
+  }
+
+  .auth-switch-copy {
+    font-size: 14px;
+  }
+
+  .panel-heading {
+    gap: 12px;
+  }
+
+  .panel-heading > div,
+  .panel-heading > form {
+    min-width: 0;
+  }
+
+  .panel-heading .primary-button,
+  .panel-heading .secondary-button,
+  .notes-toolbar .primary-button,
+  .note-editor-actions .primary-button,
+  .note-editor-actions .secondary-button,
+  .modal-actions .primary-button,
+  .modal-actions .secondary-button,
+  .row-actions .secondary-button,
+  .row-actions .danger-button,
+  .item-actions .secondary-button,
+  .item-actions .danger-button,
+  .compact-button {
+    min-height: 44px;
+  }
+
+  .row-actions,
+  .item-actions,
+  .modal-actions,
+  .note-editor-actions {
+    align-items: stretch;
+  }
+
+  .row-actions button,
+  .item-actions button,
+  .modal-actions button,
+  .note-editor-actions button {
+    flex: 1 1 132px;
+  }
+
+  .table-wrap {
+    margin-right: -16px;
+    padding-right: 16px;
+  }
+
+  table {
+    min-width: 860px;
+  }
+
+  .metrics,
+  .analysis-mini-metrics,
+  .analysis-risk-layout .analysis-mini-metrics,
+    .analysis-card:not(.analysis-card-wide) .analysis-mini-metrics,
+  .portfolio-filter,
+  .analysis-filter,
+  .market-sync-list,
+  .analysis-health-list,
+  .stage-comparison-grid,
+  .analysis-cashflow-grid,
+  .asset-form,
+  .form-section-grid,
+  .asset-adjustment-summary,
+  .asset-live-summary,
+  .transaction-live-summary,
+  .adjustment-options,
+  .writing-form,
+  .note-form,
+  .post-form {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-column-chart {
+    grid-template-columns: repeat(6, minmax(24px, 1fr));
+    height: 220px;
+  }
+
+  .analysis-waterfall {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .analysis-waterfall article {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto;
+    justify-items: stretch;
+    align-items: center;
+    text-align: left;
+  }
+
+  .waterfall-bar {
+    height: 10px !important;
+    max-width: none;
+  }
+
+  .wide {
+    grid-column: auto;
+  }
+
+  .metric strong {
+    font-size: 24px;
+  }
+
+  .asset-value-metric {
+    min-height: 160px;
+    padding: 22px;
+    border-radius: var(--radius-panel);
+  }
+
+  .asset-value-line {
+    gap: 12px;
+    margin: 20px 0 18px;
+  }
+
+  .asset-value-line strong {
+    font-size: clamp(30px, 10vw, 40px);
+  }
+
+  .currency-switch select {
+    font-size: 13px;
+  }
+
+  .asset-value-metric small {
+    font-size: 14px;
+  }
+
+  .return-value-line strong {
+    font-size: clamp(30px, 10vw, 40px);
+  }
+
+  .trend-chart-meta {
+    display: grid;
+  }
+
+  .trend-chart svg {
+    min-height: 260px;
+  }
+
+  .date-range {
+    align-items: stretch;
+  }
+
+  .date-range {
+    justify-content: flex-start;
+  }
+
+  .category-table-head,
+  .category-table-row,
+  .mini-holdings-head,
+  .mini-holdings-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .list-item {
+    display: grid;
+  }
+
+  .universe-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-hero h2,
+  .notes-editor-heading h2 {
+    font-size: 20px;
+  }
+
+  .note-card {
+    padding: 20px;
+    min-height: auto;
+  }
+
+  .note-card-preview p {
+    margin-top: 0;
+  }
+
+  .note-card h3 {
+    font-size: 17px;
+  }
+
+  .note-reader-card {
+    padding: 22px 18px;
+  }
+
+  .note-reader-card h2 {
+    font-size: 20px;
+    line-height: 1.25;
+  }
+
+  .note-editor-card {
+    padding: 16px;
+  }
+
+  .note-textarea-shell textarea {
+    min-height: 260px;
+    padding-bottom: 44px;
+  }
+
+  .note-draft-button,
+  .note-save-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .analysis-health-layout {
+    grid-template-columns: 1fr;
+  }
+}

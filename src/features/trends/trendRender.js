@@ -29,11 +29,11 @@ export function renderTrendChart() {
   const isReturnMode = elements.trendMetric.value === "return";
   const points = isReturnMode ? buildReturnTrendPoints(rawPoints) : rawPoints;
   if (!ctx.overviewAssets().length) {
-    elements.trendChart.innerHTML = emptyActionState("暂无资产变化曲线", "添加第一笔资产后，这里会展示总资产、收益变化和区间波动；不会在无数据时显示空白图表。", "添加第一笔资产", "add-asset");
+    elements.trendChart.innerHTML = emptyActionState("暂无资产变化曲线", "", "添加第一笔资产", "add-asset");
     return;
   }
   if (!points.length) {
-    elements.trendChart.innerHTML = emptyStateInner("当前范围没有价值快照", "可以调整开始和结束日期，或录入资产后重新查看总资产变化。");
+    elements.trendChart.innerHTML = emptyStateInner("当前范围没有价值快照", "添加资产或加载示例数据后，趋势会基于价格、估值和快照生成。");
     return;
   }
   const values = points.map((point) => point.valueCents);

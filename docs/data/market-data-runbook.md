@@ -43,7 +43,8 @@ storage/market-data/user-asset-prices/{userId}/{assetId}.json
 
 生成口径：
 
-- 起点优先取资产 `purchaseDate`，没有持有日期时从已缓存行情的第一天开始。
+- 手动或自动同步会覆盖所有录入过且有代码的资产，包含当前持仓和历史持仓。
+- 每个资产单独确定起点：优先取该资产 `purchaseDate`，没有持有日期时从已缓存行情的第一天开始。
 - 股票、ETF 和指数使用日收盘价；基金使用单位净值；贵金属和虚拟货币使用数据源提供的日价格。
 - 每个自然日最多一条价格。非交易日或单日缺缓存时沿用上一条可用价格，并标记 `priceBasis=carry_forward`、`qualityStatus=carried_forward` 和 `carriedFromDate`。
 - 首次可用行情之前的缺口不会填假价格；同步结果会累计 `dailyPriceGapCount`，后续 UI 应提示用户补价格或扩大回补范围。
@@ -73,7 +74,7 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 - 货币汇率：Frankfurter 参考汇率，默认抓取 `USD/CNY`、`HKD/CNY`、`USD/HKD` 和 `EUR/CNY`。
 - 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产，按 USD/USDT 近似存储价格；CoinGecko 保留为部分稳定币兜底。
 - 美股和美股 ETF：Nasdaq historical 公开接口。
-- 资产主库：A 股/港股尝试使用东方财富市场列表，港股也支持读取 `hkex-list-of-securities.csv` 或 `hkex-list-of-securities.txt` 本地缓存；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/*clist*.json`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源。
+- 资产主库：A 股优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底；港股支持读取 `hkex-list-of-securities.csv` 或 `hkex-list-of-securities.txt` 本地缓存，也可回退到东方财富港股列表；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/*stock-list*.json`、`storage/market-data/*clist*.json`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源。
 - 沪深 300 成分股：东方财富 datacenter 公开接口。
 - 恒生科技成分股：Goldman Sachs Warrants 公开 AJAX。
 - 纳斯达克 100 成分股：Nasdaq list-type 公开接口。
@@ -81,6 +82,8 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 ## 资产主库同步策略
 
 资产主库和价格缓存是两套任务：主库用于录入时匹配名称、代码、市场、类型和币种；价格脚本按用户录入且需要行情的资产抓取价格，同时稳定维护分析页收益表现对比使用的少量基准指数或 ETF 缓存。
+
+当前 A 股主库策略是官方源优先：上交所接口提供 `SECURITY_CODE_A`、`SECURITY_ABBR_A` 和 `LISTING_DATE` 等字段，深交所接口提供 `agdm`、`agjc`、`bk` 和 `agssrq` 等字段。公开官网接口可能限流或临时返回空响应；同步脚本会保留已成功分页和既有缓存，不应因为单个市场失败而用更薄的数据覆盖已生成主库。
 
 面向中国用户时，不应为了控制总量而降低美股覆盖，因为美元资产录入仍然常见。当前策略是保留美股普通股票和 ETF，同时用市场级覆盖闸门要求 A 股和港股必须补齐：
 
