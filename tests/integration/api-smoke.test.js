@@ -142,6 +142,39 @@ test("api skeleton serves health, positions and attribution", async () => {
     )
   );
   await fs.writeFile(
+    path.join(marketDataDir, "prices", "US", "SPY.json"),
+    JSON.stringify(
+      [
+        {
+          instrumentSymbol: "SPY",
+          instrumentName: "SPDR S&P 500 ETF Trust",
+          market: "US",
+          currency: "USD",
+          tradeDate: "2026-06-01",
+          closePrice: "520.00",
+          adjustedClosePrice: "520.00",
+          source: "Nasdaq historical public API",
+          sourceFetchedAt: "2026-06-01T10:00:00.000Z",
+          qualityStatus: "ok"
+        },
+        {
+          instrumentSymbol: "SPY",
+          instrumentName: "SPDR S&P 500 ETF Trust",
+          market: "US",
+          currency: "USD",
+          tradeDate: "2026-06-02",
+          closePrice: "522.50",
+          adjustedClosePrice: "522.50",
+          source: "Nasdaq historical public API",
+          sourceFetchedAt: "2026-06-02T10:00:00.000Z",
+          qualityStatus: "ok"
+        }
+      ],
+      null,
+      2
+    )
+  );
+  await fs.writeFile(
     path.join(marketDataDir, "prices", "HK", "00700.json"),
     JSON.stringify(
       [
@@ -223,6 +256,11 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(sync.results[0].dailyPrices.length, 2);
     assert.equal(sync.results[0].dailyPrices[0].priceDate, "2026-06-01");
 
+    await fs.mkdir(path.join(marketDataDir, "user-asset-prices", "DEMO-USER"), { recursive: true });
+    await fs.writeFile(
+      path.join(marketDataDir, "user-asset-prices", "DEMO-USER", "ASSET-00700.json"),
+      JSON.stringify([sync.results[0].dailyPrices[0]], null, 2)
+    );
     const dailyPrices = await getJson("/api/asset-prices/daily?assetId=asset-00700");
     assert.equal(dailyPrices.userId, "demo-user");
     assert.equal(dailyPrices.assetId, "asset-00700");
@@ -277,7 +315,32 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.deepEqual(closedAssetResult.dailyPrices.map((row) => row.priceDate), ["2026-06-02"]);
     assert.equal(closedAssetResult.dailyPrices[0].priceType, "close");
 
-    const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["SPY"], autoFetch: false });
+    const spyFundLabelSync = await postJson("/api/market-data/sync-daily", {
+      symbols: ["SPY"],
+      autoFetch: false,
+      assets: [
+        {
+          id: "asset-spy-fund-label",
+          name: "标普500 ETF",
+          symbol: "SPY",
+          type: "基金",
+          market: "US",
+          account: "美股账户",
+          currency: "USD",
+          quantity: "3",
+          costPrice: "500",
+          currentPrice: "520",
+          previousPrice: "520",
+          fxRate: "1",
+          purchaseDate: "2026-06-01"
+        }
+      ]
+    });
+    assert.equal(spyFundLabelSync.summary.syncedCount, 1);
+    assert.equal(spyFundLabelSync.results[0].after.currentPrice, "522.5");
+    assert.equal(spyFundLabelSync.results[0].dailyPrices[0].priceType, "close");
+
+    const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["IWM"], autoFetch: false });
     assert.equal(missingSync.fetch, null);
     assert.equal(missingSync.summary.syncedCount, 0);
     assert.equal(missingSync.summary.missingCount, 1);

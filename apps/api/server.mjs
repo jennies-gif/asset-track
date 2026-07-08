@@ -327,8 +327,11 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   let fetchResult = null;
   let dailyPriceRowsUpserted = 0;
   let dailyPriceGapCount = 0;
-  const historyDateFrom = normalizeDateParam(body.dateFrom) || earliestAssetHistoryDate(stateCandidates);
   const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
+  const fallbackHistoryDays = Math.max(1, Number(body.days || 7));
+  const historyDateFrom = normalizeDateParam(body.dateFrom) ||
+    earliestAssetHistoryDate(stateCandidates) ||
+    addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1);
 
   if (body.autoFetch !== false) {
     try {
@@ -442,6 +445,22 @@ async function getAssetDailyPrices(url, response) {
   if (!asset) return sendError(response, 404, "asset_not_found", "未找到用户资产");
 
   const stored = await readPersistedUserAssetDailyPrices({ userId: demoUser.id, assetId: asset.id, dateFrom, dateTo });
+  const history = await readStoredMarketHistory(asset);
+  const dailyPrices = buildUserAssetDailyPriceSnapshots({ userId: demoUser.id, asset, history, dateFrom, dateTo });
+  if (dailyPrices.rows.length) {
+    const changedCount = await persistUserAssetDailyPrices(dailyPrices.rows);
+    return sendJson(response, {
+      userId: demoUser.id,
+      assetId: asset.id,
+      symbol: asset.symbol,
+      points: dailyPrices.rows,
+      status: dailyPrices.status,
+      changedCount,
+      missingDates: dailyPrices.missingDates,
+      source: isMarketDataDatabaseEnabled() ? "postgres-user-asset-daily-prices" : "storage/user-asset-prices"
+    });
+  }
+
   if (stored.length) {
     return sendJson(response, {
       userId: demoUser.id,
@@ -452,8 +471,6 @@ async function getAssetDailyPrices(url, response) {
     });
   }
 
-  const history = await readStoredMarketHistory(asset);
-  const dailyPrices = buildUserAssetDailyPriceSnapshots({ userId: demoUser.id, asset, history, dateFrom, dateTo });
   const changedCount = await persistUserAssetDailyPrices(dailyPrices.rows);
   return sendJson(response, {
     userId: demoUser.id,
@@ -477,7 +494,7 @@ function scheduleDailyMarketSync() {
   console.log(`Next daily market data sync scheduled at ${nextRunAt.toLocaleString()} local time`);
   setTimeout(async () => {
     try {
-      const result = await runDailyMarketDataSync({ days: 7, includeBenchmarks: true }, "scheduled");
+      const result = await runDailyMarketDataSync({ includeBenchmarks: true }, "scheduled");
       console.log(
         `Daily market data sync finished: ${result.summary.syncedCount} synced, ${result.summary.missingCount} missing`
       );
@@ -619,8 +636,7 @@ function exportBackup(response) {
 }
 
 async function readStoredMarketHistory(asset) {
-  const isFund = String(asset.type || "").includes("基金");
-  const sourceRows = isFund
+  const sourceRows = isFundNavAsset(asset)
     ? await readStoredRowsForSymbol(asset, "nav")
     : await readStoredRowsForSymbol(asset, "price");
   return sourceRows
@@ -635,6 +651,12 @@ async function readStoredMarketHistory(asset) {
     }))
     .filter((row) => row.date && Number.isFinite(row.close) && row.close > 0)
     .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function isFundNavAsset(asset) {
+  const symbol = String(asset.symbol || "").trim().toUpperCase();
+  const type = String(asset.type || "").trim();
+  return symbol.endsWith(".OF") || type === "公募基金" || type === "开放式基金";
 }
 
 async function persistUserAssetDailyPrices(rows) {

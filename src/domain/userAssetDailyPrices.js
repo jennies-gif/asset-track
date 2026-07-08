@@ -76,7 +76,7 @@ function normalizeHistory(history) {
 }
 
 function snapshotFromPoint({ userId, asset, point, priceDate, basis, carriedFromDate = "" }) {
-  const isFund = String(asset.type || "").includes("基金") || point.type === "单位净值";
+  const isFund = isFundNavAsset(asset) || point.type === "单位净值";
   return {
     userId,
     assetId: asset.id,
@@ -93,6 +93,12 @@ function snapshotFromPoint({ userId, asset, point, priceDate, basis, carriedFrom
     sourceFetchedAt: point.sourceFetchedAt,
     qualityStatus: basis === "carry_forward" ? "carried_forward" : point.qualityStatus || "ok"
   };
+}
+
+function isFundNavAsset(asset) {
+  const symbol = String(asset.symbol || "").trim().toUpperCase();
+  const type = String(asset.type || "").trim();
+  return symbol.endsWith(".OF") || type === "公募基金" || type === "开放式基金";
 }
 
 function calendarDates(startDate, endDate) {

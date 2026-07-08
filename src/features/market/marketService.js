@@ -71,7 +71,7 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
     const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols, assets: assetsForMarketSyncPayload(), days: 7, trigger })
+      body: JSON.stringify({ symbols, assets: assetsForMarketSyncPayload(), trigger })
     });
     if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
