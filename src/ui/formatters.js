@@ -19,6 +19,13 @@ export function formatDisplayCurrency(cents) {
   return formatCurrencyAmount(Number(cents) / 100, displayCurrency());
 }
 
+export function formatDisplayCurrencyParts(cents) {
+  return {
+    currency: displayCurrency(),
+    amount: formatDecimalAmount(Number(cents) / 100)
+  };
+}
+
 export function formatDisplayAmountOnly(cents) {
   return formatDecimalAmount(Number(cents) / 100);
 }

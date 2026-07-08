@@ -1,0 +1,71 @@
+/* Compact status badges: muted fills, darker semantic text, and low visual weight in dense tables. */
+.trust-badge,
+.asset-status-badge,
+.price-cell small,
+#open-portfolio-view .price-cell small,
+.analysis-audit-badge,
+.analysis-table-status,
+.status-tag,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 18px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.status-stack .trust-badge,
+.compact-status-stack .asset-status-badge {
+  justify-self: start;
+}
+
+.trust-badge.data-error,
+.price-cell small.data-error,
+.asset-status-badge.is-danger,
+.analysis-table-status.is-danger,
+.status-tag.is-high,
+.status-pill.danger {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.trust-badge.warning,
+.trust-badge.data-warning,
+.price-cell small.data-warning,
+.asset-status-badge.is-warning,
+.asset-status-badge.is-neutral,
+.analysis-audit-badge.is-warning,
+.analysis-table-status.is-warning,
+.status-tag.is-medium,
+.status-pill.warning {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.trust-badge.positive,
+.trust-badge.data-ok,
+.price-cell small.data-ok,
+.asset-status-badge.is-success,
+.analysis-audit-badge.is-ok,
+.analysis-table-status.is-ok,
+.status-tag.is-low,
+.status-pill.good {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.trust-badge:not(.positive):not(.warning):not(.data-ok):not(.data-warning):not(.data-error),
+.price-cell small:not(.data-ok):not(.data-warning):not(.data-error),
+.asset-status-badge.is-neutral,
+.analysis-audit-badge:not(.is-ok):not(.is-warning),
+.analysis-table-status:not(.is-ok):not(.is-warning):not(.is-danger),
+.status-pill:not(.good):not(.warning):not(.danger) {
+  background: #F3F4F6;
+  color: #374151;
+}

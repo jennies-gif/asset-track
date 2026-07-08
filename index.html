@@ -11,13 +11,19 @@
   </head>
   <body>
     <header class="top-nav">
-      <a class="brand" href="#" data-tab="home" aria-label="返回首页">
-        <img class="brand-icon" src="/public/icon.svg" alt="">
-        <span class="brand-copy">
-          <strong>资产轨迹</strong>
-          <small>一款面向个人投资者的资产记录和投资复盘工具</small>
-        </span>
-      </a>
+      <div class="navbar-left">
+        <a class="brand" href="#" data-tab="home" aria-label="返回首页">
+          <img class="brand-icon" src="/public/icon.svg" alt="">
+          <span class="brand-copy">
+            <strong>资产轨迹</strong>
+          </span>
+        </a>
+        <span class="navbar-page-title" id="navbar-page-title">资产总览</span>
+      </div>
+      <form class="navbar-search" role="search">
+        <label class="sr-only" for="global-search">全局搜索</label>
+        <input id="global-search" type="search" placeholder="搜索资产、交易、复盘" autocomplete="off">
+      </form>
       <div class="header-actions">
         <div class="market-sync-header">
           <button class="settings-button sync-price-button" id="sync-market-data-button" type="button">同步价格</button>
@@ -430,7 +436,7 @@
             <div><h2><span>投资复盘</span></h2><p id="notes-meta">共 0 条复盘 / 0 个标签</p></div>
             <div class="notes-toolbar">
               <label class="notes-search"><span aria-hidden="true">⌕</span><input id="notes-search" type="search" placeholder="搜索复盘、标签、关键词..."><kbd>⌘K</kbd></label>
-              <button class="primary-button note-write-button" id="new-note-button" type="button">✎ 写复盘 <span>⌄</span></button>
+              <button class="secondary-button note-write-button" id="new-note-button" type="button">✎ 写复盘 <span>⌄</span></button>
             </div>
           </div>
           <div class="notes-filter-row"><div class="note-tag-filters" id="note-filter-tags"></div><div class="notes-sort-control"><button class="text-button" type="button">筛选</button><span></span><button class="text-button" type="button">最新更新</button></div></div>
@@ -503,7 +509,7 @@
     <div class="modal-backdrop is-hidden" id="close-review-modal" role="presentation">
       <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="close-review-title">
         <div><h2 id="close-review-title">要记录这次操作吗？</h2><p id="close-review-message">清仓后做一次简短复盘，后面回看决策会更清楚。</p></div>
-        <div class="modal-actions"><button class="secondary-button" id="close-review-later" type="button">暂不复盘</button><button class="primary-button note-write-button" id="close-review-write" type="button">✎ 写复盘</button></div>
+        <div class="modal-actions"><button class="secondary-button" id="close-review-later" type="button">暂不复盘</button><button class="secondary-button note-write-button" id="close-review-write" type="button">✎ 写复盘</button></div>
       </section>
     </div>
     <div class="modal-backdrop is-hidden" id="feedback-modal" role="presentation">

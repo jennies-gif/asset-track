@@ -6,6 +6,7 @@ import { emptyStateInner } from "../../ui/emptyState.js";
 import {
   displayCurrencyCode,
   formatDisplayCurrency,
+  formatDisplayCurrencyParts,
   formatMonthDayTimeMinute,
   formatShare,
   formatSignedAmountOnly,
@@ -118,7 +119,7 @@ export function renderPortfolio() {
           <td>${escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</td>
           <td>${renderPriceCell(asset)}</td>
           <td>${escapeHtml(formatHoldingDays(asset))}</td>
-          <td>${formatDisplayCurrency(position.marketValueCents)}</td>
+          <td class="asset-market-value-cell">${renderDisplayCurrencyAmount(position.marketValueCents)}</td>
           <td>
             <div class="return-cell">
               <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
@@ -189,6 +190,16 @@ function renderPriceCell(asset) {
       <span>${escapeHtml(formatUnitPrice(asset.currentPrice || asset.costPrice, asset.currency, "待补价格"))}</span>
       <small class="${escapeHtml(status.className)}">${escapeHtml(shortMeta)}</small>
     </div>
+  `;
+}
+
+function renderDisplayCurrencyAmount(cents) {
+  const { currency, amount } = formatDisplayCurrencyParts(cents);
+  return `
+    <span class="asset-money">
+      <span class="asset-money-currency">${escapeHtml(currency)}</span>
+      <span class="asset-money-amount">${escapeHtml(amount)}</span>
+    </span>
   `;
 }
 
@@ -312,7 +323,7 @@ function renderDataStatus(asset) {
   return `
     <div class="status-stack compact-status-stack">
       <span class="asset-status-badge is-${priceTone}">${escapeHtml(priceStatusLabel(asset))}</span>
-      ${issues.slice(0, 1).map((issue) => `<span class="asset-status-badge is-${issue.severity === "high" ? "warning" : "neutral"}">${escapeHtml(issue.label)}</span>`).join("")}
+      ${issues.slice(0, 1).map((issue) => `<span class="asset-status-badge is-${issue.severity === "high" ? "danger" : "warning"}">${escapeHtml(issue.label)}</span>`).join("")}
       ${issues.length > 1 ? `<small>+${issues.length - 1} 项</small>` : ""}
     </div>
   `;
@@ -320,6 +331,7 @@ function renderDataStatus(asset) {
 
 function compactStatusTone(className = "") {
   if (className.includes("positive") || className.includes("ok")) return "success";
-  if (className.includes("warning") || className.includes("error") || className.includes("negative")) return "warning";
+  if (className.includes("error") || className.includes("negative")) return "danger";
+  if (className.includes("warning")) return "warning";
   return "neutral";
 }

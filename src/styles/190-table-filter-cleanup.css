@@ -1,0 +1,72 @@
+/* Table and filter cleanup: remove tinted header/filter chrome in favor of white surfaces. */
+table thead,
+table thead tr,
+table th,
+#assets-panel th,
+#analysis-panel th,
+.benchmark-table th,
+.allocation-table th,
+#analysis-panel .analysis-return-table th,
+#analysis-panel .analysis-contribution-table th {
+  border-bottom: 1px solid #F1F5F9;
+  background: #FFFFFF;
+  box-shadow: none;
+}
+
+table th,
+#assets-panel th,
+#analysis-panel th,
+.benchmark-table th,
+.allocation-table th {
+  color: var(--muted);
+}
+
+.portfolio-filter,
+.analysis-filter,
+.notes-filter-row {
+  border-color: #E5E7EB;
+  background: #FFFFFF;
+  box-shadow: none;
+}
+
+select,
+.portfolio-filter select,
+.analysis-filter select,
+.settings-panel select,
+.note-asset-link-field select,
+#note-transaction-select,
+.compose-form select,
+.currency-switch select,
+.inline-select {
+  border: 1px solid #E5E7EB;
+  background-color: #FFFFFF;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+select:hover,
+.portfolio-filter select:hover,
+.analysis-filter select:hover,
+.settings-panel select:hover,
+.note-asset-link-field select:hover,
+#note-transaction-select:hover,
+.compose-form select:hover,
+.currency-switch select:hover,
+.inline-select:hover {
+  border-color: #CBD5E1;
+  background-color: #FFFFFF;
+}
+
+select:focus,
+.portfolio-filter select:focus,
+.analysis-filter select:focus,
+.settings-panel select:focus,
+.note-asset-link-field select:focus,
+#note-transaction-select:focus,
+.compose-form select:focus,
+.currency-switch select:focus,
+.inline-select:focus {
+  border-color: #CBD5E1;
+  background-color: #FFFFFF;
+  outline: none;
+}

@@ -1,3 +1,10 @@
+const TAB_TITLES = {
+  home: "资产总览",
+  assets: "资产台账",
+  analysis: "资产分析",
+  notes: "投资复盘"
+};
+
 export function activateTab(name) {
   document.querySelectorAll(".tab").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.tab === name);
@@ -5,6 +12,8 @@ export function activateTab(name) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("is-active", panel.id === `${name}-panel`);
   });
+  const pageTitle = document.querySelector("#navbar-page-title");
+  if (pageTitle) pageTitle.textContent = TAB_TITLES[name] || "资产总览";
 }
 
 export function activatePortfolioView(name) {

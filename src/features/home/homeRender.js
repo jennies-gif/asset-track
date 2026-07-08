@@ -5,6 +5,7 @@ import { trustBadge } from "../../ui/badges.js";
 import { emptyActionState, emptyStateInner } from "../../ui/emptyState.js";
 import {
   formatDisplayCurrency,
+  formatDisplayCurrencyParts,
   formatOptionalSignedAmount,
   formatShare,
   formatSignedAmountOnly,
@@ -106,27 +107,58 @@ export function renderHomeHoldings(elements, context) {
     elements.homeHoldingsList.innerHTML = emptyActionState("暂无当前持仓", "", "添加第一笔资产", "add-asset");
     return;
   }
-  elements.homeHoldingsList.innerHTML = rows.map((position) => {
-    const asset = assets.find((item) => item.id === position.id) || position;
-    const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
-    const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
-    return `
-      <article class="home-list-row">
-        <div>
-          <strong>${escapeHtml(position.name)}</strong>
-          <span>${escapeHtml([position.type, position.account].filter(Boolean).join(" · "))}</span>
-        </div>
-        <div class="home-list-value">
-          <strong>${formatDisplayCurrency(position.marketValueCents)}</strong>
-          <span class="${pnlClass}">${position.hasCostBasis ? `${formatSignedAmountOnly(position.unrealizedPnlCents)} / ${formatPercent(position.returnBps)}` : "成本缺失"}</span>
-        </div>
-        <div class="home-list-status">
-          ${trustBadge(formatShare(weightBps))}
-          ${trustBadge(context.priceStatusLabel(asset), context.priceStatusClass(asset))}
-        </div>
-      </article>
-    `;
-  }).join("");
+  elements.homeHoldingsList.innerHTML = `
+    <div class="home-holdings-table-wrap">
+      <table class="home-holdings-table">
+        <thead>
+          <tr>
+            <th>资产</th>
+            <th>账户 / 类别</th>
+            <th>市值</th>
+            <th>收益</th>
+            <th>占比</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((position) => {
+            const asset = assets.find((item) => item.id === position.id) || position;
+            const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
+            const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
+            return `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(position.name)}</strong>
+                  <span>${escapeHtml([position.symbol, position.currency].filter(Boolean).join(" · "))}</span>
+                </td>
+                <td>
+                  <strong>${escapeHtml(position.account || "-")}</strong>
+                  <span>${escapeHtml(position.type || "-")}</span>
+                </td>
+                <td class="home-holdings-number home-market-value">${renderDisplayCurrencyAmount(position.marketValueCents)}</td>
+                <td class="home-holdings-return">
+                  <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
+                  <span class="${pnlClass}">${position.hasCostBasis ? formatSignedAmountOnly(position.unrealizedPnlCents) : "暂无法计算"}</span>
+                </td>
+                <td class="home-holdings-number">${formatShare(weightBps)}</td>
+                <td class="home-holdings-status">${trustBadge(context.priceStatusLabel(asset), context.priceStatusClass(asset))}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDisplayCurrencyAmount(cents) {
+  const { currency, amount } = formatDisplayCurrencyParts(cents);
+  return `
+    <span class="asset-money">
+      <span class="asset-money-currency">${escapeHtml(currency)}</span>
+      <span class="asset-money-amount">${escapeHtml(amount)}</span>
+    </span>
+  `;
 }
 
 export function renderHomeTransactions(elements, context) {

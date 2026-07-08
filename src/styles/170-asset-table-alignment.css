@@ -1,0 +1,119 @@
+/* Asset ledger table alignment: text scans left, money and ratios line up right. */
+#assets-panel table {
+  font-variant-numeric: tabular-nums;
+}
+
+#assets-panel th,
+#assets-panel td {
+  text-align: left;
+}
+
+#assets-panel td strong,
+#assets-panel td span,
+#assets-panel .price-cell span,
+#assets-panel .return-cell strong,
+#assets-panel .return-cell span {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+#open-portfolio-view th:nth-child(4),
+#open-portfolio-view th:nth-child(5),
+#open-portfolio-view th:nth-child(6),
+#open-portfolio-view th:nth-child(7),
+#open-portfolio-view th:nth-child(8),
+#open-portfolio-view th:nth-child(9),
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view td:nth-child(5),
+#open-portfolio-view td:nth-child(6),
+#open-portfolio-view td:nth-child(7),
+#open-portfolio-view td:nth-child(8),
+#open-portfolio-view td:nth-child(9),
+#history-portfolio-view th:nth-child(3),
+#history-portfolio-view th:nth-child(4),
+#history-portfolio-view th:nth-child(5),
+#history-portfolio-view th:nth-child(6),
+#history-portfolio-view td:nth-child(3),
+#history-portfolio-view td:nth-child(4),
+#history-portfolio-view td:nth-child(5),
+#history-portfolio-view td:nth-child(6),
+#changes-portfolio-view th:nth-child(4),
+#changes-portfolio-view th:nth-child(5),
+#changes-portfolio-view th:nth-child(6),
+#changes-portfolio-view th:nth-child(7),
+#changes-portfolio-view th:nth-child(8),
+#changes-portfolio-view td:nth-child(4),
+#changes-portfolio-view td:nth-child(5),
+#changes-portfolio-view td:nth-child(6),
+#changes-portfolio-view td:nth-child(7),
+#changes-portfolio-view td:nth-child(8) {
+  padding-right: 16px;
+  text-align: right;
+}
+
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view td:nth-child(5),
+#open-portfolio-view td:nth-child(6),
+#open-portfolio-view td:nth-child(7),
+#open-portfolio-view td:nth-child(8),
+#open-portfolio-view td:nth-child(9),
+#history-portfolio-view td:nth-child(3),
+#history-portfolio-view td:nth-child(4),
+#history-portfolio-view td:nth-child(5),
+#history-portfolio-view td:nth-child(6),
+#changes-portfolio-view td:nth-child(4),
+#changes-portfolio-view td:nth-child(5),
+#changes-portfolio-view td:nth-child(6),
+#changes-portfolio-view td:nth-child(7),
+#changes-portfolio-view td:nth-child(8) {
+  font-family: var(--font-number);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-weight: var(--weight-medium);
+}
+
+#open-portfolio-view th:nth-child(1),
+#open-portfolio-view th:nth-child(2),
+#open-portfolio-view th:nth-child(3),
+#open-portfolio-view th:nth-child(10),
+#open-portfolio-view th:nth-child(11),
+#open-portfolio-view td:nth-child(1),
+#open-portfolio-view td:nth-child(2),
+#open-portfolio-view td:nth-child(3),
+#open-portfolio-view td:nth-child(10),
+#open-portfolio-view td:nth-child(11),
+#history-portfolio-view th:nth-child(1),
+#history-portfolio-view th:nth-child(2),
+#history-portfolio-view th:nth-child(7),
+#history-portfolio-view td:nth-child(1),
+#history-portfolio-view td:nth-child(2),
+#history-portfolio-view td:nth-child(7),
+#changes-portfolio-view th:nth-child(1),
+#changes-portfolio-view th:nth-child(2),
+#changes-portfolio-view th:nth-child(3),
+#changes-portfolio-view th:nth-child(9),
+#changes-portfolio-view td:nth-child(1),
+#changes-portfolio-view td:nth-child(2),
+#changes-portfolio-view td:nth-child(3),
+#changes-portfolio-view td:nth-child(9) {
+  text-align: left;
+}
+
+#assets-panel .price-cell,
+#assets-panel .return-cell {
+  justify-items: end;
+  text-align: right;
+}
+
+#assets-panel .price-cell span,
+#assets-panel .return-cell strong,
+#assets-panel .return-cell span {
+  font-family: var(--font-number);
+  font-weight: var(--weight-medium);
+}
+
+#open-portfolio-view .compact-status-stack,
+#assets-panel .row-actions {
+  justify-content: flex-start;
+  text-align: left;
+}

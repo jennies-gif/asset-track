@@ -205,13 +205,18 @@ test("classifies price status without hiding missing or stale prices", () => {
     costPrice: "100",
     priceStatus: "pending"
   }), true);
-  assert.equal(resolvePriceStatus({
+  assert.deepEqual(resolvePriceStatus({
     currentPrice: "101",
     costPrice: "100",
     priceStatus: "synced",
     pricedAt: "2026-06-20",
     priceSource: "test source"
-  }, { today: "2026-07-05" }).key, "stale");
+  }, { today: "2026-07-05" }), {
+    key: "stale",
+    label: "价格过期",
+    className: "data-error",
+    needsReview: true
+  });
   assert.equal(resolvePriceStatus({
     currentPrice: "101",
     costPrice: "100",

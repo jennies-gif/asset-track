@@ -20,10 +20,10 @@ src/styles/app.css
 | `--font-display` | `var(--font-body)` | 页面标题、区块标题 |
 | `--font-number` | DIN / Roboto Mono / SFMono 等宽数字字体栈 | 金额、收益率、价格、数量 |
 | `--radius-control` | `6px` | 按钮、输入框、菜单项、页签 |
-| `--radius-card` | `8px` | 指标卡、列表项、状态块、表格容器 |
-| `--radius-panel` | `10px` | 页面主要面板、弹窗、浮层 |
+| `--radius-card` | `6px` | 指标卡、列表项、状态块、表格容器 |
+| `--radius-panel` | `6px` | 页面主要面板、弹窗、浮层 |
 | `--radius-pill` | `999px` | 徽章、胶囊筛选、圆形状态点 |
-| `--shadow-card` | 极轻阴影 | 普通面板和卡片 |
+| `--shadow-card` | `none` | 普通面板和卡片 |
 | `--shadow-popover` | 中等阴影 | 下拉菜单、浮层 |
 | `--shadow-dialog` | 较强阴影 | 模态框 |
 | `--weight-normal` | `400` | 正文 |
@@ -35,7 +35,7 @@ src/styles/app.css
 
 - 页面新增样式不得再直接写 `border-radius: 18px`、`font-weight: 650/750/800/900` 这类临时值，除非有明确例外并在注释中说明。
 - 大部分界面元素只使用 `400 / 500 / 600 / 700` 四档字重。
-- 阴影只使用 `--shadow-card`、`--shadow-popover`、`--shadow-dialog` 或 `none`。
+- 普通面板和卡片保持无阴影，使用 `1px solid #E5E7EB` 的浅灰实体描边；浮层和弹窗才使用对应阴影 token。
 - 胶囊形和圆形元素使用 `--radius-pill`，不要散写 `999px`。
 
 ## 1. 设计原则
