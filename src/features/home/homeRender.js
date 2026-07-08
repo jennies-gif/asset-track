@@ -1,7 +1,7 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { formatDate, todayIsoDate } from "../../utils/date.js";
-import { trustBadge, snapshotKpi, snapshotStatusRow } from "../../ui/badges.js";
+import { trustBadge } from "../../ui/badges.js";
 import { emptyActionState, emptyStateInner } from "../../ui/emptyState.js";
 import {
   formatDisplayCurrency,
@@ -13,25 +13,30 @@ import {
 } from "../../ui/formatters.js";
 
 export function renderMetrics(elements, context) {
-  const cumulativeReturnBps = context.calculateCumulativeReturnBps();
   const latestChange = context.calculateTrendValueChangeForRange("day");
   const hasAssets = context.overviewAssets().length > 0;
+  const portfolio = context.calculateDisplayPortfolio(context.overviewAssets());
+  const cumulativePnl = portfolio.totals.unrealizedPnlCents;
   elements.metrics.innerHTML = `
     <section class="portfolio-snapshot">
       <div class="snapshot-main">
         <div class="snapshot-heading">
-          <div>
-            <span class="snapshot-label">资产总览</span>
-            <h1>记录资产变化，回看收益来源和投资决策。</h1>
-          </div>
+          <span class="snapshot-card-title">核心资产总览</span>
           ${hasAssets ? "" : trustBadge("当前暂无资产")}
         </div>
-        <span class="snapshot-label">当前总资产</span>
-        <strong>${escapeHtml(formatDisplayCurrency(context.currentOverviewTotalCents()))}</strong>
-        <div class="snapshot-kpis">
-          ${snapshotKpi("累计收益", formatSignedCurrency(context.calculateDisplayPortfolio(context.overviewAssets()).totals.unrealizedPnlCents), toneClassForValue(context.calculateDisplayPortfolio(context.overviewAssets()).totals.unrealizedPnlCents))}
-          ${snapshotKpi("收益率", formatPercent(cumulativeReturnBps), toneClassForValue(cumulativeReturnBps))}
-          ${snapshotKpi("最近变化", formatOptionalSignedAmount(latestChange), toneClassForValue(latestChange || 0n))}
+        <div class="snapshot-balance-block">
+          <span class="snapshot-label">当前总资产 <small>(Total Balance)</small></span>
+          <strong>${escapeHtml(formatDisplayCurrency(context.currentOverviewTotalCents()))}</strong>
+        </div>
+        <div class="snapshot-inline-metrics">
+          <span>
+            <small>累计收益</small>
+            <b class="${toneClassForValue(cumulativePnl)}">${escapeHtml(formatSignedCurrency(cumulativePnl))}</b>
+          </span>
+          <span>
+            <small>最近变化</small>
+            <b class="${toneClassForValue(latestChange || 0n)}">${escapeHtml(formatOptionalSignedAmount(latestChange))}</b>
+          </span>
         </div>
         ${hasAssets ? "" : `
           <div class="home-empty-intro">
@@ -40,18 +45,35 @@ export function renderMetrics(elements, context) {
           </div>
         `}
         <div class="snapshot-actions">
-          <button class="primary-button" data-home-action="add-asset" type="button">${hasAssets ? "记录一笔交易" : "添加第一笔资产"}</button>
-          ${hasAssets ? `<button class="secondary-button" data-home-action="view-assets" type="button">查看全部资产</button>` : `<button class="secondary-button" data-home-action="load-demo" type="button">加载示例数据</button>`}
+          <button class="secondary-button snapshot-action-button" data-home-action="add-asset" type="button">➕ ${hasAssets ? "记录一笔交易" : "添加第一笔资产"}</button>
+          ${hasAssets ? `<button class="secondary-button snapshot-action-button" data-home-action="view-assets" type="button">🔍 查看全部资产</button>` : `<button class="secondary-button snapshot-action-button" data-home-action="load-demo" type="button">加载示例数据</button>`}
         </div>
       </div>
       <aside class="snapshot-status" aria-label="核心数据状态">
-        ${snapshotStatusRow("保存", "本地保存", "positive")}
-        ${snapshotStatusRow("上传", "数据未上传", "")}
-        ${snapshotStatusRow("更新", context.latestOverviewUpdateLabel(), "")}
-        ${snapshotStatusRow("价格", context.priceCompletenessLabel(), context.priceCompletenessClass())}
-        ${snapshotStatusRow("折算", context.fxRateSummary(), "")}
+        <div class="snapshot-heading">
+          <span class="snapshot-card-title">同步状态面板</span>
+        </div>
+        <div class="snapshot-status-list">
+          ${snapshotStatusItem("本地保存", "已保存在当前浏览器", "positive")}
+          ${snapshotStatusItem("数据上传", "数据未上传", "warning")}
+          ${snapshotStatusItem("更新时间", context.latestOverviewUpdateLabel(), "")}
+          ${snapshotStatusItem("价格核对", context.priceCompletenessLabel(), context.priceCompletenessClass())}
+        </div>
       </aside>
     </section>
+  `;
+}
+
+function snapshotStatusItem(label, value, className = "") {
+  const tone = className === "positive" ? "positive" : className === "warning" || className === "negative" ? "warning" : "neutral";
+  return `
+    <div class="snapshot-status-item">
+      <i class="snapshot-status-dot is-${tone}" aria-hidden="true"></i>
+      <span>
+        <small>${escapeHtml(label)}</small>
+        <b>${escapeHtml(value)}</b>
+      </span>
+    </div>
   `;
 }
 

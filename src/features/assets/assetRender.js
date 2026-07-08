@@ -2,7 +2,6 @@ import { formatPercent, roundDivide } from "../../domain/calculations.js";
 import { priceUsesCostFallback, resolvePriceStatus } from "../../domain/priceStatus.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { formatShortDate } from "../../utils/date.js";
-import { trustBadge } from "../../ui/badges.js";
 import { emptyStateInner } from "../../ui/emptyState.js";
 import {
   displayCurrencyCode,
@@ -236,23 +235,24 @@ function renderCurrentPriceHeading(assets) {
 
 function renderRowActions(assetId) {
   const secondaryActions = [
-    ["close", "清仓", false],
-    ["edit", "编辑资产", false],
     ["dividend", "分红", true],
     ["transfer-in", "转入", true],
     ["transfer-out", "转出", true],
     ["adjust-cost", "调整成本", true]
   ];
   return `
-    <button class="row-action-button" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="buy" type="button">买入</button>
-    <button class="row-action-button" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="sell" type="button">卖出</button>
+    <button class="row-action-link" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="buy" type="button">买入</button>
+    <span class="row-action-separator" aria-hidden="true">|</span>
+    <button class="row-action-link" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="sell" type="button">卖出</button>
+    <span class="row-action-separator" aria-hidden="true">|</span>
+    <button class="row-action-link" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="close" type="button">清仓</button>
+    <span class="row-action-separator" aria-hidden="true">|</span>
+    <button class="row-action-link" data-edit-asset-id="${escapeHtml(assetId)}" type="button">编辑</button>
+    <span class="row-action-separator" aria-hidden="true">|</span>
     <details class="row-more-menu">
-      <summary aria-label="更多操作">更多</summary>
+      <summary aria-label="更多操作">...</summary>
       <div class="row-more-panel">
         ${secondaryActions.map(([action, label, disabled]) => {
-          if (action === "edit") {
-            return `<button data-edit-asset-id="${escapeHtml(assetId)}" type="button">${escapeHtml(label)}</button>`;
-          }
           return `
             <button data-asset-id="${escapeHtml(assetId)}" data-transaction-action="${escapeHtml(action)}" ${disabled ? "disabled aria-disabled=\"true\" title=\"后续支持\"" : ""} type="button">
               ${escapeHtml(disabled ? `${label}（后续支持）` : label)}
@@ -300,12 +300,26 @@ function renderClosedAssetRow(asset) {
 
 function renderDataStatus(asset) {
   const issues = buildAssetDataIssues(asset);
-  if (!issues.length) return `<div class="status-stack">${trustBadge(priceStatusLabel(asset), priceStatusClass(asset))}<span class="status-pill good">完整</span></div>`;
+  const priceTone = compactStatusTone(priceStatusClass(asset));
+  if (!issues.length) {
+    return `
+      <div class="status-stack compact-status-stack">
+        <span class="asset-status-badge is-${priceTone}">${escapeHtml(priceStatusLabel(asset))}</span>
+        <span class="asset-status-badge is-success">完整</span>
+      </div>
+    `;
+  }
   return `
-    <div class="status-stack">
-      ${trustBadge(priceStatusLabel(asset), priceStatusClass(asset))}
-      ${issues.slice(0, 2).map((issue) => `<span class="status-pill ${issue.severity === "high" ? "warning" : ""}">${escapeHtml(issue.label)}</span>`).join("")}
-      ${issues.length > 2 ? `<small>另 ${issues.length - 2} 项待补全</small>` : ""}
+    <div class="status-stack compact-status-stack">
+      <span class="asset-status-badge is-${priceTone}">${escapeHtml(priceStatusLabel(asset))}</span>
+      ${issues.slice(0, 1).map((issue) => `<span class="asset-status-badge is-${issue.severity === "high" ? "warning" : "neutral"}">${escapeHtml(issue.label)}</span>`).join("")}
+      ${issues.length > 1 ? `<small>+${issues.length - 1} 项</small>` : ""}
     </div>
   `;
+}
+
+function compactStatusTone(className = "") {
+  if (className.includes("positive") || className.includes("ok")) return "success";
+  if (className.includes("warning") || className.includes("error") || className.includes("negative")) return "warning";
+  return "neutral";
 }

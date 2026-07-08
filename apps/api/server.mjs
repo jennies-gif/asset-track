@@ -122,6 +122,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/accounts") return listAccounts(response);
     if (request.method === "POST" && url.pathname === "/api/accounts") return createAccount(request, response);
     if (request.method === "GET" && url.pathname === "/api/instruments/search") return searchInstruments(url, response);
+    if (request.method === "GET" && url.pathname === "/api/instruments/lookup") return lookupInstrumentWithLatestPrice(url, response);
     if (request.method === "GET" && url.pathname === "/api/positions") return listPositions(url, response);
     if (request.method === "GET" && url.pathname === "/api/market-data/history") return getMarketHistory(url, response);
     if (request.method === "GET" && url.pathname === "/api/asset-prices/daily") return getAssetDailyPrices(url, response);
@@ -194,6 +195,68 @@ async function searchInstruments(url, response) {
     );
   });
   return sendJson(response, { instruments: matches.slice(0, 20), universes: marketUniverses });
+}
+
+async function lookupInstrumentWithLatestPrice(url, response) {
+  const rawQuery = String(url.searchParams.get("query") || "").trim();
+  const query = normalizeQuery(rawQuery);
+  if (!query) return sendError(response, 400, "validation_error", "资产代码或名称不能为空", { query: "资产代码或名称不能为空" });
+
+  const instruments = await loadSearchInstruments();
+  let instrument = bestInstrumentMatch(instruments, query);
+  let addedToRegistry = false;
+  if (!instrument) {
+    const inferred = inferInstrumentFromSymbol(rawQuery);
+    if (!inferred) return sendJson(response, { instrument: null, price: null, addedToRegistry: false, status: "not_found" });
+    instrument = await upsertStoredInstrumentRegistry({
+      ...inferred,
+      source: "录入时按代码搜索发现",
+      status: "active",
+      marketDataSupported: true
+    });
+    addedToRegistry = true;
+  }
+
+  const syncAsset = normalizeAsset({
+    id: `draft-${instrument.market || "UNKNOWN"}-${instrument.symbol}`,
+    name: instrument.name || instrument.symbol,
+    symbol: instrument.symbol,
+    type: instrument.type || "股票",
+    market: instrument.market,
+    account: "录入草稿",
+    currency: instrument.currency || "USD",
+    quantity: "1",
+    costPrice: "0",
+    currentPrice: "0",
+    fxRate: instrument.currency === "HKD" ? "0.1280" : instrument.currency === "CNY" ? "0.1460" : "1"
+  });
+  let syncResult = null;
+  try {
+    syncResult = await runDailyMarketDataSync({
+      symbols: [instrument.symbol],
+      assets: [syncAsset],
+      days: Number(url.searchParams.get("days") || 7),
+      includeBenchmarks: false
+    }, "draft_lookup");
+  } catch (error) {
+    const message = errorMessage(error, "抓取失败");
+    return sendJson(response, { instrument, price: null, addedToRegistry, status: "fetch_failed", message }, 202);
+  }
+
+  const result = (syncResult.results || []).find((item) => String(item.symbol || "").toUpperCase() === String(instrument.symbol || "").toUpperCase());
+  const price = result?.status === "synced" ? result.after : null;
+  return sendJson(response, {
+    instrument,
+    price,
+    addedToRegistry,
+    status: price ? "synced" : "missing",
+    message: result?.message || "",
+    fetch: syncResult.fetch?.run ? {
+      id: syncResult.fetch.run.id,
+      status: syncResult.fetch.run.status,
+      failureCount: syncResult.fetch.run.failureCount
+    } : null
+  }, 202);
 }
 
 function listPositions(url, response) {
@@ -829,9 +892,11 @@ async function findInstrument(symbol) {
 }
 
 async function loadSearchInstruments() {
+  const registryRows = await readJsonArray(path.join(marketStorageDir, "instrument-registry.json"));
   const rows = await readJsonArray(path.join(marketStorageDir, "index-constituents.json"));
   const activeRows = rows.filter((row) => !row.effectiveTo);
   return dedupeInstruments([
+    ...registryRows.map(normalizeSearchInstrument).filter(Boolean),
     ...securityWhitelist,
     ...activeRows.map((row) => ({
       symbol: row.symbol,
@@ -844,6 +909,91 @@ async function loadSearchInstruments() {
       source: row.source
     }))
   ]);
+}
+
+function normalizeSearchInstrument(row) {
+  const symbol = String(row?.symbol || "").trim().toUpperCase();
+  if (!symbol) return null;
+  return {
+    id: row.id || [row.market, row.type, symbol].filter(Boolean).join(":"),
+    symbol,
+    name: String(row.name || symbol).trim(),
+    type: String(row.type || "股票").trim(),
+    universe: row.universe || "",
+    market: String(row.market || inferMarket(row)).trim().toUpperCase(),
+    exchange: row.exchange || "",
+    currency: String(row.currency || "USD").trim().toUpperCase(),
+    aliases: Array.isArray(row.aliases) ? row.aliases : [],
+    source: row.source || row.dataSource || "",
+    dataSource: row.dataSource || row.source || "",
+    marketDataSupported: row.marketDataSupported !== false
+  };
+}
+
+function bestInstrumentMatch(instruments, normalizedQuery) {
+  return instruments
+    .map((item) => ({ item, score: scoreInstrumentSearchMatch(item, normalizedQuery) }))
+    .filter((match) => match.score > 0)
+    .sort((left, right) => (
+      right.score - left.score ||
+      marketSearchPriority(left.item) - marketSearchPriority(right.item) ||
+      `${left.item.market}:${left.item.symbol}:${left.item.name}`.localeCompare(`${right.item.market}:${right.item.symbol}:${right.item.name}`, "zh-CN")
+    ))
+    .map((match) => match.item)[0] || null;
+}
+
+function scoreInstrumentSearchMatch(item, normalizedQuery) {
+  const symbol = normalizeQuery(item.symbol);
+  const name = normalizeQuery(item.name);
+  const aliases = Array.isArray(item.aliases) ? item.aliases.map(normalizeQuery) : [];
+  if (symbol === normalizedQuery) return 1000;
+  if (name === normalizedQuery) return 900;
+  if (aliases.some((alias) => alias === normalizedQuery)) return 850;
+  if (symbol.startsWith(normalizedQuery)) return 700 - Math.abs(symbol.length - normalizedQuery.length);
+  if (normalizedQuery.length < 2) return 0;
+  if (name.includes(normalizedQuery)) return 600 - Math.abs(name.length - normalizedQuery.length);
+  if (aliases.some((alias) => alias.includes(normalizedQuery))) return 500;
+  return 0;
+}
+
+function marketSearchPriority(item) {
+  return {
+    CN: 1,
+    HK: 2,
+    WEB3: 3,
+    METAL: 4,
+    US: 5,
+    CASH: 6,
+    OTHER: 7
+  }[String(item?.market || "").toUpperCase()] || 9;
+}
+
+async function upsertStoredInstrumentRegistry(instrument) {
+  const file = path.join(marketStorageDir, "instrument-registry.json");
+  const rows = await readJsonArray(file);
+  const normalized = {
+    id: instrument.id || [instrument.market, instrument.type, instrument.symbol].filter(Boolean).join(":"),
+    symbol: String(instrument.symbol || "").trim().toUpperCase(),
+    name: String(instrument.name || instrument.symbol || "").trim(),
+    market: String(instrument.market || inferMarket(instrument)).trim().toUpperCase(),
+    exchange: instrument.exchange || "",
+    type: String(instrument.type || "股票").trim(),
+    currency: String(instrument.currency || "USD").trim().toUpperCase(),
+    aliases: [...new Set([instrument.symbol, instrument.name, ...(instrument.aliases || [])].filter(Boolean).map(String))],
+    status: instrument.status || "active",
+    universe: instrument.universe || "",
+    marketDataSupported: instrument.marketDataSupported !== false,
+    dataSource: instrument.dataSource || instrument.source || "录入时按代码搜索发现",
+    sourceUpdatedAt: todayIsoDate(),
+    updatedAt: new Date().toISOString()
+  };
+  const key = `${normalized.market}:${normalized.symbol}`;
+  const nextRows = rows.filter((row) => `${String(row.market || "").toUpperCase()}:${String(row.symbol || "").toUpperCase()}` !== key);
+  nextRows.push(normalized);
+  nextRows.sort((left, right) => `${left.market}:${left.symbol}`.localeCompare(`${right.market}:${right.symbol}`));
+  await writeJson(file, nextRows);
+  state.auditLogs.push(audit("upsert_instrument_registry", "instrument", key, normalized));
+  return normalizeSearchInstrument(normalized);
 }
 
 function dedupeInstruments(instruments) {

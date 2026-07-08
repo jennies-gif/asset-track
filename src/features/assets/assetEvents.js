@@ -4,6 +4,7 @@ import {
   applyAssetQuickMatch,
   applyCashAssetFormMode,
   applyExistingAccountType,
+  queueDraftMarketLookup,
   editAsset,
   handleAccountTypeChange,
   requestHideAssetFormPanel,
@@ -41,6 +42,17 @@ export function initAssetEvents(ctx) {
     updateAssetLiveSummary();
     updateTransactionLiveSummary();
   });
+  elements.assetForm.elements.currentPrice?.addEventListener("input", () => {
+    delete elements.assetForm.dataset.autoDraftPrice;
+    if (elements.assetForm.elements.priceStatus?.value === "synced") elements.assetForm.elements.priceStatus.value = "manual";
+    if (elements.assetForm.elements.priceSource && elements.assetForm.elements.currentPrice.value.trim()) {
+      elements.assetForm.elements.priceSource.value = "用户录入";
+    }
+    if (elements.assetForm.elements.pricedAt) elements.assetForm.elements.pricedAt.value = "";
+  });
+  elements.assetForm.elements.costPrice?.addEventListener("input", () => {
+    delete elements.assetForm.dataset.autoDraftPrice;
+  });
   elements.assetForm.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
     toggle.addEventListener("change", () => {
       syncOptionalEntryPanels();
@@ -51,14 +63,22 @@ export function initAssetEvents(ctx) {
     applyAssetQuickMatch();
     updateAssetMatchPanel();
     updateAssetLiveSummary();
+    queueDraftMarketLookup();
   });
-  elements.assetForm.elements.name?.addEventListener("input", updateAssetMatchPanel);
+  elements.assetForm.elements.name?.addEventListener("input", () => {
+    updateAssetMatchPanel();
+    queueDraftMarketLookup();
+  });
   elements.assetForm.elements.symbol?.addEventListener("change", () => {
     applyAssetQuickMatch();
     updateAssetMatchPanel();
     updateAssetLiveSummary();
+    queueDraftMarketLookup();
   });
-  elements.assetForm.elements.symbol?.addEventListener("input", updateAssetMatchPanel);
+  elements.assetForm.elements.symbol?.addEventListener("input", () => {
+    updateAssetMatchPanel();
+    queueDraftMarketLookup();
+  });
   elements.assetMatchPanel?.addEventListener("pointerdown", (event) => {
     const button = event.target.closest("[data-asset-match-index]");
     if (!button) return;

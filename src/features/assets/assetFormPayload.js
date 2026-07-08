@@ -41,9 +41,11 @@ export function buildAssetFormPayload(existingAsset) {
   }
   const fxRate = form.fxRate || existingAsset?.fxRate || defaultAssetFxRate(form.currency);
   const hasManualPrice = String(form.currentPrice || "").trim() !== "";
+  const explicitPriceStatus = String(form.priceStatus || "").trim();
+  const hasSyncedDraftPrice = explicitPriceStatus === "synced" && String(form.priceSource || "").trim() && String(form.pricedAt || "").trim();
   const hasCostPrice = Number(String(form.costPrice || existingAsset?.costPrice || "0").trim()) > 0;
   const hasExistingPrice = Boolean(existingAsset?.currentPrice && existingAsset?.priceStatus !== "pending");
-  const priceStatus = hasManualPrice ? "manual" : hasExistingPrice ? existingAsset.priceStatus || "manual" : hasCostPrice ? "pending" : "missing";
+  const priceStatus = hasSyncedDraftPrice ? "synced" : hasManualPrice ? "manual" : hasExistingPrice ? existingAsset.priceStatus || "manual" : hasCostPrice ? "pending" : "missing";
   return {
     ...form,
     costPrice: form.costPrice || existingAsset?.costPrice || "0",
@@ -58,8 +60,8 @@ export function buildAssetFormPayload(existingAsset) {
     fees: form.fees || existingAsset?.fees || "0",
     taxes: form.taxes || existingAsset?.taxes || "0",
     manualAdjustment: form.manualAdjustment || existingAsset?.manualAdjustment || "0",
-    pricedAt: form.pricedAt || (hasManualPrice ? todayIsoDate() : existingAsset?.pricedAt || ""),
-    priceSource: form.priceSource || (hasManualPrice ? "用户录入" : existingAsset?.priceSource || "")
+    pricedAt: hasSyncedDraftPrice ? form.pricedAt : form.pricedAt || (hasManualPrice ? todayIsoDate() : existingAsset?.pricedAt || ""),
+    priceSource: hasSyncedDraftPrice ? form.priceSource : form.priceSource || (hasManualPrice ? "用户录入" : existingAsset?.priceSource || "")
   };
 }
 

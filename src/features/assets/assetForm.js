@@ -12,6 +12,9 @@ import { clearAssetFieldErrors, humanizeAssetError, setTransactionFieldError, va
 let ctx = {};
 let assetMatchCandidates = [];
 let suppressNextMatchPanel = false;
+let draftMarketLookupTimer = 0;
+let draftMarketLookupRequest = 0;
+let draftMarketLookupQuery = "";
 
 export function configureAssetForm(context) {
   ctx = context;
@@ -110,6 +113,9 @@ export function submitAssetForm() {
 }
 
 export function setDefaultAssetFormValues() {
+  delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
+  resetDraftPriceStatus();
   if (ctx.elements.assetForm.elements.currentPrice) ctx.elements.assetForm.elements.currentPrice.value = "";
   if (ctx.elements.assetForm.elements.previousPrice) ctx.elements.assetForm.elements.previousPrice.value = "";
   if (ctx.elements.assetForm.elements.previousFxRate) ctx.elements.assetForm.elements.previousFxRate.value = "1";
@@ -299,6 +305,17 @@ export function applyAssetQuickMatch() {
   selectAssetMatch(match, query);
 }
 
+export function queueDraftMarketLookup() {
+  const form = ctx.elements.assetForm;
+  if (!form || isTransactionMode()) return;
+  const query = String(form.elements.symbol?.value || form.elements.name?.value || "").trim();
+  clearTimeout(draftMarketLookupTimer);
+  if (!query || query.length < 2 || form.elements.type?.value === "现金") return;
+  draftMarketLookupTimer = setTimeout(() => {
+    lookupDraftMarketPrice(query);
+  }, 700);
+}
+
 export function selectAssetMatchByIndex(index, options = {}) {
   const match = assetMatchCandidates[Number(index)];
   if (!match) return;
@@ -332,6 +349,84 @@ function selectAssetMatch(match, query, options = {}) {
   }
   setAssetMatchHiddenFields(match, "matched");
   applyCashAssetFormMode();
+  if (!options.skipLookup) queueDraftMarketLookup();
+}
+
+async function lookupDraftMarketPrice(query) {
+  const form = ctx.elements.assetForm;
+  if (!ctx.marketApiBaseUrl || !form || isTransactionMode()) return;
+  const requestId = ++draftMarketLookupRequest;
+  draftMarketLookupQuery = query;
+  setDraftPriceStatus("loading", "正在查询行情...");
+  try {
+    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error(await readDraftLookupError(response));
+    const payload = await response.json();
+    if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== query) return;
+    applyDraftLookupPayload(payload, query);
+  } catch (error) {
+    if (requestId !== draftMarketLookupRequest) return;
+    setDraftPriceStatus("error", error instanceof Error ? error.message : "行情查询失败");
+  }
+}
+
+async function readDraftLookupError(response) {
+  try {
+    const payload = await response.clone().json();
+    return payload?.message || `行情 API 返回 ${response.status}`;
+  } catch {
+    return `行情 API 返回 ${response.status}`;
+  }
+}
+
+function applyDraftLookupPayload(payload, query) {
+  const form = ctx.elements.assetForm;
+  const instrument = payload?.instrument;
+  const price = payload?.price;
+  if (instrument) {
+    selectAssetMatch(instrument, query, { skipLookup: true });
+  }
+  if (!price?.currentPrice) {
+    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用当前价格，可手动填写。");
+    return;
+  }
+  const currentPriceField = form.elements.currentPrice;
+  const costPriceField = form.elements.costPrice;
+  const previousPriceField = form.elements.previousPrice;
+  const previousAutoPrice = form.dataset.autoDraftPrice || "";
+  const nextPrice = String(price.currentPrice || "").trim();
+  const canFillCurrentPrice = !currentPriceField?.value.trim() || currentPriceField.value.trim() === previousAutoPrice;
+  const canFillCostPrice = !costPriceField?.value.trim() || costPriceField.value.trim() === previousAutoPrice;
+  const didFillCurrentPrice = canFillCurrentPrice && currentPriceField;
+  if (didFillCurrentPrice) currentPriceField.value = nextPrice;
+  if (canFillCostPrice && costPriceField) costPriceField.value = nextPrice;
+  if (previousPriceField && !previousPriceField.value.trim() && price.previousPrice) previousPriceField.value = price.previousPrice;
+  form.dataset.autoDraftPrice = nextPrice;
+  form.dataset.autoDraftPriceQuery = query;
+  if (didFillCurrentPrice) {
+    if (form.elements.priceSource) form.elements.priceSource.value = price.priceSource || "";
+    if (form.elements.pricedAt) form.elements.pricedAt.value = price.pricedAt || "";
+    if (form.elements.priceStatus) form.elements.priceStatus.value = "synced";
+    setDraftPriceStatus("synced", `已带入 ${price.pricedAt || "最新"} 当前价格，可直接修改。`);
+  } else {
+    setDraftPriceStatus("synced", `已查到 ${price.pricedAt || "最新"} 当前价格，已保留你手动填写的价格。`);
+  }
+  updateAssetLiveSummary();
+}
+
+function setDraftPriceStatus(status, message) {
+  const form = ctx.elements.assetForm;
+  const help = form?.querySelector("[data-price-fallback]");
+  if (!help) return;
+  help.dataset.lookupStatus = status;
+  help.textContent = message || "成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。";
+}
+
+function resetDraftPriceStatus() {
+  const help = ctx.elements.assetForm?.querySelector("[data-price-fallback]");
+  if (!help) return;
+  delete help.dataset.lookupStatus;
+  help.textContent = "成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。";
 }
 
 function assetSearchQuery() {
@@ -622,6 +717,9 @@ function isAssetFormDirty() {
 }
 
 function fillAssetForm(asset) {
+  delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
+  resetDraftPriceStatus();
   for (const field of [
     "name",
     "symbol",
@@ -668,6 +766,10 @@ function fillAssetForm(asset) {
 }
 
 export function resetAssetFormMode(mode = "create") {
+  clearTimeout(draftMarketLookupTimer);
+  draftMarketLookupQuery = "";
+  delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   delete ctx.elements.assetForm.dataset.editingId;
   delete ctx.elements.assetForm.dataset.closingId;
   delete ctx.elements.assetForm.dataset.sellingId;

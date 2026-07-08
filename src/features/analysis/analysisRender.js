@@ -182,20 +182,42 @@ function renderAnalysisJudgement(analysis, dataIssues) {
   const riskHigh = analysis.exposure.highRiskBps >= 3000n || analysis.drawdown.maxDrawdownBps <= -1500n || analysis.concentration.status === "high";
   const qualityOkay = analysis.realReturnBps >= 0n || analysis.investmentResultCents >= 0n;
   analysisElements.analysisJudgementTitle.textContent = riskHigh
-    ? `风险与收益结论：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
-    : `风险与收益结论：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`;
+    ? `AI 诊断看板：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
+    : `AI 诊断看板：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`;
   const cryptoBps = analysis.exposure.digitalBps;
   const cashBps = analysis.exposure.cashBps;
   const topDriver = topVolatileDriver(analysis);
   const yearChange = calculateTrendValueChangeForRange("ytd");
   const items = [
-    `数字资产占比 ${formatShare(cryptoBps)}，${cryptoBps >= 500n ? "高于稳健参考值" : "处于较低水平"}。`,
-    `最大回撤 ${formatPercent(analysis.drawdown.maxDrawdownBps)}，组合${analysis.drawdown.maxDrawdownBps <= -1500n ? "波动较大" : "回撤仍在可观察范围"}。`,
-    `今年收益${yearChange !== null && yearChange >= 0n ? "为正" : "仍需观察"}，${topDriver ? `主要受 ${topDriver} 等高波动资产影响` : "需要结合资产结构继续拆解"}。`,
-    `现金占比 ${formatShare(cashBps)}，${cashBps >= 2000n ? "仍有防守和再配置空间" : "防守缓冲相对有限"}。`
+    {
+      tone: cryptoBps >= 500n ? "warning" : "ok",
+      text: `数字资产占比 ${formatShare(cryptoBps)}，${cryptoBps >= 500n ? "高于稳健参考值" : "处于较低水平"}。`
+    },
+    {
+      tone: analysis.drawdown.maxDrawdownBps <= -1500n ? "warning" : "ok",
+      text: `最大回撤 ${formatPercent(analysis.drawdown.maxDrawdownBps)}，组合${analysis.drawdown.maxDrawdownBps <= -1500n ? "波动较大" : "回撤仍在可观察范围"}。`
+    },
+    {
+      tone: yearChange !== null && yearChange >= 0n ? "ok" : "warning",
+      text: `今年收益${yearChange !== null && yearChange >= 0n ? "为正" : "仍需观察"}，${topDriver ? `主要受 ${topDriver} 等高波动资产影响` : "需要结合资产结构继续拆解"}。`
+    },
+    {
+      tone: cashBps >= 2000n ? "ok" : "warning",
+      text: `现金占比 ${formatShare(cashBps)}，${cashBps >= 2000n ? "仍有防守和再配置空间" : "防守缓冲相对有限"}。`
+    }
   ];
-  if (dataIssues.length) items.push(`仍有 ${dataIssues.length} 项数据待核对，结论需在补齐价格、费用或历史记录后复查。`);
-  analysisElements.analysisJudgementList.innerHTML = items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  if (dataIssues.length) {
+    items.push({
+      tone: "danger",
+      text: `仍有 ${dataIssues.length} 项数据待核对，结论需在补齐价格、费用或历史记录后复查。`
+    });
+  }
+  analysisElements.analysisJudgementList.innerHTML = items.map((item) => `
+    <li class="analysis-diagnosis-item is-${escapeHtml(item.tone)}">
+      <span class="analysis-diagnosis-icon" aria-hidden="true">${item.tone === "ok" ? "✅" : item.tone === "danger" ? "🔴" : "⚠️"}</span>
+      <span>${escapeHtml(item.text)}</span>
+    </li>
+  `).join("");
 }
 
 function topVolatileDriver(analysis) {
@@ -264,14 +286,14 @@ function renderAttributionWaterfall(analysis, startValueCents, endValueCents) {
   const income = (itemByKey.get("income") || 0n);
   const fees = (itemByKey.get("fees") || 0n) + (itemByKey.get("taxes") || 0n);
   const rows = [
-    { key: "start", label: "起点资产", amount: startValueCents, type: "total" },
-    { key: "contribution", label: "净投入", amount: itemByKey.get("contribution") || 0n },
+    { key: "start", label: "起点资产", amount: startValueCents, type: "total", semantic: "neutral" },
+    { key: "contribution", label: "净投入", amount: itemByKey.get("contribution") || 0n, semantic: "neutral" },
     { key: "price", label: "价格变动", amount: itemByKey.get("price") || 0n },
     { key: "fx", label: "汇率影响", amount: itemByKey.get("fx") || 0n },
     { key: "income", label: "分红", amount: income },
-    { key: "fees", label: "手续费", amount: fees },
+    { key: "fees", label: "手续费", amount: fees, semantic: "negative" },
     { key: "unexplained", label: "未归因差异", amount: itemByKey.get("unexplained") || 0n },
-    { key: "end", label: "当前资产", amount: endValueCents, type: "total" }
+    { key: "end", label: "当前资产", amount: endValueCents, type: "total", semantic: "neutral" }
   ];
   const maxAmount = rows.reduce((max, row) => {
     const value = row.type === "total" ? absBigInt(row.amount) : absBigInt(row.amount);
@@ -280,8 +302,9 @@ function renderAttributionWaterfall(analysis, startValueCents, endValueCents) {
   analysisElements.analysisCashflowChart.innerHTML = `${chartSourceLine("录入计算", "基于用户录入的期初价、当前价、汇率、现金流、费用和税费拆解。未补字段会进入未归因差异。", "positive")}${rows.map((row) => {
     const width = Math.max(4, Number((absBigInt(row.amount) * 10000n) / maxAmount) / 100);
     const tone = row.type === "total" ? "total" : row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "muted";
+    const semanticTone = row.semantic || (row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "neutral");
     return `
-      <div class="waterfall-row ${tone}">
+      <div class="waterfall-row ${tone} semantic-${semanticTone}">
         <span>${escapeHtml(row.label)}</span>
         <div class="waterfall-track"><i style="width:${width.toFixed(2)}%"></i></div>
         <strong class="${row.type === "total" ? "" : toneClassForValue(row.amount)}">${escapeHtml(row.type === "total" ? formatDisplayCurrency(row.amount) : formatSignedCurrency(row.amount))}</strong>
@@ -411,14 +434,20 @@ function ensureAnalysisBenchmarkDataLoaded() {
 
 function renderAnalysisBenchmarkSelector() {
   if (!analysisElements.analysisBenchmarkSelector) return;
-  const selected = new Set(ctx.getSelectedBenchmarkKeys());
+  const selectedKeys = ctx.getSelectedBenchmarkKeys();
+  const selected = new Set(selectedKeys);
   analysisElements.analysisBenchmarkSelector.innerHTML = benchmarkInstruments
-    .map((benchmark) => `
+    .map((benchmark) => {
+      const selectedIndex = selectedKeys.indexOf(benchmark.key);
+      const legendClass = selectedIndex >= 0 ? `benchmark-series-${selectedIndex + 2}` : "benchmark-series-muted";
+      return `
       <label class="benchmark-option ${selected.has(benchmark.key) ? "is-selected" : ""}">
         <input type="checkbox" value="${escapeHtml(benchmark.key)}" ${selected.has(benchmark.key) ? "checked" : ""}>
+        <i class="benchmark-option-line ${escapeHtml(legendClass)}" aria-hidden="true"></i>
         <span>${escapeHtml(benchmark.label)}</span>
       </label>
-    `)
+    `;
+    })
     .join("");
 }
 
@@ -439,25 +468,28 @@ function buildComparableBenchmarkSeries(trendPoints) {
       .map((point) => ({ date: point.date, value: Number(point.close) }))
       .filter((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value > 0)
   }));
-  const availableSeries = [
+  const rawSeries = [
     { label: "我的组合", points: portfolioRawPoints },
     ...benchmarkRawSeries
-  ].filter((series) => series.points.length >= 2);
-  if (!availableSeries.length) return [];
+  ].map((series) => ({
+    ...series,
+    points: [...series.points].sort((left, right) => left.date.localeCompare(right.date))
+  }));
+  const availableSeries = rawSeries.filter((series) => series.points.length >= 2);
+  if (!availableSeries.length) return rawSeries.map((series) => ({ label: series.label, points: [] }));
 
-  const commonStart = availableSeries.reduce(
-    (current, series) => series.points[0].date > current ? series.points[0].date : current,
-    availableSeries[0].points[0].date
-  );
-  const commonEnd = availableSeries.reduce(
-    (current, series) => series.points.at(-1).date < current ? series.points.at(-1).date : current,
-    availableSeries[0].points.at(-1).date
-  );
-  if (commonStart >= commonEnd) return [];
+  const portfolioSeries = rawSeries[0];
+  const hasPortfolioWindow = portfolioSeries.points.length >= 2;
+  const windowStart = hasPortfolioWindow
+    ? portfolioSeries.points[0].date
+    : availableSeries.reduce((current, series) => series.points[0].date < current ? series.points[0].date : current, availableSeries[0].points[0].date);
+  const windowEnd = hasPortfolioWindow
+    ? portfolioSeries.points.at(-1).date
+    : availableSeries.reduce((current, series) => series.points.at(-1).date > current ? series.points.at(-1).date : current, availableSeries[0].points.at(-1).date);
 
-  return availableSeries.map((series) => ({
+  return rawSeries.map((series) => ({
     label: series.label,
-    points: normalizedReturnPoints(series.points, commonStart, commonEnd)
+    points: normalizedReturnPoints(series.points, windowStart, windowEnd)
   }));
 }
 
@@ -496,13 +528,18 @@ function renderAnalysisDataTrust(analysis, dataIssues) {
   );
   const issueSummary = summarizeAnalysisIssues(dataIssues);
   if (!dataIssues.length && unexplained === 0n) {
-    analysisElements.analysisRiskNote.innerHTML = `${trustBadge("关键数据完整", "positive")} ${trustBadge(`上次更新：${latestOverviewUpdateLabel()}`)} ${trustBadge(fxRateSummary())} <span>仅供记录与复盘，不构成投资建议。</span>`;
+    analysisElements.analysisRiskNote.innerHTML = `
+      <span class="analysis-audit-badge is-ok">关键数据完整</span>
+      <span class="analysis-audit-badge">上次更新：${escapeHtml(latestOverviewUpdateLabel())}</span>
+      <span class="analysis-audit-badge">${escapeHtml(fxRateSummary())}</span>
+      <span>仅供记录与复盘，不构成投资建议。</span>
+    `;
     return;
   }
   analysisElements.analysisRiskNote.innerHTML = `
-    <strong>${escapeHtml(dataIssues.length ? `${dataIssues.length} 项数据待核对` : "存在未归因差异")}</strong>
+    <span class="analysis-audit-badge is-warning">${escapeHtml(dataIssues.length ? `${dataIssues.length} 项待核对` : "存在未归因差异")}</span>
     <span>${issueSummary ? escapeHtml(issueSummary) : `未归因差异 ${escapeHtml(formatSignedCurrency(unexplained))}，建议核对期初价格、当前价格、汇率和费用。`}</span>
-    <span class="analysis-trust-inline">${trustBadge("仅供记录与复盘")} ${trustBadge(fxRateSummary())}</span>
+    <span class="analysis-trust-inline"><span class="analysis-audit-badge">仅供记录与复盘</span><span class="analysis-audit-badge">${escapeHtml(fxRateSummary())}</span></span>
   `;
 }
 
@@ -716,7 +753,7 @@ function renderAnalysisContributionRows(portfolio) {
               </td>
               <td class="${changeClass}">${formatDisplayCurrency(row.changeCents)}</td>
               <td>${formatShare(row.weightBps)}</td>
-              <td><span class="status-pill ${row.status === "完整" ? "" : "warning"}">${escapeHtml(row.status)}</span></td>
+              <td><span class="analysis-table-status ${row.status === "完整" ? "is-ok" : "is-warning"}">${escapeHtml(row.status)}</span></td>
             </tr>
           `;
         })
