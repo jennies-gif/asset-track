@@ -25,24 +25,55 @@
         <button class="primary-button header-add-button" data-tab="assets" type="button">新增记录</button>
         <div class="auth">
           <button class="avatar-button" id="auth-button" type="button" aria-expanded="false" aria-label="用户菜单">用户</button>
-          <form class="settings-panel auth-panel is-hidden" id="auth-panel">
-            <div class="user-menu-actions">
-              <button class="settings-button menu-settings-button" id="settings-button" type="button" aria-expanded="false">设置</button>
+          <form class="auth-dialog is-hidden" id="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <div class="auth-card">
+              <button class="auth-close-button" id="auth-close-button" type="button" aria-label="关闭登录窗口">×</button>
+              <img class="auth-logo" src="/public/icon.svg" alt="">
+              <h2 id="auth-title">欢迎回来</h2>
+              <p class="auth-intro" id="auth-intro">登录资产轨迹，继续记录、分析和复盘你的资产。</p>
+
+              <div class="auth-provider-list" aria-label="第三方登录">
+                <button class="auth-provider-button" data-auth-provider="google" type="button">
+                  <span class="auth-provider-icon auth-provider-icon-google" aria-hidden="true">G</span>
+                  <span>使用 Google 继续</span>
+                </button>
+                <button class="auth-provider-button" data-auth-provider="apple" type="button">
+                  <span class="auth-provider-icon auth-provider-icon-apple" aria-hidden="true"></span>
+                  <span>使用 Apple 继续</span>
+                </button>
+              </div>
+
+              <div class="auth-divider"><span>或</span></div>
+
+              <label class="auth-field">邮箱地址 *
+                <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="you@example.com">
+              </label>
+              <label class="auth-field auth-password-field">密码 *
+                <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" placeholder="至少 8 位">
+                <button class="auth-password-toggle" id="auth-password-toggle" type="button" aria-label="显示密码"></button>
+              </label>
+              <label class="auth-field auth-name-field is-hidden" id="auth-name-field">昵称
+                <input id="auth-name" name="name" autocomplete="name" placeholder="注册时可选">
+              </label>
+
+              <button class="auth-link-button" id="auth-reset-button" type="button">重置密码</button>
+              <button class="primary-button auth-submit-button" id="auth-submit-button" data-auth-action="login" type="submit">继续登录</button>
+
+              <p class="auth-switch-copy">
+                <span id="auth-switch-copy">还没有账号？</span>
+                <button class="auth-link-button" id="auth-mode-toggle" type="button">创建账号</button>
+              </p>
+              <p class="form-status auth-status" id="auth-status" role="status"></p>
+              <p class="data-source">账号由 Supabase Auth 处理；当前资产和复盘仍保存在本机浏览器，尚未云同步。</p>
             </div>
-            <label>
-              邮箱
-              <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="you@example.com">
-            </label>
-            <label>
-              昵称
-              <input id="auth-name" name="name" autocomplete="name" placeholder="仅本地展示">
-            </label>
-            <button class="primary-button" type="submit">进入</button>
-            <p class="data-source">当前版本使用浏览器本地身份，不会上传账户数据。</p>
           </form>
+          <div class="auth-user-menu is-hidden" id="auth-user-menu">
+            <button class="settings-button auth-logout-button" id="auth-logout-button" type="button">退出登录</button>
+          </div>
         </div>
         <div class="settings">
-        <form class="settings-panel is-hidden" id="settings-panel">
+          <button class="settings-button" id="settings-button" type="button" aria-expanded="false">设置</button>
+          <form class="settings-panel is-hidden" id="settings-panel">
           <label>
             计价货币
             <select id="setting-currency">
