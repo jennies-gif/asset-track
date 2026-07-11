@@ -5,17 +5,27 @@ import test from "node:test";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 
-test("settings event elements exist in the static app markup", async () => {
-  const [indexSource, elementsSource] = await Promise.all([
-    readFile(resolve(projectRoot, "index.html"), "utf8"),
-    readFile(resolve(projectRoot, "src/features/settings/settingsElements.js"), "utf8")
-  ]);
-  const requiredIds = [...elementsSource.matchAll(/document\.querySelector\("#([^"]+)"\)/gu)]
-    .map(([, id]) => id);
+const requiredElementSources = [
+  "src/features/settings/settingsElements.js",
+  "src/features/home/homeElements.js",
+  "src/features/analysis/analysisElements.js",
+  "src/features/importExport/importExportElements.js",
+  "src/features/feedback/feedbackEvents.js"
+];
 
-  assert.ok(requiredIds.length > 0, "expected settings element IDs to be declared");
+test("core static app modules have unique DOM targets in index.html", async () => {
+  const [indexSource, ...elementSources] = await Promise.all([
+    readFile(resolve(projectRoot, "index.html"), "utf8"),
+    ...requiredElementSources.map((file) => readFile(resolve(projectRoot, file), "utf8"))
+  ]);
+  const requiredIds = [...new Set(elementSources.flatMap((source) =>
+    [...source.matchAll(/document\.querySelector\("#([^"]+)"\)/gu)].map(([, id]) => id)
+  ))];
+
+  assert.ok(requiredIds.length > 0, "expected core module element IDs to be declared");
   for (const id of requiredIds) {
-    assert.match(indexSource, new RegExp(`id=["']${escapeRegExp(id)}["']`, "u"), `index.html is missing #${id}`);
+    const matches = indexSource.match(new RegExp(`id=["']${escapeRegExp(id)}["']`, "gu")) || [];
+    assert.equal(matches.length, 1, `index.html must contain exactly one #${id}; found ${matches.length}`);
   }
 });
 

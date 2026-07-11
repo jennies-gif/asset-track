@@ -7,16 +7,23 @@
     <link rel="icon" href="/public/icon.svg?v=2" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/public/icon.svg?v=2">
     <link rel="stylesheet" href="/src/styles/app.css">
+    <script src="/public/runtime-config.js"></script>
   </head>
   <body>
     <header class="top-nav">
-      <a class="brand" href="#" data-tab="home" aria-label="返回首页">
-        <img class="brand-icon" src="/public/icon.svg" alt="">
-        <span class="brand-copy">
-          <strong>资产轨迹</strong>
-          <small>一款面向个人投资者的资产记录和投资复盘工具</small>
-        </span>
-      </a>
+      <div class="navbar-left">
+        <a class="brand" href="#" data-tab="home" aria-label="返回首页">
+          <img class="brand-icon" src="/public/icon.svg" alt="">
+          <span class="brand-copy">
+            <strong>资产轨迹</strong>
+          </span>
+        </a>
+        <span class="navbar-page-title" id="navbar-page-title">资产总览</span>
+      </div>
+      <form class="navbar-search" role="search">
+        <label class="sr-only" for="global-search">全局搜索</label>
+        <input id="global-search" type="search" placeholder="搜索资产、交易、复盘" autocomplete="off">
+      </form>
       <div class="header-actions">
         <div class="market-sync-header">
           <button class="settings-button sync-price-button" id="sync-market-data-button" type="button">同步价格</button>
@@ -33,13 +40,13 @@
               <p class="auth-intro" id="auth-intro">登录资产轨迹，继续记录、分析和复盘你的资产。</p>
 
               <div class="auth-provider-list" aria-label="第三方登录">
-                <button class="auth-provider-button" data-auth-provider="google" type="button">
+                <button class="auth-provider-button auth-provider-button-unavailable" data-auth-provider="google" type="button" aria-disabled="true">
                   <span class="auth-provider-icon auth-provider-icon-google" aria-hidden="true">G</span>
-                  <span>使用 Google 继续</span>
+                  <span>Google 登录暂未接入</span>
                 </button>
-                <button class="auth-provider-button" data-auth-provider="apple" type="button">
+                <button class="auth-provider-button auth-provider-button-unavailable" data-auth-provider="apple" type="button" aria-disabled="true">
                   <span class="auth-provider-icon auth-provider-icon-apple" aria-hidden="true"></span>
-                  <span>使用 Apple 继续</span>
+                  <span>Apple 登录暂未接入</span>
                 </button>
               </div>
 
@@ -74,50 +81,37 @@
         <div class="settings">
           <button class="settings-button" id="settings-button" type="button" aria-expanded="false">设置</button>
           <form class="settings-panel is-hidden" id="settings-panel">
-          <label>
-            计价货币
-            <select id="setting-currency">
-              <option value="CNY">人民币 CNY</option>
-              <option value="USD">美元 USD</option>
-              <option value="HKD">港币 HKD</option>
-            </select>
-          </label>
-          <label>
-            美元/人民币汇率
-            <input id="setting-usd-cny-rate" inputmode="decimal" value="6.85">
-          </label>
-          <label>
-            BTC/美元汇率
-            <input id="setting-btc-usd-rate" inputmode="decimal" value="70000">
-          </label>
-          <label>
-            美元/港币汇率
-            <input id="setting-usd-hkd-rate" inputmode="decimal" value="7.82">
-          </label>
-          <label>
-            语言
-            <select id="setting-language">
-              <option value="zh">中文</option>
-              <option value="en">English</option>
-            </select>
-          </label>
-          <label>
-            全站字体
-            <select id="setting-font">
-              <option value="system">系统默认</option>
-              <option value="serif">衬线字体</option>
-              <option value="mono">等宽字体</option>
-              <option value="rounded" selected>圆润字体</option>
-            </select>
-          </label>
-          <label>
-            主题
-            <select id="setting-theme">
-              <option value="light">白色</option>
-              <option value="dark">黑色</option>
-            </select>
-          </label>
-        </form>
+            <label>计价货币
+              <select id="setting-currency">
+                <option value="CNY">人民币 CNY</option>
+                <option value="USD">美元 USD</option>
+                <option value="HKD">港币 HKD</option>
+              </select>
+            </label>
+            <label>美元/人民币汇率 <input id="setting-usd-cny-rate" inputmode="decimal" value="6.85"></label>
+            <label>BTC/美元汇率 <input id="setting-btc-usd-rate" inputmode="decimal" value="70000"></label>
+            <label>美元/港币汇率 <input id="setting-usd-hkd-rate" inputmode="decimal" value="7.82"></label>
+            <label>语言
+              <select id="setting-language">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>全站字体
+              <select id="setting-font">
+                <option value="system">系统默认</option>
+                <option value="serif">衬线字体</option>
+                <option value="mono">等宽字体</option>
+                <option value="rounded" selected>圆润字体</option>
+              </select>
+            </label>
+            <label>主题
+              <select id="setting-theme">
+                <option value="light">白色</option>
+                <option value="dark">黑色</option>
+              </select>
+            </label>
+          </form>
         </div>
       </div>
     </header>
@@ -128,104 +122,56 @@
           <img class="side-brand-icon" src="/public/icon.svg" alt="">
           <span>资产轨迹</span>
         </a>
-        <button class="side-nav-toggle" id="side-nav-toggle" type="button" aria-label="收起侧边栏" aria-expanded="true">
-          <span></span>
-        </button>
+        <button class="side-nav-toggle" id="side-nav-toggle" type="button" aria-label="收起侧边栏" aria-expanded="true"><span></span></button>
       </div>
       <nav class="tabs">
         <button class="tab is-active" data-tab="home"><span class="tab-icon" aria-hidden="true">⌂</span><span class="tab-label">总览</span></button>
         <button class="tab" data-tab="assets"><span class="tab-icon" aria-hidden="true">▤</span><span class="tab-label">资产</span></button>
         <button class="tab" data-tab="analysis"><span class="tab-icon" aria-hidden="true">↗</span><span class="tab-label">分析</span></button>
-        <button class="tab" data-tab="notes"><span class="tab-icon" aria-hidden="true">✎</span><span class="tab-label">笔记</span></button>
+        <button class="tab" data-tab="notes"><span class="tab-icon" aria-hidden="true">✎</span><span class="tab-label">复盘</span></button>
       </nav>
     </aside>
 
     <main class="app-main shell content-container">
-      <section class="trust-banner" aria-label="数据和风险提示">
-        <p class="privacy-note">本地数据提醒：当前版本的数据保存在你的浏览器本地存储中，不会主动上传到服务器。请定期导出 JSON 备份。</p>
-        <p class="risk-note">风险提示：数据仅供记录和分析，不构成投资建议。</p>
-        <p class="market-data-note">行情说明：可手动同步股票、ETF、贵金属、数字资产和汇率缓存；价格可能延迟或缺失，请以来源与交易确认记录为准。</p>
+      <section class="trust-banner" aria-label="数据状态">
+        <p class="site-status-note">本地保存 · 数据未上传 · 价格可能延迟 · 仅供记录与复盘</p>
       </section>
+
       <section class="panel home-panel is-active" id="home-panel">
         <section class="overview" aria-labelledby="overview-title">
-          <h2 id="overview-title" class="sr-only">资产工作台</h2>
+          <h2 id="overview-title" class="sr-only">资产总览</h2>
           <div class="metrics" id="metrics"></div>
         </section>
-
-        <section class="home-section trend-section" aria-labelledby="trend-title">
-          <div class="panel-heading">
+        <section class="home-section home-data-status-section" aria-label="数据状态">
+          <div class="home-data-status" id="home-data-status"></div>
+        </section>
+        <section class="home-section home-dashboard-section analysis-trend-section" aria-labelledby="home-trend-title">
+          <div class="analysis-card-heading">
             <div>
-              <h2 id="trend-title">总资产变化曲线</h2>
+              <h2 id="home-trend-title">总资产趋势</h2>
+              <p class="section-description">按总览当前账户范围展示资产变化，曲线基于可追踪价格和估值数据生成。</p>
             </div>
-            <form class="date-range" aria-label="总览变化曲线日期范围">
-              <label class="is-hidden">
-                图表指标
-                <select id="trend-metric">
-                  <option value="value">总资产</option>
-                  <option value="return">收益率</option>
-                </select>
-              </label>
-              <label class="is-hidden">
-                时间范围
-                <select id="trend-range">
-                  <option value="day">1日</option>
-                  <option value="1">1月</option>
-                  <option value="3">近3月</option>
-                  <option value="ytd">今年</option>
-                  <option value="12" selected>近一年</option>
-                  <option value="custom">自定义</option>
-                </select>
-              </label>
-              <div class="range-pills" aria-hidden="true">
+            <form class="date-range" aria-label="总资产趋势日期范围">
+              <label class="is-hidden">图表指标 <select id="trend-metric"><option value="value">总资产</option><option value="return">收益率</option></select></label>
+              <label class="is-hidden">时间范围 <select id="trend-range"><option value="day">1日</option><option value="1">1月</option><option value="3">近3月</option><option value="ytd">今年</option><option value="12" selected>近一年</option><option value="custom">自定义</option></select></label>
+              <div class="range-pills" aria-label="趋势时间范围">
                 <button class="range-pill" data-range-value="day" type="button">1日</button>
                 <button class="range-pill" data-range-value="1" type="button">1月</button>
                 <button class="range-pill" data-range-value="3" type="button">近3月</button>
                 <button class="range-pill" data-range-value="ytd" type="button">今年</button>
                 <button class="range-pill" data-range-value="custom" type="button">自定义</button>
               </div>
-              <label class="custom-date">
-                开始日期
-                <input id="trend-start" type="date">
-              </label>
-              <label class="custom-date">
-                结束日期
-                <input id="trend-end" type="date">
-              </label>
+              <label class="custom-date">开始日期 <input id="trend-start" type="date"></label>
+              <label class="custom-date">结束日期 <input id="trend-end" type="date"></label>
             </form>
           </div>
           <div class="trend-chart" id="trend-chart"></div>
         </section>
-
-        <section class="home-section benchmark-section" aria-labelledby="benchmark-title">
+        <section class="home-section allocation-section home-dashboard-section" aria-labelledby="allocation-title">
           <div class="panel-heading">
             <div>
-              <h2 id="benchmark-title">收益表现对比</h2>
-              <p class="section-description">对比我的组合与主要市场基准在不同周期下的收益表现。</p>
-            </div>
-          </div>
-          <div class="benchmark-table-wrap">
-            <table class="benchmark-table">
-              <thead>
-                <tr>
-                  <th>指标</th>
-                  <th>近1月</th>
-                  <th>近3月</th>
-                  <th>今年</th>
-                  <th>累计</th>
-                  <th>年化</th>
-                </tr>
-              </thead>
-              <tbody id="benchmark-rows"></tbody>
-            </table>
-          </div>
-          <p class="empty-state benchmark-empty-state is-hidden" id="benchmark-empty">暂无基准数据。同步或接入基准指数历史价格后，可在这里查看组合与市场基准的收益表现对比。</p>
-        </section>
-
-        <section class="home-section allocation-section" aria-labelledby="allocation-title">
-          <div class="panel-heading">
-            <div>
-              <h2 id="allocation-title">资产配置</h2>
-              <p class="section-description">按类别、市场、账户、币种和风险维度查看组合集中度。</p>
+              <h2 id="allocation-title">资产配置概览</h2>
+              <p class="section-description">展示当前主要配置，复杂收益、归因和风险口径请到“分析”页查看。</p>
             </div>
             <div class="allocation-tabs" role="tablist" aria-label="资产配置维度">
               <button class="allocation-tab is-active" data-allocation-view="type" type="button">类别</button>
@@ -239,660 +185,349 @@
             <div class="allocation-chart" id="category-list"></div>
             <div class="allocation-table-wrap table-wrap">
               <table class="allocation-table">
-                <thead>
-                  <tr>
-                    <th>维度</th>
-                    <th>占比</th>
-                    <th>市值</th>
-                    <th>收益</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>维度</th><th>占比</th><th>市值</th><th>收益</th></tr></thead>
                 <tbody id="market-distribution-list"></tbody>
               </table>
             </div>
           </div>
         </section>
+        <div class="home-dashboard-grid">
+          <section class="home-section home-dashboard-section" aria-labelledby="home-holdings-title">
+            <div class="home-module-heading">
+              <div><h2 id="home-holdings-title">主要持仓</h2><p class="section-description">按当前市值展示前 5 个持仓。</p></div>
+              <button class="text-button" data-home-action="view-assets" type="button">查看全部资产</button>
+            </div>
+            <div class="home-list" id="home-holdings-list"></div>
+          </section>
+          <section class="home-section home-dashboard-section" aria-labelledby="home-transactions-title">
+            <div class="home-module-heading">
+              <div><h2 id="home-transactions-title">最近交易</h2><p class="section-description">最近记录的资产变化。</p></div>
+              <button class="text-button" data-home-action="view-assets" type="button">查看全部交易</button>
+            </div>
+            <div class="home-list" id="home-transactions-list"></div>
+          </section>
+          <section class="home-section home-dashboard-section" aria-labelledby="home-notes-title">
+            <div class="home-module-heading">
+              <div><h2 id="home-notes-title">最近复盘</h2><p class="section-description">沉淀投资判断和交易后的回看。</p></div>
+              <button class="text-button" data-home-action="write-note" type="button">写一条复盘</button>
+            </div>
+            <div class="home-list" id="home-notes-list"></div>
+          </section>
+          <section class="home-section home-dashboard-section" aria-labelledby="home-readiness-title">
+            <div class="home-module-heading">
+              <div><h2 id="home-readiness-title">待补全信息</h2><p class="section-description">完善记录后，收益和配置会更准确。</p></div>
+            </div>
+            <div class="home-checklist" id="home-checklist"></div>
+          </section>
+        </div>
       </section>
 
       <section class="panel" id="assets-panel">
         <div class="panel-heading">
           <div>
             <h2>资产台账</h2>
+            <p class="section-description">添加资产、管理持仓；通过“导入 / 备份数据”恢复或导出 JSON 备份。</p>
           </div>
           <div class="button-row">
             <button class="primary-button" id="open-asset-form" type="button">添加资产</button>
             <button class="secondary-button" id="reset-demo" type="button">恢复示例</button>
             <details class="backup-menu">
-              <summary>备份</summary>
+              <summary>导入 / 备份数据</summary>
               <div class="backup-menu-panel">
-                <p class="backup-note">本地数据建议定期导出 JSON 备份。</p>
-                <div class="backup-actions">
-                  <button class="secondary-button compact-button" id="export-json-button" type="button">导出 JSON</button>
-                  <button class="secondary-button compact-button" id="export-csv-button" type="button">导出 CSV</button>
-                </div>
-                <form class="import-form" id="import-form">
-                  <label>
-                    粘贴 JSON 备份
-                    <textarea id="import-json" rows="4" placeholder="粘贴从本应用导出的 JSON"></textarea>
-                  </label>
-                  <button class="secondary-button compact-button" type="submit">导入</button>
-                  <p class="form-error" id="import-error" role="alert"></p>
-                </form>
+                <section class="backup-card">
+                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↥</span><div><h3>导出与备份</h3><p>当前数据保存在本机浏览器中，建议集中录入后及时导出备份。</p></div></div>
+                  <div class="backup-actions">
+                    <button class="secondary-button backup-action-button" id="export-json-button" type="button">导出 JSON</button>
+                    <button class="secondary-button backup-action-button" id="export-csv-button" type="button">导出 CSV</button>
+                  </div>
+                </section>
+                <section class="backup-card">
+                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↧</span><div><h3>导入备份</h3></div></div>
+                  <form class="import-form" id="import-form">
+                    <p class="backup-risk-note">导入会覆盖当前本地数据，建议先导出备份，并确认文件来自可信来源。</p>
+                    <label><span>粘贴 JSON 备份</span><textarea id="import-json" rows="5" placeholder="请粘贴从本应用导出的 JSON 备份内容"></textarea></label>
+                    <button class="primary-button backup-import-button" type="submit">校验并导入</button>
+                    <p class="form-error" id="import-error" role="alert"></p>
+                    <p class="form-status" id="import-status" role="status"></p>
+                  </form>
+                </section>
               </div>
             </details>
           </div>
         </div>
+
         <section class="asset-ledger-section asset-form-section is-hidden" id="asset-form-section" aria-labelledby="asset-form-title">
           <div class="panel-heading sub-heading">
-            <div>
-              <h2 id="asset-form-title">添加或编辑资产</h2>
-            </div>
+            <div><h2 id="asset-form-title">添加资产</h2><p class="section-description" id="asset-form-subtitle">先建立资产档案；买入、卖出和清仓请从已有持仓的“记录交易”进入。</p></div>
             <button class="secondary-button compact-button" id="close-asset-form" type="button">关闭</button>
           </div>
-        <form class="asset-form" id="asset-form">
-          <fieldset class="form-section adjustment-summary-section">
-            <legend>当前资产情况</legend>
-            <div class="asset-adjustment-summary" id="asset-adjustment-summary"></div>
-            <div class="adjustment-type-field">
-              <p class="adjustment-label">本次操作</p>
-              <div class="adjustment-options" role="radiogroup" aria-label="本次操作">
-                <label class="adjustment-option adjustment-option-buy">
-                  <input type="radio" name="adjustmentType" value="buy" checked>
-                  <span class="adjustment-icon">+</span>
-                  <span>
-                    <strong>加仓</strong>
-                    <small>增加持仓数量，摊低平均成本</small>
-                  </span>
-                </label>
-                <label class="adjustment-option adjustment-option-sell">
-                  <input type="radio" name="adjustmentType" value="sell">
-                  <span class="adjustment-icon">−</span>
-                  <span>
-                    <strong>减仓</strong>
-                    <small>减少持仓数量，锁定部分收益</small>
-                  </span>
-                </label>
-                <label class="adjustment-option adjustment-option-close">
-                  <input type="radio" name="adjustmentType" value="close">
-                  <span class="adjustment-icon">×</span>
-                  <span>
-                    <strong>清仓</strong>
-                    <small>全部卖出，清空当前持仓</small>
-                  </span>
-                </label>
+          <form class="asset-form" id="asset-form" data-mode="create" autocomplete="off">
+            <fieldset class="form-section adjustment-summary-section">
+              <legend>交易资产</legend>
+              <div class="asset-adjustment-summary" id="asset-adjustment-summary"></div>
+              <div class="adjustment-options" role="radiogroup" aria-label="本次交易类型">
+                <label class="adjustment-option"><input type="radio" name="adjustmentType" value="buy" checked><span class="adjustment-icon" aria-hidden="true">+</span><span><strong>加仓</strong><small>增加已有资产的持仓数量，并重新计算平均成本。</small></span></label>
+                <label class="adjustment-option adjustment-option-sell"><input type="radio" name="adjustmentType" value="sell"><span class="adjustment-icon" aria-hidden="true">-</span><span><strong>减仓</strong><small>记录部分卖出，保留剩余持仓和已实现收益。</small></span></label>
+                <label class="adjustment-option adjustment-option-close"><input type="radio" name="adjustmentType" value="close"><span class="adjustment-icon" aria-hidden="true">×</span><span><strong>清仓</strong><small>卖出全部剩余持仓，并转入历史持仓。</small></span></label>
               </div>
-            </div>
-          </fieldset>
-
-          <fieldset class="form-section adjustment-buy-section">
-            <legend>加仓</legend>
-            <p>只填写本次新增买入的信息，系统会自动更新持仓数量和平均成本价。</p>
-            <div class="form-section-grid">
-              <label>
-                <span>加仓数量/份额 <em class="required-mark">必填</em></span>
-                <input name="addQuantity" inputmode="decimal" placeholder="请输入本次加仓数量">
-              </label>
-              <label>
-                <span>加仓价格 <em class="required-mark">必填</em></span>
-                <input name="addPrice" inputmode="decimal" placeholder="请输入本次成交价格">
-              </label>
-              <label>
-                <span>加仓日期 <em class="required-mark">必填</em></span>
-                <input name="addDate" type="date">
-              </label>
-              <label>
-                <span>加仓手续费 <em class="optional-mark">可选</em></span>
-                <input name="addFees" inputmode="decimal" value="0">
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="form-section quick-entry-section">
-            <legend>快速录入</legend>
-            <p>标记为必填的字段用于建立资产台账；价格/净值默认由系统获取，缺失时可稍后补全。</p>
-            <div class="form-section-grid">
-              <label>
-                <span>资产名称 <em class="required-mark">必填</em></span>
-                <input name="name" required list="asset-quick-match-options" placeholder="输入代码或名称，例如：510300、腾讯、QQQ、现金">
-                <datalist id="asset-quick-match-options"></datalist>
-              </label>
-              <label>
-                <span>代码 <em class="optional-mark">可选</em></span>
-                <input name="symbol" list="security-code-options" placeholder="例如：510300、00700、QQQ">
-                <datalist id="security-code-options">
-                  <option value="AAPL">Apple · 美股</option>
-                  <option value="NVDA">英伟达 · 美股</option>
-                  <option value="SPY">标普500 ETF · 美股</option>
-                  <option value="600519">贵州茅台 · A股</option>
-                  <option value="510300">沪深300 ETF · A股</option>
-                  <option value="00700">腾讯控股 · 港股</option>
-                  <option value="03033">南方恒生科技 · 港股</option>
-                </datalist>
-              </label>
-              <label>
-                <span>分类 <em class="required-mark">必填</em></span>
-                <select name="type">
-                  <option>股票</option>
-                  <option>ETF</option>
-                  <option>基金</option>
-                  <option>债券</option>
-                  <option>现金</option>
-                  <option>数字资产</option>
-                  <option>贵金属</option>
-                  <option>实物资产</option>
-                  <option>其他</option>
-                </select>
-              </label>
-              <label>
-                <span>市场 <em class="required-mark">必填</em></span>
-                <select name="market">
-                  <option value="CN">A股 / 内地</option>
-                  <option value="HK">港股</option>
-                  <option value="US">美股</option>
-                  <option value="FUND">国内基金</option>
-                  <option value="WEB3">Web3</option>
-                  <option value="CASH">现金/手动</option>
-                  <option value="OTHER">其他</option>
-                </select>
-              </label>
-              <label>
-                <span>账户类型 <em class="required-mark">必填</em></span>
-                <select name="accountType">
-                  <option value="securities">证券账户</option>
-                  <option value="fund">基金账户</option>
-                  <option value="cash">现金账户</option>
-                  <option value="crypto">数字资产账户</option>
-                  <option value="long_term">养老金/长期账户</option>
-                  <option value="watch">模拟/观察账户</option>
-                  <option value="other">其他</option>
-                  <option value="__custom__">自定义账户类型</option>
-                </select>
-              </label>
-              <label id="account-type-custom-field" class="is-hidden">
-                <span>自定义账户类型 <em class="required-mark">必填</em></span>
-                <input name="accountTypeCustom" placeholder="例如：家庭共同账户">
-              </label>
-              <label>
-                <span>账户名称 <em class="required-mark">必填</em></span>
-                <input id="account-picker" name="account" required list="account-name-options" placeholder="选择或输入账户名称，例如：OKX、Binance、华泰证券">
-                <datalist id="account-name-options"></datalist>
-              </label>
-              <label>
-                <span>币种 <em class="required-mark">必填</em></span>
-                <select name="currency">
-                  <option>USD</option>
-                  <option>CNY</option>
-                  <option>HKD</option>
-                  <option>EUR</option>
-                </select>
-              </label>
-              <label>
-                <span>持有数量/份额 <em class="required-mark">必填</em></span>
-                <input name="quantity" inputmode="decimal" required placeholder="10.5">
-              </label>
-              <label>
-                <span>平均成本价 <em class="required-mark">必填</em></span>
-                <input name="costPrice" inputmode="decimal" required placeholder="100.00">
-              </label>
-              <label>
-                <span>开仓日期 <em class="optional-mark">可选</em></span>
-                <input name="purchaseDate" type="date">
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="close-fields is-hidden" id="close-fields">
-            <div class="close-fields-title">
-              <strong>卖出</strong>
-              <span>只填写本次卖出相关字段。</span>
-            </div>
-            <label>
-              <span>操作数量/份额 <em class="required-mark">必填</em></span>
-              <input name="sellQuantity" inputmode="decimal" placeholder="请输入卖出数量">
-            </label>
-            <label>
-              <span>操作日期 <em class="required-mark">必填</em></span>
-              <input name="closedDate" type="date">
-            </label>
-            <label>
-              <span>操作价格 <em class="required-mark">必填</em></span>
-              <input name="closePrice" inputmode="decimal" placeholder="请输入卖出价格">
-            </label>
-            <label>
-              <span>操作手续费 <em class="optional-mark">可选</em></span>
-              <input name="sellFees" inputmode="decimal" value="0">
-            </label>
-            <label>
-              <span>操作税费 <em class="optional-mark">可选</em></span>
-              <input name="sellTaxes" inputmode="decimal" value="0">
-            </label>
-            <label class="wide close-reason-field">
-              <span>卖出/清仓原因 <em class="optional-mark">可选</em></span>
-              <input name="closeReason" placeholder="例如：部分止盈、风险控制、调仓">
-            </label>
-          </div>
-          <button class="primary-button" type="submit">确认买入</button>
-        </form>
-        <p class="form-error" id="asset-error" role="alert"></p>
+            </fieldset>
+            <fieldset class="form-section adjustment-buy-section">
+              <legend>买入 / 加仓</legend>
+              <div class="form-section-grid">
+                <label>买入数量 <input name="addQuantity" inputmode="decimal"></label>
+                <label>买入单价 <input name="addPrice" inputmode="decimal"></label>
+                <label>交易日期 <input name="addDate" type="date"></label>
+                <label>费用 <input name="addFees" inputmode="decimal" value="0"></label>
+                <label class="wide-row">买入理由 <input name="addReason" placeholder="可选"></label>
+              </div>
+            </fieldset>
+            <fieldset class="form-section quick-entry-section">
+              <legend>必要信息</legend>
+              <div class="form-section-grid">
+                <div class="asset-name-field">
+                  <label>资产名称 <input name="name" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入代码或名称"></label>
+                  <div class="asset-match-panel is-hidden" id="asset-match-panel" aria-live="polite"></div>
+                </div>
+                <div class="asset-symbol-field">
+                  <label>代码 <input name="symbol" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+                </div>
+                <label>资产类型
+                  <select name="type" required>
+                    <option value="" selected>请选择资产类型</option>
+                    <option>股票</option><option>ETF</option><option>REIT</option><option>基金</option><option>现金</option><option>数字资产</option><option>贵金属</option><option>实物资产</option><option>其他</option>
+                  </select>
+                </label>
+                <label class="advanced-field">市场 <input name="market" placeholder="US / CN / HK / CASH"></label>
+                <label>账户 <input name="account" id="account-picker" list="account-name-options" placeholder="账户名称"><datalist id="account-name-options"></datalist></label>
+                <label class="advanced-field">账户类型
+                  <select name="accountType">
+                    <option value="securities">证券账户</option><option value="fund">基金账户</option><option value="cash">现金账户</option><option value="crypto">数字资产账户</option><option value="long_term">养老金/长期账户</option><option value="watch">模拟/观察账户</option><option value="other">其他</option><option value="__custom__">自定义</option>
+                  </select>
+                </label>
+                <label id="account-type-custom-field" class="advanced-field is-hidden">自定义账户类型 <input name="accountTypeCustom"></label>
+                <label>币种
+                  <select name="currency" required><option value="" selected>请选择币种</option><option value="CNY">CNY</option><option value="USD">USD</option><option value="HKD">HKD</option><option value="BTC">BTC</option></select>
+                </label>
+                <label>持有数量 <input name="quantity" required inputmode="decimal" placeholder="请输入数量"></label>
+                <label>平均成本价 <input name="costPrice" inputmode="decimal" placeholder="可后续补充"></label>
+                <label>首次持有日期 <input name="purchaseDate" type="date"></label>
+                <label>当前价格 <input name="currentPrice" inputmode="decimal" placeholder="可选"></label>
+                <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
+              </div>
+              <input name="assetRegistryId" type="hidden">
+              <input name="assetMatchStatus" type="hidden" value="unmatched">
+              <input name="marketDataSupported" type="hidden" value="false">
+              <input name="contribution" type="hidden" value="0">
+              <input name="dividends" type="hidden" value="0">
+              <input name="interest" type="hidden" value="0">
+              <input name="manualAdjustment" type="hidden" value="0">
+              <input name="transactionType" type="hidden" value="买入">
+              <input name="priceSource" type="hidden">
+              <input name="pricedAt" type="hidden">
+              <input name="priceStatus" type="hidden">
+              <p class="form-help" data-price-fallback>成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。</p>
+              <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
+            </fieldset>
+            <fieldset class="form-section optional-entry-section">
+              <legend>可选项</legend>
+              <div class="optional-toggle-list">
+                <label class="form-switch-row">
+                  <span><strong>税费/手续费</strong><small>本次建仓产生费用时再打开。</small></span>
+                  <input type="checkbox" data-optional-toggle="fees">
+                  <span class="form-switch-control" aria-hidden="true"></span>
+                </label>
+                <div class="optional-entry-panel is-hidden" data-optional-panel="fees">
+                  <div class="form-section-grid">
+                    <label>手续费 <input name="fees" inputmode="decimal" value="0"></label>
+                    <label>税费 <input name="taxes" inputmode="decimal" value="0"></label>
+                  </div>
+                </div>
+                <label class="form-switch-row">
+                  <span><strong>汇率</strong><small>外币资产或需要固定成交汇率时再打开。</small></span>
+                  <input type="checkbox" data-optional-toggle="fx">
+                  <span class="form-switch-control" aria-hidden="true"></span>
+                </label>
+                <div class="optional-entry-panel is-hidden" data-optional-panel="fx">
+                  <p class="form-help">当前汇率用于把资产原始币种折算到 USD；留空时按币种使用默认汇率。</p>
+                  <div class="form-section-grid">
+                    <label>当前汇率到 USD <input name="fxRate" inputmode="decimal" value="1"></label>
+                    <label>期初汇率到 USD <input name="previousFxRate" inputmode="decimal" value="1"></label>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="form-section close-fields is-hidden" id="close-fields">
+              <legend class="close-fields-title"><strong>减仓详情</strong><span>只填写本次减仓相关字段。</span></legend>
+              <div class="form-section-grid">
+                <label>卖出数量 <input name="sellQuantity" inputmode="decimal"></label>
+                <label>卖出单价 <input name="closePrice" inputmode="decimal"></label>
+                <label>交易日期 <input name="closedDate" type="date"></label>
+                <label>费用 <input name="sellFees" inputmode="decimal" value="0"></label>
+                <label>税费 <input name="sellTaxes" inputmode="decimal" value="0"></label>
+                <label class="wide-row">卖出原因 <input name="closeReason" placeholder="可选"></label>
+              </div>
+              <p class="close-confirm-note is-hidden" id="close-confirm-note">清仓会将该资产移入历史持仓。提交前请确认价格和费用。</p>
+            </fieldset>
+            <div class="transaction-live-summary is-hidden" id="transaction-live-summary" aria-live="polite"></div>
+            <p class="form-error" id="asset-error" role="alert"></p>
+            <div class="form-actions"><button class="secondary-button" type="button" data-cancel-asset-form>取消</button><button class="primary-button" type="submit">保存资产</button></div>
+          </form>
         </section>
 
-        <section class="asset-ledger-section asset-list-section" aria-labelledby="portfolio-title">
-        <div class="panel-heading sub-heading">
-          <div>
-            <h2 id="portfolio-title">资产列表</h2>
-          </div>
-        </div>
         <div class="sub-tabs" role="tablist" aria-label="资产列表视图">
           <button class="sub-tab is-active" data-portfolio-view="open" type="button">当前持仓</button>
           <button class="sub-tab" data-portfolio-view="history" type="button">历史持仓</button>
           <button class="sub-tab" data-portfolio-view="changes" type="button">交易记录</button>
         </div>
-        <form class="portfolio-filter" aria-label="当前持仓筛选">
-          <label>
-            账户
-            <select id="portfolio-account-filter"></select>
-          </label>
-          <label>
-            类型
-            <select id="portfolio-type-filter"></select>
-          </label>
-          <label>
-            数据状态
-            <select id="portfolio-status-filter">
-              <option value="all">全部状态</option>
-              <option value="needs-review">待核对</option>
-              <option value="complete">关键数据完整</option>
-            </select>
-          </label>
-          <p class="filter-summary" id="portfolio-filter-summary"></p>
+        <form class="portfolio-filter" aria-label="资产筛选">
+          <select id="portfolio-account-filter"></select>
+          <select id="portfolio-type-filter"></select>
+          <select id="portfolio-status-filter"><option value="all">全部状态</option><option value="needs-review">待核对</option><option value="complete">关键数据完整</option></select>
+          <p id="portfolio-filter-summary"></p>
         </form>
-        <div class="portfolio-view is-active" id="open-portfolio-view">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>资产</th>
-                  <th>账户</th>
-                  <th>类型/市场</th>
-                  <th>成本价</th>
-                  <th>当前价</th>
-                  <th>持有天数</th>
-                  <th id="market-value-heading">市值</th>
-                  <th>收益</th>
-                  <th>占比</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="portfolio-rows"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="portfolio-view" id="history-portfolio-view">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>资产</th>
-                  <th>账户</th>
-                  <th>清仓单价</th>
-                  <th>当前价格</th>
-                  <th>市值</th>
-                  <th>收益</th>
-                  <th>笔记</th>
-                </tr>
-              </thead>
-              <tbody id="history-rows"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="portfolio-view" id="changes-portfolio-view">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>资产</th>
-                  <th>操作</th>
-                  <th>日期</th>
-                  <th>数量</th>
-                  <th>变动价格</th>
-                  <th>当前价格</th>
-                  <th>价值</th>
-                  <th>手续费</th>
-                  <th>笔记</th>
-                </tr>
-              </thead>
-              <tbody id="asset-change-rows"></tbody>
-            </table>
-          </div>
-        </div>
+        <section class="portfolio-view is-active" id="open-portfolio-view">
+          <div class="table-wrap"><table><thead><tr><th>资产</th><th>账户</th><th>类型</th><th>成本价</th><th id="portfolio-current-price-heading">当前价</th><th>持有天数</th><th id="market-value-heading">市值</th><th>收益</th><th>占比</th><th>数据状态</th><th>操作</th></tr></thead><tbody id="portfolio-rows"></tbody></table></div>
         </section>
-
+        <section class="portfolio-view" id="history-portfolio-view">
+          <div class="table-wrap"><table><thead><tr><th>资产</th><th>账户</th><th>退出价</th><th id="history-current-price-heading">当前价</th><th>退出金额</th><th>实现收益</th><th>复盘</th></tr></thead><tbody id="history-rows"></tbody></table></div>
+        </section>
+        <section class="portfolio-view" id="changes-portfolio-view">
+          <div class="table-wrap"><table><thead><tr><th>资产</th><th>类型</th><th>日期</th><th>数量</th><th>成交价</th><th id="changes-current-price-heading">当前价</th><th>金额</th><th>费用</th><th>复盘</th></tr></thead><tbody id="asset-change-rows"></tbody></table></div>
+        </section>
       </section>
 
       <section class="panel" id="analysis-panel">
         <div class="panel-heading">
-          <div>
-            <h2>资产分析</h2>
-          </div>
+          <div><h2>组合表现分析</h2><p class="section-description">收益、归因、风险和计算口径集中在这里查看。</p></div>
           <form class="analysis-filter" aria-label="分析范围筛选">
-            <label>
-              账户
-              <select id="analysis-account-filter"></select>
-            </label>
-            <label>
-              资产
-              <select id="analysis-asset-filter"></select>
-            </label>
-            <label>
-              开始日期
-              <input id="analysis-start" type="date">
-            </label>
-            <label>
-              结束日期
-              <input id="analysis-end" type="date">
-            </label>
+            <label>账户 <select id="analysis-account-filter"></select></label>
+            <label>资产 <select id="analysis-asset-filter"></select></label>
+            <label>开始 <input id="analysis-start" type="date"></label>
+            <label>结束 <input id="analysis-end" type="date"></label>
             <p class="filter-summary" id="analysis-range-summary"></p>
           </form>
         </div>
-        <section class="analysis-card analysis-card-wide analysis-judgement-card" aria-labelledby="analysis-judgement-title">
-          <h3 id="analysis-judgement-title">当前组合风险偏高，但收益质量尚可。</h3>
+        <section class="analysis-card analysis-card-wide analysis-judgement-card">
+          <h3 id="analysis-judgement-title"></h3>
           <ol class="analysis-judgement-list" id="analysis-judgement-list"></ol>
         </section>
         <div class="analysis-grid analysis-focus-grid">
-          <section class="analysis-card analysis-card-wide analysis-hero-card">
-            <h3>投资健康度</h3>
-            <div class="analysis-health-layout">
-              <div class="analysis-health-list" id="analysis-health-list"></div>
-            </div>
+          <section class="analysis-card analysis-card-wide"><h3>关键指标</h3><div class="analysis-health-list" id="analysis-health-list"></div></section>
+          <section class="analysis-card analysis-card-wide" data-analysis-requires-assets>
+            <div class="analysis-card-heading"><h3>收益表现对比</h3><div class="analysis-toggle" role="tablist" aria-label="收益表现口径"><button class="is-active" data-analysis-return-metric="mwr" type="button">MWR</button><button data-analysis-return-metric="twr" type="button">TWR</button><button data-analysis-return-metric="sr" type="button">SR</button></div></div>
+            <div class="benchmark-selector" id="analysis-benchmark-selector" aria-label="选择收益对比基准"></div>
+            <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
+            <div class="benchmark-comparison-chart" id="analysis-benchmark-trend-chart"></div>
           </section>
-
-          <section class="analysis-card analysis-card-wide">
-            <div class="analysis-card-heading">
-              <div>
-                <h3>组合收益 vs 可替代基准</h3>
-              </div>
-              <div class="analysis-toggle" aria-label="收益算法">
-                <span class="is-active">MWR</span>
-                <span>TWR</span>
-                <span>SR</span>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table class="analysis-return-table">
-                <thead>
-                  <tr>
-                    <th>指标</th>
-                    <th>近1月</th>
-                    <th>近3月</th>
-                    <th>今年</th>
-                    <th>累计</th>
-                    <th>年化</th>
-                  </tr>
-                </thead>
-                <tbody id="analysis-monthly-return-chart"></tbody>
-              </table>
-            </div>
-            <div class="benchmark-empty-panel is-hidden" id="analysis-benchmark-empty">
-              <strong>暂无可用基准数据</strong>
-              <p>同步市场指数后，可对比沪深300、标普500、纳斯达克和现金基准。</p>
-              <button class="secondary-button compact-button" id="sync-benchmark-data" type="button">同步基准数据</button>
-            </div>
-          </section>
-
-          <section class="analysis-card analysis-card-wide">
-            <div class="analysis-card-heading">
-              <div>
-                <h3>把净投入、价格、汇率、分红和成本分开看</h3>
-              </div>
-              <div class="analysis-mini-metrics" id="stage-comparison-grid"></div>
-            </div>
-            <div class="waterfall-chart" id="analysis-cashflow-chart"></div>
-          </section>
-
-          <section class="analysis-card">
-            <h3>哪些资产贡献最大、拖累最大</h3>
-            <div class="attribution-list" id="analysis-top-return-assets"></div>
-            <p class="analysis-auto-summary" id="analysis-contribution-summary"></p>
-          </section>
-
-          <section class="analysis-card">
-            <h3>先核对会影响计算的缺口</h3>
-            <div class="analysis-note-card" id="analysis-risk-note"></div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>资产</th>
-                    <th>变化</th>
-                    <th>权重</th>
-                    <th>数据状态</th>
-                  </tr>
-                </thead>
-                <tbody id="analysis-contribution-rows"></tbody>
-              </table>
-            </div>
-          </section>
+          <section class="analysis-card analysis-card-wide"><div class="analysis-card-heading"><h3>资产变动归因</h3><div class="analysis-mini-metrics" id="stage-comparison-grid"></div></div><div class="waterfall-chart" id="analysis-cashflow-chart"></div></section>
+          <section class="analysis-card"><h3>资产贡献排行</h3><div class="attribution-list" id="analysis-top-return-assets"></div><p class="analysis-auto-summary" id="analysis-contribution-summary"></p></section>
+          <section class="analysis-card" data-analysis-requires-assets><h3>集中度</h3><div id="analysis-concentration-metrics"></div><div id="analysis-top-holdings"></div><p id="analysis-concentration-note"></p></section>
+          <section class="analysis-card" data-analysis-requires-assets><h3>风险</h3><div id="analysis-risk-metrics"></div><div id="analysis-drawdown-chart"></div></section>
+          <section class="analysis-card"><h3>数据核对</h3><div class="analysis-note-card" id="analysis-risk-note"></div><div class="table-wrap"><table class="analysis-contribution-table"><thead><tr><th>资产</th><th>变化</th><th>权重</th><th>数据状态</th></tr></thead><tbody id="analysis-contribution-rows"></tbody></table></div></section>
+          <div id="attribution-metrics" class="is-hidden"></div>
+          <div id="attribution-list" class="is-hidden"></div>
+          <div id="analysis-quality-metrics" class="is-hidden"></div>
         </div>
       </section>
 
       <section class="panel" id="notes-panel">
         <section class="notes-home" id="notes-home">
           <div class="notes-hero">
-            <div>
-              <h2><span>投资复盘</span></h2>
-              <p id="notes-meta">共 0 条记录 / 0 个标签</p>
-            </div>
+            <div><h2><span>投资复盘</span></h2><p id="notes-meta">共 0 条复盘 / 0 个标签</p></div>
             <div class="notes-toolbar">
-              <label class="notes-search">
-                <span aria-hidden="true">⌕</span>
-                <input id="notes-search" type="search" placeholder="搜索笔记、标签、关键词...">
-                <kbd>⌘K</kbd>
-              </label>
-              <button class="primary-button note-write-button" id="new-note-button" type="button">✎ 写笔记 <span>⌄</span></button>
+              <label class="notes-search"><span aria-hidden="true">⌕</span><input id="notes-search" type="search" placeholder="搜索复盘、标签、关键词..."><kbd>⌘K</kbd></label>
+              <button class="secondary-button note-write-button" id="new-note-button" type="button">✎ 写复盘 <span>⌄</span></button>
             </div>
           </div>
-          <div class="notes-filter-row">
-            <div class="note-tag-filters" id="note-filter-tags"></div>
-            <div class="notes-sort-control">
-              <button class="text-button" type="button">筛选 <span aria-hidden="true">▽</span></button>
-              <span></span>
-              <button class="text-button" type="button">最新更新⌄</button>
-              <span></span>
-              <button class="text-button" type="button">☷</button>
-            </div>
-          </div>
+          <div class="notes-filter-row"><div class="note-tag-filters" id="note-filter-tags"></div><div class="notes-sort-control"><button class="text-button" type="button">筛选</button><span></span><button class="text-button" type="button">最新更新</button></div></div>
           <div class="notes-workspace">
-            <div class="notes-list-shell">
-              <div class="notes-list" id="notes-list"></div>
-              <div class="notes-pagination" aria-label="笔记分页">
-                <button type="button" aria-label="上一页">‹</button>
-                <button class="is-active" type="button">1</button>
-                <button type="button">2</button>
-                <button type="button" aria-label="下一页">›</button>
-              </div>
-            </div>
-
+            <div class="notes-list-shell"><div class="notes-list" id="notes-list"></div><div class="notes-pagination" aria-label="复盘分页"><button type="button">1</button></div></div>
             <section class="notes-reader is-hidden" id="notes-reader">
-              <article class="note-reader-card">
-                <div class="note-detail-inner">
-                  <div class="note-reader-top">
-                    <div class="note-reader-actions">
-                      <button class="secondary-button compact-button" id="note-reader-edit" type="button">✎ 编辑</button>
-                      <button class="note-reader-more compact-button" type="button" aria-label="更多操作">...</button>
-                    </div>
-                  </div>
-                  <h2 id="note-reader-title"></h2>
-                  <div class="note-reader-meta" id="note-reader-meta"></div>
-                  <div class="note-reader-asset" id="note-reader-asset"></div>
-                  <div class="note-reader-content" id="note-reader-content"></div>
-                  <button class="danger-button compact-button is-hidden" id="note-reader-delete" type="button">删除</button>
-                </div>
-              </article>
+              <article class="note-reader-card"><div class="note-detail-inner"><div class="note-reader-actions"><button class="secondary-button compact-button" id="note-reader-edit" type="button">编辑</button></div><h2 id="note-reader-title"></h2><div class="note-reader-meta" id="note-reader-meta"></div><div class="note-reader-asset" id="note-reader-asset"></div><div class="note-reader-content" id="note-reader-content"></div><button class="danger-button compact-button is-hidden" id="note-reader-delete" type="button">删除</button></div></article>
             </section>
           </div>
         </section>
-
         <section class="notes-editor is-hidden" id="notes-editor">
-          <div class="notes-editor-heading">
-            <h2><span>写笔记</span></h2>
-            <button class="secondary-button compact-button" id="note-back-button" type="button">‹ 返回</button>
-          </div>
+          <div class="notes-editor-heading"><h2><span>写复盘</span></h2><button class="secondary-button compact-button" id="note-back-button" type="button">返回</button></div>
           <form class="note-form" id="note-form">
             <section class="note-editor-card">
-              <label class="note-title-field">
-                <strong>标题</strong>
-                <span class="note-input-shell">
-                  <input name="title" maxlength="80" required placeholder="写下这次复盘的核心判断">
-                  <small id="note-title-count">0/80</small>
-                </span>
-              </label>
-
-              <fieldset class="note-template-field note-editor-group">
-                <legend>模板</legend>
-                <input name="template" type="hidden" value="blank">
-                <div class="note-template-cards" id="note-template-cards">
-                  <button class="note-template-card is-selected" data-note-template="blank" type="button">
-                    <strong>空白复盘</strong>
-                    <span>自由记录判断、情绪和后续验证点。</span>
-                  </button>
-                  <button class="note-template-card" data-note-template="buy" type="button">
-                    <strong>买入复盘</strong>
-                    <span>记录买入理由、假设、风险和验证计划。</span>
-                  </button>
-                  <button class="note-template-card" data-note-template="hold" type="button">
-                    <strong>持有观察</strong>
-                    <span>检查持有逻辑是否仍然成立。</span>
-                  </button>
-                  <button class="note-template-card" data-note-template="close" type="button">
-                    <strong>卖出/清仓复盘</strong>
-                    <span>沉淀退出原因、收益和行为结论。</span>
-                  </button>
-                </div>
-              </fieldset>
-
-              <fieldset class="note-tag-field note-editor-group">
-                <legend>类型与标签</legend>
-                <div class="note-tag-options">
-                  <label><input type="checkbox" name="tags" value="交易复盘"><span># 交易复盘</span></label>
-                  <label><input type="checkbox" name="tags" value="持有观察"><span># 持有观察</span></label>
-                  <label><input type="checkbox" name="tags" value="原则"><span># 原则</span></label>
-                  <label><input type="checkbox" name="tags" value="理财学习"><span># 理财学习</span></label>
-                  <label><input type="checkbox" name="tags" value="交易心理"><span># 交易心理</span></label>
-                  <button class="note-new-tag-button" id="note-new-tag-button" type="button">＋ 新建标签</button>
-                  <label class="note-custom-tag is-hidden" id="note-custom-tag-field">
-                    <input name="customTag" maxlength="12" placeholder="输入标签名">
-                  </label>
-                </div>
-              </fieldset>
-
-              <label class="note-content-field">
-                <strong>正文</strong>
-                <span class="note-textarea-shell">
-                  <textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结...&#10;&#10;可以是市场观点、投资思考、行为复盘、灵感记录等。"></textarea>
-                  <small id="note-content-count">0/5000</small>
-                </span>
-              </label>
-
-              <section class="note-link-card">
-                <div>
-                  <strong>关联资产与交易</strong>
-                  <p>先关联资产，也可以进一步选择一笔交易，方便后续回顾。</p>
-                  <label class="note-asset-link-field">
-                    <span>关联资产</span>
-                    <select name="assetId" id="note-asset-select"></select>
-                  </label>
-                  <input name="asset" type="hidden">
-                  <label class="note-asset-link-field">
-                    <span>关联交易</span>
-                    <select id="note-transaction-select" aria-label="选择关联资产变动"></select>
-                  </label>
-                  <input name="format" type="hidden" value="plain">
-                  <input name="status" type="hidden" value="published">
-                </div>
-                <div class="note-suggested-transactions" id="note-suggested-transactions"></div>
-              </section>
+              <label class="note-title-field"><strong>标题</strong><span class="note-input-shell"><input name="title" maxlength="80" required placeholder="写下这次复盘的核心判断"><small id="note-title-count">0/80</small></span></label>
+              <fieldset class="note-template-field"><legend>模板</legend><input name="template" type="hidden" value="blank"><div class="note-template-cards" id="note-template-cards"><button class="note-template-card" data-note-template="hold" type="button">持有观察</button><button class="note-template-card" data-note-template="buy" type="button">买入复盘</button><button class="note-template-card" data-note-template="close" type="button">卖出/清仓复盘</button><button class="note-template-card is-selected" data-note-template="blank" type="button">空白复盘</button></div></fieldset>
+              <fieldset class="note-tag-field"><legend>标签</legend><div class="note-tag-options"><label><input type="checkbox" name="tags" value="交易复盘"><span># 交易复盘</span></label><label><input type="checkbox" name="tags" value="持有观察"><span># 持有观察</span></label><label><input type="checkbox" name="tags" value="原则"><span># 原则</span></label><label><input type="checkbox" name="tags" value="理财学习"><span># 复盘学习</span></label><label><input type="checkbox" name="tags" value="交易心理"><span># 交易心理</span></label><button class="note-new-tag-button" id="note-new-tag-button" type="button">＋ 新建标签</button><label class="note-custom-tag is-hidden" id="note-custom-tag-field"><input name="customTag" maxlength="12" placeholder="输入标签名"></label></div></fieldset>
+              <label class="note-content-field"><strong>正文</strong><span class="note-textarea-shell"><textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结..."></textarea><small id="note-content-count">0/5000</small></span></label>
+              <section class="note-link-card"><strong>关联资产与交易</strong><label class="note-asset-link-field">关联资产 <select name="assetId" id="note-asset-select"></select></label><input name="asset" type="hidden"><label class="note-asset-link-field">关联交易 <select id="note-transaction-select" aria-label="选择关联资产变动"></select></label><input name="format" type="hidden" value="plain"><input name="status" type="hidden" value="published"></section>
             </section>
-            <div class="note-editor-actions">
-              <button class="secondary-button note-draft-button" id="note-save-draft" type="button">▣ 保存草稿</button>
-              <button class="primary-button note-save-button" type="submit">◎ 保存</button>
-              <small>⌘ + S 快捷键保存</small>
-            </div>
+            <div class="note-editor-actions"><button class="secondary-button note-draft-button" id="note-save-draft" type="button">保存草稿</button><button class="primary-button note-save-button" type="submit">保存</button></div>
           </form>
         </section>
-
-        <section class="review-community-section is-hidden" aria-labelledby="community-title">
-        <div class="panel-heading sub-heading">
-          <div>
-            <h2 id="community-title">观点广场</h2>
-          </div>
-          <button class="primary-button" id="new-post-button" type="button">发表想法</button>
-        </div>
-        <form class="post-form writing-form compose-form is-hidden" id="post-form">
-          <p class="data-source wide-row">默认不公开个人资产数据。</p>
-          <label>
-            主题
-            <input name="title" required placeholder="例如：如何看待多币种配置">
-          </label>
-          <label>
-            标签
-            <input name="tag" placeholder="风险控制">
-          </label>
-          <label>
-            字体
-            <select class="font-family-select">
-              <option value="system">系统默认</option>
-              <option value="serif">衬线字体</option>
-              <option value="mono">等宽字体</option>
-            </select>
-          </label>
-          <label>
-            字号
-            <select class="font-size-select">
-              <option value="small">小号</option>
-              <option value="compact" selected>紧凑</option>
-              <option value="medium">舒适</option>
-              <option value="large">大号</option>
-              <option value="xlarge">特大</option>
-              <option value="xxlarge">超大</option>
-            </select>
-          </label>
-          <label>
-            字重
-            <select class="font-weight-select">
-              <option value="regular" selected>常规</option>
-              <option value="medium">清晰</option>
-              <option value="bold">粗体</option>
-            </select>
-          </label>
-          <label class="wide-row">
-            内容
-            <textarea name="content" required rows="10" placeholder="支持 Markdown。分享观点，不包含收益承诺或跟单暗示。"></textarea>
-          </label>
-          <button class="primary-button" type="submit">发布观点</button>
-        </form>
-        <div class="list" id="posts-list"></div>
+        <section class="review-community-section is-hidden" hidden aria-hidden="true">
+          <div class="panel-heading sub-heading"><div><h2 id="community-title">观点广场</h2></div><button class="primary-button" id="new-post-button" type="button">发表想法</button></div>
+          <form class="post-form writing-form compose-form is-hidden" id="post-form">
+            <p class="data-source wide-row">默认不公开个人资产数据。</p>
+            <label>主题 <input name="title" required placeholder="例如：如何看待多币种配置"></label>
+            <label>标签 <input name="tag" placeholder="风险控制"></label>
+            <label>字体 <select class="font-family-select"><option value="system">系统默认</option><option value="serif">衬线字体</option><option value="mono">等宽字体</option></select></label>
+            <label>字号 <select class="font-size-select"><option value="small">小号</option><option value="compact" selected>紧凑</option><option value="medium">舒适</option><option value="large">大号</option></select></label>
+            <label>字重 <select class="font-weight-select"><option value="regular" selected>常规</option><option value="medium">清晰</option><option value="bold">粗体</option></select></label>
+            <label class="wide-row">内容 <textarea name="content" required rows="10" placeholder="支持 Markdown。分享观点，不包含收益承诺或跟单暗示。"></textarea></label>
+            <button class="primary-button" type="submit">发布观点</button>
+          </form>
+          <div class="list" id="posts-list"></div>
         </section>
       </section>
     </main>
 
     <footer class="site-footer">
+      <nav class="footer-links" aria-label="上线基础说明">
+        <a href="#privacy-policy">隐私政策</a>
+        <a href="#terms">使用条款</a>
+        <a href="#risk-disclaimer">风险提示</a>
+        <a href="#backup-guide">数据备份</a>
+        <button class="footer-link-button" id="open-feedback-modal" type="button">用户反馈</button>
+        <a href="#changelog">更新日志</a>
+      </nav>
       <p class="privacy-note">隐私与本地数据：当前版本的数据保存在你的浏览器本地存储中，不会主动上传到服务器。请定期导出 JSON 备份。</p>
       <p class="risk-note">数据仅供记录和分析，不构成投资建议。</p>
     </footer>
 
+    <section class="legal-docs content-container" aria-label="产品基础说明">
+      <details class="legal-card" id="privacy-policy"><summary>Privacy Policy / 隐私政策</summary><p>资产轨迹 MVP 以本地保存为主。你录入的资产、交易、复盘和设置默认保存在当前浏览器的 localStorage 中。</p></details>
+      <details class="legal-card" id="terms"><summary>Terms / 使用条款</summary><p>本产品用于个人资产记录、组合分析和投资复盘。用户需要自行保证录入数据、价格、汇率、费用和备注的准确性。</p></details>
+      <details class="legal-card" id="risk-disclaimer"><summary>Risk Disclaimer / 风险提示</summary><p>资产轨迹不提供投资建议。页面展示的收益、风险、归因和复盘内容仅用于记录、核对和回顾。</p></details>
+      <details class="legal-card" id="backup-guide"><summary>Data Backup Guide / 数据备份说明</summary><p>建议在集中录入、修改或导入前后导出 JSON 备份。</p></details>
+      <details class="legal-card" id="feedback"><summary>Feedback / 用户反馈</summary><p>点击页脚“用户反馈”可以打开反馈模板。反馈时请不要发送完整资产备份文件、真实账户凭据、身份证明或其他敏感材料。</p></details>
+      <details class="legal-card" id="changelog"><summary>Changelog / 更新日志</summary><p>已支持：本地资产记录、交易记录、收益概览、复盘、JSON 导入导出和 CSV 导出。</p></details>
+    </section>
+
+    <div class="modal-backdrop is-hidden" id="import-confirm-modal" role="presentation">
+      <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="import-confirm-title">
+        <div><h2 id="import-confirm-title">确认导入备份数据？</h2><p>导入后会替换当前浏览器中的本地数据。建议你先导出当前数据备份，并确认导入文件来自你信任的来源。</p></div>
+        <div class="import-preview" id="import-preview"></div>
+        <div class="modal-actions"><button class="secondary-button" id="import-cancel" type="button">取消</button><button class="primary-button" id="import-continue" type="button">继续导入</button></div>
+      </section>
+    </div>
     <div class="modal-backdrop is-hidden" id="close-review-modal" role="presentation">
       <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="close-review-title">
+        <div><h2 id="close-review-title">要记录这次操作吗？</h2><p id="close-review-message">清仓后做一次简短复盘，后面回看决策会更清楚。</p></div>
+        <div class="modal-actions"><button class="secondary-button" id="close-review-later" type="button">暂不复盘</button><button class="secondary-button note-write-button" id="close-review-write" type="button">✎ 写复盘</button></div>
+      </section>
+    </div>
+    <div class="modal-backdrop is-hidden" id="feedback-modal" role="presentation">
+      <section class="modal-dialog feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
         <div>
-          <h2 id="close-review-title">要记录这次操作吗？</h2>
-          <p id="close-review-message">清仓后做一次简短复盘，后面回看决策会更清楚。</p>
+          <h2 id="feedback-title">发送试用反馈</h2>
+          <p>告诉我们哪里卡住、哪个数字不可信、哪个功能最有价值。请不要粘贴完整资产备份、真实账户凭据或身份证明。</p>
         </div>
-        <div class="modal-actions">
-          <button class="secondary-button" id="close-review-later" type="button">不写笔记</button>
-          <button class="primary-button note-write-button" id="close-review-write" type="button">✎ 写笔记</button>
-        </div>
+        <form class="feedback-form" id="feedback-form">
+          <label>你的联系方式（可选）<input id="feedback-contact" name="contact" placeholder="邮箱 / 微信 / 其他联系方式"></label>
+          <label>反馈内容<textarea id="feedback-body" name="body" rows="12"></textarea></label>
+          <p class="feedback-status" id="feedback-status" role="status"></p>
+          <div class="modal-actions">
+            <button class="secondary-button" id="feedback-cancel" type="button">取消</button>
+            <button class="secondary-button" id="copy-feedback" type="button">复制反馈</button>
+            <a class="primary-button feedback-mail-link" id="feedback-mail-link" href="mailto:jennieshen1027@gmail.com">用邮件发送</a>
+          </div>
+        </form>
       </section>
     </div>
 
