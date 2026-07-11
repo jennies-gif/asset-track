@@ -32,6 +32,28 @@ test("api skeleton serves health, positions and attribution", async () => {
       2
     )
   );
+  await fs.writeFile(
+    path.join(marketDataDir, "instrument-registry.json"),
+    JSON.stringify(
+      [
+        {
+          id: "CN:FUND:OTC:110020.OF",
+          symbol: "110020.OF",
+          name: "易方达沪深300ETF联接A",
+          market: "CN",
+          exchange: "OTC",
+          type: "基金",
+          currency: "CNY",
+          aliases: ["110020", "YFDHS300ETFLJA", "指数型-股票"],
+          universe: "fund",
+          marketDataSupported: true,
+          dataSource: "test fixture"
+        }
+      ],
+      null,
+      2
+    )
+  );
   await fs.mkdir(path.join(marketDataDir, "prices", "WEB3"), { recursive: true });
   await fs.writeFile(
     path.join(marketDataDir, "prices", "WEB3", "BTC.json"),
@@ -228,6 +250,10 @@ test("api skeleton serves health, positions and attribution", async () => {
     const instruments = await getJson("/api/instruments/search?query=00020");
     assert.equal(instruments.instruments[0].symbol, "00020");
     assert.equal(instruments.instruments[0].universe, "hstech");
+
+    const fundSearch = await getJson("/api/instruments/search?query=110020");
+    assert.equal(fundSearch.instruments[0].symbol, "110020.OF");
+    assert.equal(fundSearch.instruments[0].type, "基金");
 
     const cryptoHistory = await getJson("/api/market-data/history?symbol=BTC");
     assert.equal(cryptoHistory.points[0].close, 68000.55);

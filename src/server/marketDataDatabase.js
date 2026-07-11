@@ -23,6 +23,144 @@ export async function readMarketDataRows({ symbol, market, kind }) {
   return result.rows.map((row) => row.raw_payload).filter(Boolean);
 }
 
+export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {}) {
+  const pool = await getPool();
+  if (!pool) return [];
+  await ensureMarketDataSchema(pool);
+  const normalizedQuery = normalizeSearchText(query);
+  const boundedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 500) : 200;
+  if (!normalizedQuery) return [];
+  const result = await pool.query(
+    `
+      with matched_instruments as (
+        select distinct i.*
+        from market_data_instruments i
+        left join market_data_instrument_aliases a
+          on a.instrument_key = i.instrument_key
+        where i.status = 'active'
+          and (
+            upper(replace(i.symbol, '.OF', '')) like $1
+            or upper(i.symbol) like $1
+            or upper(replace(i.name, ' ', '')) like $1
+            or upper(replace(coalesce(a.alias, ''), ' ', '')) like $1
+          )
+        order by i.market asc, i.symbol asc
+        limit $2
+      )
+      select
+        i.instrument_key,
+        i.symbol,
+        i.name,
+        i.market,
+        i.exchange,
+        i.asset_type,
+        i.currency,
+        i.universe_key,
+        i.market_data_supported,
+        i.status,
+        i.data_source,
+        i.source_updated_at,
+        i.updated_at,
+        coalesce(
+          jsonb_agg(distinct a.alias) filter (where a.alias is not null),
+          '[]'::jsonb
+        ) as aliases
+      from matched_instruments i
+      left join market_data_instrument_aliases a
+        on a.instrument_key = i.instrument_key
+      group by i.instrument_key
+      order by i.market asc, i.symbol asc
+    `,
+    [`%${normalizedQuery}%`, boundedLimit]
+  );
+  return result.rows.map(instrumentRegistryRowFromDatabase);
+}
+
+export async function upsertInstrumentRegistryRows(rows) {
+  const pool = await getPool();
+  if (!pool || !Array.isArray(rows) || !rows.length) return 0;
+  await ensureMarketDataSchema(pool);
+  let changedCount = 0;
+  for (const row of rows) {
+    const instrument = normalizeInstrumentRegistryRow(row);
+    if (!instrument) continue;
+    const aliases = [...new Set([instrument.symbol, instrument.name, ...(instrument.aliases || [])].filter(Boolean).map(String))];
+    const sourceUpdatedAt = instrument.sourceUpdatedAt || null;
+    const rawPayload = JSON.stringify(row);
+    const result = await pool.query(
+      `
+        insert into market_data_instruments (
+          instrument_key, symbol, name, market, exchange, asset_type, currency,
+          universe_key, market_data_supported, status, data_source,
+          source_updated_at, raw_payload, updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13::jsonb, now())
+        on conflict (instrument_key)
+        do update set
+          symbol = excluded.symbol,
+          name = excluded.name,
+          market = excluded.market,
+          exchange = excluded.exchange,
+          asset_type = excluded.asset_type,
+          currency = excluded.currency,
+          universe_key = excluded.universe_key,
+          market_data_supported = excluded.market_data_supported,
+          status = excluded.status,
+          data_source = excluded.data_source,
+          source_updated_at = excluded.source_updated_at,
+          raw_payload = excluded.raw_payload,
+          updated_at = now()
+        where market_data_instruments.raw_payload is distinct from excluded.raw_payload
+      `,
+      [
+        instrument.instrumentKey,
+        instrument.symbol,
+        instrument.name,
+        instrument.market,
+        instrument.exchange || "",
+        instrument.type,
+        instrument.currency,
+        instrument.universe || "",
+        instrument.marketDataSupported !== false,
+        instrument.status || "active",
+        instrument.dataSource || "",
+        sourceUpdatedAt,
+        rawPayload
+      ]
+    );
+    changedCount += result.rowCount;
+
+    await pool.query("delete from market_data_instrument_aliases where instrument_key = $1", [instrument.instrumentKey]);
+    for (const alias of aliases) {
+      await pool.query(
+        `
+          insert into market_data_instrument_aliases (instrument_key, alias, normalized_alias)
+          values ($1, $2, $3)
+          on conflict (instrument_key, normalized_alias)
+          do update set alias = excluded.alias
+        `,
+        [instrument.instrumentKey, alias, normalizeSearchText(alias)]
+      );
+    }
+
+    await pool.query(
+      `
+        insert into market_data_instrument_sources (
+          instrument_key, source, source_updated_at, raw_payload, updated_at
+        )
+        values ($1, $2, $3::timestamptz, $4::jsonb, now())
+        on conflict (instrument_key, source)
+        do update set
+          source_updated_at = excluded.source_updated_at,
+          raw_payload = excluded.raw_payload,
+          updated_at = now()
+      `,
+      [instrument.instrumentKey, instrument.dataSource || "unknown", sourceUpdatedAt, rawPayload]
+    );
+  }
+  return changedCount;
+}
+
 export async function readUserAssetDailyPriceRows({ userId, assetId, dateFrom, dateTo }) {
   const pool = await getPool();
   if (!pool) return [];
@@ -273,6 +411,43 @@ async function ensureMarketDataSchema(pool) {
 
 async function createMarketDataSchema(pool) {
   await pool.query(`
+    create table if not exists market_data_instruments (
+      instrument_key text primary key,
+      symbol text not null,
+      name text not null,
+      market text not null,
+      exchange text not null default '',
+      asset_type text not null,
+      currency char(3) not null,
+      universe_key text not null default '',
+      market_data_supported boolean not null default true,
+      status text not null default 'active',
+      data_source text not null default '',
+      source_updated_at timestamptz,
+      raw_payload jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (market, symbol)
+    );
+
+    create table if not exists market_data_instrument_aliases (
+      instrument_key text not null references market_data_instruments(instrument_key) on delete cascade,
+      alias text not null,
+      normalized_alias text not null,
+      created_at timestamptz not null default now(),
+      primary key (instrument_key, normalized_alias)
+    );
+
+    create table if not exists market_data_instrument_sources (
+      instrument_key text not null references market_data_instruments(instrument_key) on delete cascade,
+      source text not null,
+      source_updated_at timestamptz,
+      raw_payload jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (instrument_key, source)
+    );
+
     create table if not exists market_data_price_snapshots (
       symbol text not null,
       name text not null,
@@ -369,5 +544,60 @@ async function createMarketDataSchema(pool) {
 
     create index if not exists market_data_nav_symbol_date_idx
       on market_data_fund_nav_snapshots(symbol, market, nav_date desc);
+
+    create index if not exists market_data_instruments_symbol_idx
+      on market_data_instruments(symbol, market);
+
+    create index if not exists market_data_instruments_market_type_idx
+      on market_data_instruments(market, asset_type);
+
+    create index if not exists market_data_instrument_aliases_normalized_idx
+      on market_data_instrument_aliases(normalized_alias);
   `);
+}
+
+function normalizeInstrumentRegistryRow(row) {
+  const symbol = String(row?.symbol || "").trim().toUpperCase();
+  const market = String(row?.market || "").trim().toUpperCase();
+  if (!symbol || !market) return null;
+  const type = String(row.type || row.assetType || row.asset_type || "股票").trim();
+  const instrumentKey = row.instrumentKey || row.instrument_key || `${market}:${symbol}`;
+  return {
+    instrumentKey,
+    symbol,
+    name: String(row.name || symbol).trim(),
+    market,
+    exchange: String(row.exchange || "").trim(),
+    type,
+    currency: String(row.currency || "USD").trim().toUpperCase(),
+    aliases: Array.isArray(row.aliases) ? row.aliases : [],
+    status: row.status || "active",
+    universe: row.universe || row.universeKey || row.universe_key || "",
+    marketDataSupported: row.marketDataSupported ?? row.market_data_supported ?? true,
+    dataSource: row.dataSource || row.source || row.data_source || "",
+    sourceUpdatedAt: row.sourceUpdatedAt || row.source_updated_at || row.updatedAt || null
+  };
+}
+
+function instrumentRegistryRowFromDatabase(row) {
+  return {
+    id: row.instrument_key,
+    symbol: row.symbol,
+    name: row.name,
+    market: row.market,
+    exchange: row.exchange || "",
+    type: row.asset_type,
+    currency: row.currency,
+    aliases: Array.isArray(row.aliases) ? row.aliases : [],
+    status: row.status || "active",
+    universe: row.universe_key || "",
+    marketDataSupported: row.market_data_supported !== false,
+    dataSource: row.data_source || "",
+    sourceUpdatedAt: row.source_updated_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function normalizeSearchText(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/gu, "");
 }

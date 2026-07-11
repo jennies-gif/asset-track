@@ -32,6 +32,7 @@ const priceShardDir = path.join(storageDir, "prices");
 const navShardDir = path.join(storageDir, "fund-nav");
 const fxFile = path.join(storageDir, "fx-rates.json");
 const runFile = path.join(storageDir, "market-data-runs.json");
+const registryFile = path.join(storageDir, "instrument-registry.json");
 const constituentsFile = path.join(storageDir, "index-constituents.json");
 
 const command = process.argv[2] || "daily";
@@ -164,11 +165,12 @@ function buildRange(mode, args) {
 async function selectInstruments(args, asOfDate) {
   const symbols = parseList(args.symbols || "").map((item) => item.toUpperCase());
   const universes = parseList(args.universes || "");
-  const source = universes.length ? await loadUniverseInstruments(universes, asOfDate) : securityWhitelist;
+  const registryRows = await readJsonArray(registryFile);
+  const source = universes.length ? await loadUniverseInstruments(universes, asOfDate) : dedupeInstruments([...registryRows, ...securityWhitelist]);
   if (!symbols.length) {
     return universes.length ? source : dedupeInstruments([...source, ...benchmarkInstruments]);
   }
-  const matched = source.filter((item) => symbols.includes(item.symbol.toUpperCase()));
+  const matched = source.filter((item) => symbols.some((symbol) => instrumentSymbolMatches(item, symbol)));
   const matchedSymbols = new Set(matched.map((item) => item.symbol.toUpperCase()));
   const inferred = symbols
     .filter((symbol) => !matchedSymbols.has(symbol))
@@ -209,8 +211,8 @@ function inferInstrumentFromSymbol(symbol) {
     return {
       symbol: normalized,
       name: normalized,
-      type: normalized.startsWith("5") || normalized.startsWith("1") ? "ETF" : "股票",
-      universe: "manual-cn",
+      type: normalized.startsWith("5") ? "ETF" : normalized.startsWith("1") ? "基金" : "股票",
+      universe: normalized.startsWith("1") ? "fund" : "manual-cn",
       market: "CN",
       currency: "CNY"
     };
@@ -226,6 +228,16 @@ function inferInstrumentFromSymbol(symbol) {
     };
   }
   return null;
+}
+
+function instrumentSymbolMatches(item, symbol) {
+  const normalized = String(symbol || "").trim().toUpperCase();
+  const itemSymbol = String(item?.symbol || "").trim().toUpperCase();
+  return (
+    itemSymbol === normalized ||
+    itemSymbol.replace(/\.OF$/u, "") === normalized ||
+    (item?.aliases || []).some((alias) => String(alias || "").trim().toUpperCase() === normalized)
+  );
 }
 
 async function loadUniverseInstruments(universes, asOfDate) {

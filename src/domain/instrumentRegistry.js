@@ -1,11 +1,11 @@
-import { instrumentRegistry, instrumentRegistryGeneratedAt, instrumentRegistrySummary } from "./instrumentRegistry.generated.js";
+import { instrumentRegistryGeneratedAt, instrumentRegistrySeed, instrumentRegistrySummary } from "./instrumentRegistry.seed.js";
 import { aliasesForInstrument } from "./instrumentAliases.js";
-import { securityWhitelist } from "./marketData.js";
 
-export { instrumentRegistry, instrumentRegistryGeneratedAt, instrumentRegistrySummary };
+export const instrumentRegistry = instrumentRegistrySeed;
+export { instrumentRegistryGeneratedAt, instrumentRegistrySummary };
 
 export function activeInstrumentRegistry() {
-  return instrumentRegistry.length ? instrumentRegistry : securityWhitelist.map(normalizeLegacyInstrument);
+  return instrumentRegistrySeed;
 }
 
 export function lookupInstrument(query, options = {}) {
@@ -59,25 +59,6 @@ function scoreInstrumentMatch(item, normalized) {
   const aliasScore = aliases.find((alias) => alias.includes(normalized));
   if (aliasScore) return 500 - Math.abs(aliasScore.length - normalized.length);
   return 0;
-}
-
-function normalizeLegacyInstrument(item) {
-  return {
-    id: [item.market, item.type, item.symbol].filter(Boolean).join(":"),
-    name: item.name,
-    symbol: item.symbol,
-    market: item.market,
-    exchange: item.exchange || "",
-    type: item.type,
-    currency: item.currency,
-    aliases: [item.symbol, item.name, ...aliasesForInstrument(item)].filter(Boolean),
-    status: "active",
-    universe: item.universe || "",
-    marketDataSupported: true,
-    dataSource: item.source || "Asset Trail core whitelist",
-    sourceUpdatedAt: "",
-    updatedAt: ""
-  };
 }
 
 function compareInstrument(left, right) {

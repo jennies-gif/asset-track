@@ -7,16 +7,19 @@ import { promisify } from "node:util";
 import { securityWhitelist } from "../../src/domain/marketData.js";
 import { aliasesForInstrument } from "../../src/domain/instrumentAliases.js";
 import { cryptoInstruments, preciousMetalInstruments } from "../../src/domain/marketDataSources.js";
+import { isMarketDataDatabaseEnabled, upsertInstrumentRegistryRows } from "../../src/server/marketDataDatabase.js";
 
 const execFileAsync = promisify(execFile);
 const storageDir = path.resolve(process.env.MARKET_DATA_DIR || "storage/market-data");
+const sourceCacheDir = path.join(storageDir, "source-cache");
+const hkexListOfSecuritiesUrl = "https://www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx";
+const eastmoneyFundCodeSearchUrl = "https://fund.eastmoney.com/js/fundcode_search.js";
 const registryFile = path.join(storageDir, "instrument-registry.json");
 const summaryFile = path.join(storageDir, "instrument-registry-summary.json");
 const runFile = path.join(storageDir, "market-data-runs.json");
-const generatedModuleFile = path.resolve("src/domain/instrumentRegistry.generated.js");
 
 const options = parseArgs(process.argv.slice(2));
-const requestedSources = new Set(parseList(options.sources || "cn,us,hk,core"));
+const requestedSources = new Set(parseList(options.sources || "cn,us,hk,fund,core"));
 const minCount = Number(options["min-count"] || "5000");
 const coverageMinimums = {
   CN: Number(options["min-cn"] || "5000"),
@@ -29,10 +32,11 @@ const sourceAdapters = {
   core: { market: "MIXED", label: "Asset Trail core instruments", fetch: seedCoreInstruments },
   cn: { market: "CN", label: "A 股官方股票列表", fetch: fetchOfficialCn },
   hk: { market: "HK", label: "港股普通证券", fetch: fetchEastmoneyHk },
+  fund: { market: "CN", label: "国内公募基金", fetch: fetchEastmoneyFunds },
   us: { market: "US", label: "美股普通股票", fetch: fetchNasdaqTraderUs }
 };
 
-await fs.mkdir(storageDir, { recursive: true });
+await fs.mkdir(sourceCacheDir, { recursive: true });
 
 const run = {
   id: `run-sync-instrument-registry-${Date.now()}`,
@@ -91,7 +95,28 @@ if (coverageErrors.length) {
 }
 await writeJson(registryFile, rows);
 await writeJson(summaryFile, summary);
-await writeGeneratedModule(generatedModuleFile, rows, summary);
+
+if (isMarketDataDatabaseEnabled()) {
+  try {
+    const changedCount = await upsertInstrumentRegistryRows(rows);
+    run.messages.push({
+      source: "postgres",
+      level: "info",
+      message: `${rows.length} instruments synced to PostgreSQL (${changedCount} changed rows)`
+    });
+    run.postgres = { enabled: true, changedCount };
+  } catch (error) {
+    run.failureCount += 1;
+    run.messages.push({
+      source: "postgres",
+      level: "error",
+      message: error instanceof Error ? error.message : String(error)
+    });
+    run.postgres = { enabled: true, error: error instanceof Error ? error.message : String(error) };
+  }
+} else {
+  run.postgres = { enabled: false };
+}
 
 run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
 run.finishedAt = new Date().toISOString();
@@ -144,7 +169,7 @@ async function fetchOfficialCn() {
 }
 
 async function fetchSseCnStocks() {
-  const cachePrefix = "sse-stock-list-v2";
+  const cachePrefix = "sse-stock-list";
   const pageSize = 100;
   const firstPayload = await fetchAndCacheSseStockListPage({ cachePrefix, page: 1, pageSize });
   const firstRows = firstPayload.pageHelp?.data;
@@ -194,7 +219,7 @@ async function fetchAndCacheSseStockListPage({ cachePrefix, page, pageSize }) {
   const payload = await fetchJson(`https://query.sse.com.cn/security/stock/getStockListData2.do?${query}`, {
     referer: "https://www.sse.com.cn/assortment/stock/list/share/"
   });
-  await writeJson(path.join(storageDir, `${cachePrefix}-${page}.json`), payload);
+  await writeCachedSourcePage(cachePrefix, page, payload);
   return payload;
 }
 
@@ -251,7 +276,7 @@ async function fetchAndCacheSzseStockListPage({ cachePrefix, page }) {
   const payload = await fetchJson(`https://www.szse.cn/api/report/ShowReport/data?${query}`, {
     referer: "https://www.szse.cn/market/product/stock/list/index.html"
   });
-  await writeJson(path.join(storageDir, `${cachePrefix}-${page}.json`), payload);
+  await writeCachedSourcePage(cachePrefix, page, payload);
   return payload;
 }
 
@@ -284,17 +309,16 @@ async function fetchEastmoneyCn() {
 }
 
 async function fetchEastmoneyHk() {
-  const hkexRows = await readHkexListOfSecurities();
-  const rows = hkexRows.length
-    ? hkexRows
-    : await fetchEastmoneyClistPages({
-        cachePrefix: "hk-clist",
-        fs: "m:128+t:3,m:128+t:4,m:128+t:1,m:128+t:2",
-        fields: "f12,f14",
-        referer: "https://quote.eastmoney.com/center/gridlist.html#hk_stocks",
-        pageSize: 100,
-        maxPages: 40
-      });
+  const eastmoneyRows = await fetchEastmoneyHkStocks().catch((error) => {
+    run.messages.push({
+      source: "hk-eastmoney",
+      level: "warn",
+      message: `Eastmoney HK stock list failed; continuing with HKEX if available: ${error.message}`
+    });
+    return [];
+  });
+  const hkexRows = await fetchHkexListOfSecurities();
+  const rows = hkexRows.length ? enrichHkexRows(hkexRows, eastmoneyRows) : eastmoneyRows;
   return rows
     .map((row) =>
       registryRow({
@@ -303,13 +327,67 @@ async function fetchEastmoneyHk() {
         type: row.type || "股票",
         market: "HK",
         exchange: "HKEX",
-        currency: "HKD",
+        currency: row.currency || "HKD",
+        aliases: [row.aliases, row.englishName, row.nameEn, row.isin].flat().filter(Boolean),
         universe: "hk-main",
-        dataSource: row.dataSource || "Eastmoney quote clist HK",
+        dataSource: row.dataSource || "Eastmoney quote clist HK stocks",
         sourceUpdatedAt: now
       })
     )
     .filter(Boolean);
+}
+
+async function fetchEastmoneyHkStocks() {
+  const rows = await fetchEastmoneyClistPages({
+    cachePrefix: "hk-stock-clist",
+    fs: "m:128+t:3,m:128+t:4",
+    fields: "f12,f14,f13,f100",
+    referer: "https://quote.eastmoney.com/center/gridlist.html#hk_stocks",
+    pageSize: 100,
+    maxPages: 40
+  });
+  return rows
+    .filter((row) => isHkListedEquityCode(row.f12))
+    .filter((row) => !shouldSkipHkSecurity({ name: row.f14, category: row.f100 }))
+    .map((row) => ({
+      symbol: String(row.f12 || "").padStart(5, "0"),
+      name: row.f14,
+      type: "股票",
+      dataSource: "Eastmoney quote clist HK stocks"
+    }));
+}
+
+async function fetchEastmoneyFunds() {
+  const rows = await fetchEastmoneyFundCodeSearch();
+  return rows
+    .map(([code, shortCode, name, fundType, pinyin]) =>
+      registryRow({
+        symbol: `${code}.OF`,
+        name,
+        type: "基金",
+        market: "CN",
+        exchange: "OTC",
+        currency: "CNY",
+        aliases: [code, shortCode, pinyin, fundType].filter(Boolean),
+        universe: "fund",
+        dataSource: "Eastmoney fund code search",
+        sourceUpdatedAt: now
+      })
+    )
+    .filter(Boolean);
+}
+
+async function fetchEastmoneyFundCodeSearch() {
+  const file = path.join(cacheGroupDir("eastmoney-fund-code-search"), "fundcode_search.js");
+  const cached = await readOptionalText(file);
+  const script = cached || await fetchText(new URL(eastmoneyFundCodeSearchUrl), {
+    referer: "https://fund.eastmoney.com/"
+  });
+  if (!cached) {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, script);
+  }
+  return parseEastmoneyFundCodeSearch(script);
 }
 
 async function fetchEastmoneyClistPages({ cachePrefix, fs: fsValue, fields, referer, pageSize, maxPages }) {
@@ -358,14 +436,47 @@ async function fetchEastmoneyClistPage({ page, pageSize, fsValue, fields, refere
 }
 
 async function readCachedEastmoneyPage(cachePrefix, page) {
-  const cached = await readOptionalText(path.join(storageDir, `${cachePrefix}-${page}.json`));
+  const cached = await firstExistingText(cacheReadCandidates(cachePrefix, page));
   return cached ? JSON.parse(cached) : null;
 }
 
 async function fetchAndCacheEastmoneyClistPage(options) {
   const payload = await fetchEastmoneyClistPage(options);
-  await writeJson(path.join(storageDir, `${options.cachePrefix}-${options.page}.json`), payload);
+  await writeCachedSourcePage(options.cachePrefix, options.page, payload);
   return payload;
+}
+
+async function writeCachedSourcePage(cachePrefix, page, payload) {
+  const file = cachePageFile(cachePrefix, page);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await writeJson(file, payload);
+}
+
+function cachePageFile(cachePrefix, page) {
+  return path.join(cacheGroupDir(cachePrefix), `page-${page}.json`);
+}
+
+function cacheReadCandidates(cachePrefix, page) {
+  const files = [cachePageFile(cachePrefix, page)];
+  if (cachePrefix === "sse-stock-list") {
+    files.push(path.join(storageDir, `sse-stock-list-v2-${page}.json`));
+  } else {
+    files.push(path.join(storageDir, `${cachePrefix}-${page}.json`));
+  }
+  return files;
+}
+
+function cacheGroupDir(cachePrefix) {
+  const groups = {
+    "sse-stock-list": ["sse", "stock-list"],
+    "szse-stock-list": ["szse", "stock-list"],
+    "cn-clist": ["eastmoney", "cn-clist"],
+    "hk-clist": ["eastmoney", "hk-clist"],
+    "hk-stock-clist": ["eastmoney", "hk-stock-clist"],
+    "eastmoney-fund-code-search": ["eastmoney", "fund-code-search"],
+    "hkex-list-of-securities": ["hkex", "list-of-securities"]
+  };
+  return path.join(sourceCacheDir, ...(groups[cachePrefix] || [cachePrefix.replace(/[^\w.-]+/gu, "-")]));
 }
 
 async function readHkexListOfSecurities() {
@@ -375,6 +486,52 @@ async function readHkexListOfSecurities() {
   ]);
   if (cached) return parseHkexDelimitedList(cached);
   return [];
+}
+
+async function fetchHkexListOfSecurities() {
+  const localRows = await readHkexListOfSecurities();
+  if (localRows.length) return localRows;
+
+  try {
+    const file = await fetchAndCacheHkexListOfSecuritiesXlsx();
+    const rows = await parseHkexListOfSecuritiesXlsx(file);
+    if (rows.length) return rows;
+  } catch (error) {
+    run.messages.push({
+      source: "hkex-official",
+      level: "warn",
+      message: `HKEX list of securities failed; falling back to Eastmoney HK list: ${error.message}`
+    });
+  }
+  return [];
+}
+
+async function fetchAndCacheHkexListOfSecuritiesXlsx() {
+  const file = path.join(cacheGroupDir("hkex-list-of-securities"), "ListOfSecurities.xlsx");
+  try {
+    await fs.access(file);
+    return file;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await execFileAsync("curl", [
+    "-L",
+    "-s",
+    "--fail",
+    "--max-time",
+    "45",
+    "-H",
+    `User-Agent: ${publicHeaders()["User-Agent"]}`,
+    "-H",
+    "Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*",
+    "-H",
+    "Referer: https://www.hkex.com.hk/Services/Trading/Securities/Securities-Lists?sc_lang=en",
+    "-o",
+    file,
+    hkexListOfSecuritiesUrl
+  ], { maxBuffer: 80 * 1024 * 1024 });
+  return file;
 }
 
 async function fetchNasdaqTraderUs() {
@@ -520,17 +677,6 @@ function buildSummary(rows) {
   };
 }
 
-async function writeGeneratedModule(file, rows, summary) {
-  const body = [
-    "// Generated by scripts/market-data/sync-instrument-registry.mjs. Do not edit by hand.",
-    `export const instrumentRegistryGeneratedAt = ${JSON.stringify(summary.generatedAt)};`,
-    `export const instrumentRegistrySummary = ${JSON.stringify(summary, null, 2)};`,
-    `export const instrumentRegistry = ${JSON.stringify(rows, null, 2)};`,
-    ""
-  ].join("\n");
-  await fs.writeFile(file, body);
-}
-
 function parsePipeRows(text) {
   const lines = String(text || "").split(/\r?\n/u).filter((line) => line && !line.startsWith("File Creation Time"));
   const headers = lines.shift()?.split("|") || [];
@@ -558,6 +704,112 @@ function parseHkexDelimitedList(text) {
       type: /reit|房地產投資信託|房地产投资信托/iu.test(row.category || row.name) ? "REIT" : /etf|交易所買賣基金|交易所买卖基金/iu.test(row.category || row.name) ? "ETF" : "股票",
       dataSource: "HKEX list of securities cache"
     }));
+}
+
+function parseEastmoneyFundCodeSearch(script) {
+  const text = String(script || "").replace(/^\uFEFF/u, "");
+  const match = text.match(/var\s+r\s*=\s*(\[[\s\S]*?\]);?\s*$/u);
+  if (!match) throw new Error("Eastmoney fund code search missing var r payload");
+  const rows = JSON.parse(match[1]);
+  if (!Array.isArray(rows)) throw new Error("Eastmoney fund code search payload is not an array");
+  return rows
+    .filter((row) => Array.isArray(row) && /^\d{6}$/u.test(String(row[0] || "")) && row[2])
+    .map((row) => row.map((value) => String(value || "").trim()));
+}
+
+async function parseHkexListOfSecuritiesXlsx(file) {
+  const { stdout } = await execFileAsync("unzip", ["-p", file, "xl/worksheets/sheet1.xml"], {
+    maxBuffer: 80 * 1024 * 1024
+  });
+  return parseHkexWorksheetXml(stdout);
+}
+
+function parseHkexWorksheetXml(xml) {
+  const rows = [];
+  const rowPattern = /<x:row\b[^>]*r="(\d+)"[^>]*>(.*?)<\/x:row>/gsu;
+  for (const rowMatch of String(xml || "").matchAll(rowPattern)) {
+    const rowNumber = Number(rowMatch[1]);
+    if (rowNumber < 4) continue;
+    const cells = parseHkexWorksheetCells(rowMatch[2]);
+    const symbol = normalizeHkSymbol(cells.A);
+    if (!symbol) continue;
+    const category = String(cells.C || "").trim();
+    const subCategory = String(cells.D || "").trim();
+    const currency = String(cells.Q || "HKD").trim().toUpperCase();
+    if (!isSupportedHkexSecurity({ symbol, category, subCategory, currency })) continue;
+    rows.push({
+      symbol,
+      name: cells.B,
+      englishName: cells.B,
+      type: hkexSecurityType({ category, subCategory }),
+      currency,
+      isin: cells.F,
+      category,
+      dataSource: "HKEX full list of securities"
+    });
+  }
+  return rows;
+}
+
+function parseHkexWorksheetCells(rowXml) {
+  const cells = {};
+  const cellPattern = /<x:c\b[^>]*r="([A-Z]+)\d+"[^>]*>(.*?)<\/x:c>/gsu;
+  for (const cellMatch of String(rowXml || "").matchAll(cellPattern)) {
+    const valueMatch = cellMatch[2].match(/<x:v>(.*?)<\/x:v>/su);
+    cells[cellMatch[1]] = decodeXmlText(valueMatch?.[1] || "").trim();
+  }
+  return cells;
+}
+
+function enrichHkexRows(hkexRows, eastmoneyRows) {
+  const eastmoneyBySymbol = new Map(eastmoneyRows.map((row) => [normalizeHkSymbol(row.symbol), row]));
+  return hkexRows.map((row) => {
+    const eastmoney = eastmoneyBySymbol.get(normalizeHkSymbol(row.symbol));
+    if (!eastmoney?.name) return row;
+    return {
+      ...row,
+      name: eastmoney.name,
+      aliases: [row.aliases, row.name, row.englishName, row.isin].flat().filter(Boolean)
+    };
+  });
+}
+
+function isSupportedHkexSecurity({ symbol, category, subCategory, currency }) {
+  if (!isHkListedEquityCode(symbol)) return false;
+  if (currency === "RMB") return false;
+  if (category === "Equity") return true;
+  if (category === "Real Estate Investment Trusts") return true;
+  if (category === "Exchange Traded Products") return /exchange traded funds/iu.test(subCategory);
+  return false;
+}
+
+function hkexSecurityType({ category, subCategory }) {
+  if (category === "Real Estate Investment Trusts") return "REIT";
+  if (category === "Exchange Traded Products" || /exchange traded funds/iu.test(subCategory)) return "ETF";
+  return "股票";
+}
+
+function isHkListedEquityCode(value) {
+  const symbol = normalizeHkSymbol(value);
+  if (!/^\d{5}$/u.test(symbol)) return false;
+  return Number(symbol) < 80000;
+}
+
+function normalizeHkSymbol(value) {
+  const raw = String(value || "").trim();
+  if (!/^\d{1,5}$/u.test(raw)) return "";
+  return raw.padStart(5, "0");
+}
+
+function decodeXmlText(value) {
+  return String(value || "")
+    .replace(/&lt;/gu, "<")
+    .replace(/&gt;/gu, ">")
+    .replace(/&quot;/gu, "\"")
+    .replace(/&apos;/gu, "'")
+    .replace(/&amp;/gu, "&")
+    .replace(/&#(\d+);/gu, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/giu, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)));
 }
 
 function splitDelimitedLine(line, delimiter) {

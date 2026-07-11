@@ -44,7 +44,7 @@ MARKET_DAILY_SYNC_ENABLED=true
 
 `API_ALLOWED_ORIGINS` 是逗号分隔的前端来源白名单。不要在生产环境长期使用 `*`，除非只是临时公开演示。
 
-设置 `DATABASE_URL` 后，行情价格、基金净值、汇率和同步运行记录会写入 Supabase PostgreSQL。没有数据库时会回退到文件缓存；如果使用 Render Free，不要把 `MARKET_DATA_DIR` 指向 `/var/data`，除非已经配置可写的持久化 Disk。
+设置 `DATABASE_URL` 后，资产资源主库、行情价格、基金净值、汇率和同步运行记录会写入 Supabase PostgreSQL。资产搜索优先查询 PostgreSQL；没有数据库或数据库暂无资源库数据时会回退到文件缓存。如果使用 Render Free，不要把 `MARKET_DATA_DIR` 指向 `/var/data`，除非已经配置可写的持久化 Disk。
 
 ## 已有接口
 

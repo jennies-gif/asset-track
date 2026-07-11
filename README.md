@@ -114,7 +114,7 @@ Render Blueprint 默认会：
 - 执行 `npm install` 安装依赖。
 - 执行 `npm run api:start` 启动 API。
 - 通过 `/api/health` 做健康检查。
-- 在设置 `DATABASE_URL` 后，将行情价格、基金净值、汇率、收益表现对比基准缓存和同步运行记录写入 Supabase PostgreSQL。
+- 在设置 `DATABASE_URL` 后，将资产资源主库、行情价格、基金净值、汇率、收益表现对比基准缓存和同步运行记录写入 Supabase PostgreSQL。
 
 获取 Supabase 数据库连接字符串：
 
@@ -252,7 +252,9 @@ npm run data:backfill
 npm run data:daily
 ```
 
-`data:sync-registry` 维护资产名称/代码/市场主库，用于录入搜索和自动补全；它不会抓取价格。该脚本按市场设置覆盖闸门，默认要求 A 股、港股和美股分别达到最小数量，避免单一市场数量过大掩盖中国市场缺口。价格和净值仍只通过后续行情脚本、API 手动同步或用户录入资产触发。当前脚本默认使用公开数据源；A 股主库优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底；港股可读取 HKEX 本地清单或回退到东方财富港股列表；美股使用 Nasdaq 公开接口，基金使用东方财富基金净值，虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比可在分析页选择，默认展示沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY` 和 QQQ ETF `QQQ`；也支持中证500 `000905`、上证50 `000016`、纳斯达克100指数 `NDX`、罗素2000的 IWM ETF 代理基准 `IWM`、全球股票 VT ETF `VT` 和黄金 GLD ETF `GLD`。前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
+`data:sync-registry` 维护资产名称/代码/市场主库，用于录入搜索和自动补全；它不会抓取价格。该脚本按市场设置覆盖闸门，默认要求 A 股、港股和美股分别达到最小数量，避免单一市场数量过大掩盖中国市场缺口。价格和净值仍只通过后续行情脚本、API 手动同步或用户录入资产触发。当前脚本默认使用公开数据源；A 股主库优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底，分页源缓存会按来源整理到 `storage/market-data/source-cache/`；国内公募基金主库使用东方财富 `fundcode_search.js`，基金代码统一存为 `{code}.OF` 并保留裸代码别名；港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量清单，并用东方财富港股股票列表补充中文简称或兜底；美股使用 Nasdaq 公开接口，基金净值使用东方财富公开脚本，虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比可在分析页选择，默认展示沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY` 和 QQQ ETF `QQQ`；也支持中证500 `000905`、上证50 `000016`、纳斯达克100指数 `NDX`、罗素2000的 IWM ETF 代理基准 `IWM`、全球股票 VT ETF `VT` 和黄金 GLD ETF `GLD`。前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
+
+完整资产主库不打进前端首屏包：设置 `DATABASE_URL` 后，`npm run data:sync-registry` 会把资源库写入 PostgreSQL 的 `market_data_instruments`、`market_data_instrument_aliases` 和 `market_data_instrument_sources`；资产录入通过 `/api/instruments/search` 查询 PostgreSQL。`storage/market-data/instrument-registry.json` 仍作为导入缓存和无数据库时的回退源；前端源码只保留 `src/domain/instrumentRegistry.seed.js` 常用资产兜底，用于无 API 或离线原型场景。
 
 价格状态统一为 `synced`、`manual`、`pending`、`stale`、`missing` 和 `error`：缺行情时允许继续保存资产，但页面必须提示待获取价格、成本价兜底、缺缓存或同步失败，不能把兜底估值展示成真实市场价格。缺成本时允许保存持仓，但收益、收益率和依赖成本的归因必须显示为暂无法计算或待补全。
 

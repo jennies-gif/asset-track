@@ -15,6 +15,7 @@ let suppressNextMatchPanel = false;
 let draftMarketLookupTimer = 0;
 let draftMarketLookupRequest = 0;
 let draftMarketLookupQuery = "";
+let assetMatchSearchRequest = 0;
 
 export function configureAssetForm(context) {
   ctx = context;
@@ -272,14 +273,67 @@ export function updateAssetMatchPanel() {
   if (!assetMatchCandidates.length) {
     setAssetMatchHiddenFields(null, "uncovered");
     panel.classList.remove("is-hidden");
-    panel.innerHTML = `
-      <div class="asset-match-empty">
-        <strong>未搜到对应资产</strong>
-        <span>保存后将作为手动管理资产，价格、来源和估值需要自行维护。</span>
-      </div>
-    `;
+    panel.innerHTML = renderAssetMatchEmpty(Boolean(ctx.marketApiBaseUrl));
+    queueRemoteAssetSearch(query);
     return;
   }
+  assetMatchSearchRequest += 1;
+  const exact = assetMatchCandidates.find((item) => isExactAssetMatch(item, query));
+  setAssetMatchHiddenFields(exact || null, exact ? "matched" : "possible");
+  panel.classList.remove("is-hidden");
+  panel.innerHTML = `
+    <div class="asset-match-title">
+      <strong>已匹配资产</strong>
+    </div>
+    <div class="asset-match-list">
+      ${assetMatchCandidates.map((item, index) => renderAssetMatchOption(item, index, exact?.id === item.id)).join("")}
+    </div>
+  `;
+}
+
+function renderAssetMatchEmpty(isSearchingRemote = false) {
+  return `
+    <div class="asset-match-empty">
+      <strong>${isSearchingRemote ? "正在查询资产库" : "未搜到对应资产"}</strong>
+      <span>${isSearchingRemote ? "本地只保留常用资产，完整资源库由行情 API 查询。" : "保存后将作为手动管理资产，价格、来源和估值需要自行维护。"}</span>
+    </div>
+  `;
+}
+
+function queueRemoteAssetSearch(query) {
+  if (!ctx.marketApiBaseUrl || !query || query.length < 2) return;
+  const requestId = ++assetMatchSearchRequest;
+  fetch(`${ctx.marketApiBaseUrl}/api/instruments/search?query=${encodeURIComponent(query)}`)
+    .then((response) => {
+      if (!response.ok) throw new Error(`资产库查询返回 ${response.status}`);
+      return response.json();
+    })
+    .then((payload) => {
+      if (requestId !== assetMatchSearchRequest || assetSearchQuery() !== query) return;
+      const remoteMatches = Array.isArray(payload?.instruments) ? payload.instruments.slice(0, 5) : [];
+      if (!remoteMatches.length) {
+        renderRemoteAssetSearchEmpty();
+        return;
+      }
+      assetMatchCandidates = remoteMatches;
+      renderAssetMatchCandidates(query);
+    })
+    .catch(() => {
+      if (requestId !== assetMatchSearchRequest || assetSearchQuery() !== query) return;
+      renderRemoteAssetSearchEmpty();
+    });
+}
+
+function renderRemoteAssetSearchEmpty() {
+  const panel = ctx.elements.assetMatchPanel;
+  if (!panel || panel.classList.contains("is-hidden")) return;
+  setAssetMatchHiddenFields(null, "uncovered");
+  panel.innerHTML = renderAssetMatchEmpty(false);
+}
+
+function renderAssetMatchCandidates(query) {
+  const panel = ctx.elements.assetMatchPanel;
+  if (!panel) return;
   const exact = assetMatchCandidates.find((item) => isExactAssetMatch(item, query));
   setAssetMatchHiddenFields(exact || null, exact ? "matched" : "possible");
   panel.classList.remove("is-hidden");

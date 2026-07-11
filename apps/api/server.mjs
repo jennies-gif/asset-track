@@ -23,8 +23,10 @@ import {
 } from "../../src/domain/marketData.js";
 import {
   isMarketDataDatabaseEnabled,
+  readInstrumentRegistryRows,
   readMarketDataRows,
   readUserAssetDailyPriceRows,
+  upsertInstrumentRegistryRows,
   upsertUserAssetDailyPriceRows
 } from "../../src/server/marketDataDatabase.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
@@ -186,14 +188,8 @@ async function createAccount(request, response) {
 
 async function searchInstruments(url, response) {
   const query = normalizeQuery(url.searchParams.get("query"));
-  const instruments = await loadSearchInstruments();
-  const matches = instruments.filter((item) => {
-    return (
-      normalizeQuery(item.symbol).includes(query) ||
-      normalizeQuery(item.name).includes(query) ||
-      normalizeQuery(item.market).includes(query)
-    );
-  });
+  if (!query) return sendJson(response, { instruments: [], universes: marketUniverses });
+  const matches = await searchInstrumentRepository(query);
   return sendJson(response, { instruments: matches.slice(0, 20), universes: marketUniverses });
 }
 
@@ -202,8 +198,7 @@ async function lookupInstrumentWithLatestPrice(url, response) {
   const query = normalizeQuery(rawQuery);
   if (!query) return sendError(response, 400, "validation_error", "资产代码或名称不能为空", { query: "资产代码或名称不能为空" });
 
-  const instruments = await loadSearchInstruments();
-  let instrument = bestInstrumentMatch(instruments, query);
+  let instrument = (await searchInstrumentRepository(query))[0] || null;
   let addedToRegistry = false;
   if (!instrument) {
     const inferred = inferInstrumentFromSymbol(rawQuery);
@@ -873,8 +868,8 @@ function inferInstrumentFromSymbol(symbol) {
     return {
       symbol: normalized,
       name: normalized,
-      type: normalized.startsWith("5") || normalized.startsWith("1") ? "ETF" : "股票",
-      universe: "manual-cn",
+      type: normalized.startsWith("5") ? "ETF" : normalized.startsWith("1") ? "基金" : "股票",
+      universe: normalized.startsWith("1") ? "fund" : "manual-cn",
       market: "CN",
       currency: "CNY"
     };
@@ -887,8 +882,32 @@ function inferInstrumentFromSymbol(symbol) {
 
 async function findInstrument(symbol) {
   const normalized = String(symbol || "").trim().toUpperCase();
+  const dbMatch = (await searchInstrumentRepository(normalizeQuery(normalized), { allowFallback: false }))
+    .find((item) => (
+      item.symbol.toUpperCase() === normalized ||
+      item.symbol.toUpperCase().replace(/\.OF$/u, "") === normalized ||
+      (item.aliases || []).some((alias) => String(alias || "").trim().toUpperCase() === normalized)
+    ));
+  if (dbMatch) return dbMatch;
+
   const instruments = await loadSearchInstruments();
-  return instruments.find((item) => item.symbol.toUpperCase() === normalized) || null;
+  return instruments.find((item) => (
+    item.symbol.toUpperCase() === normalized ||
+    item.symbol.toUpperCase().replace(/\.OF$/u, "") === normalized ||
+    (item.aliases || []).some((alias) => String(alias || "").trim().toUpperCase() === normalized)
+  )) || bestInstrumentMatch(instruments, normalizeQuery(normalized)) || null;
+}
+
+async function searchInstrumentRepository(query, options = {}) {
+  const allowFallback = options.allowFallback !== false;
+  if (isMarketDataDatabaseEnabled()) {
+    const dbRows = await readInstrumentRegistryRows({ query, limit: 300 });
+    const dbMatches = rankInstrumentMatches(dbRows, query);
+    if (dbMatches.length || !allowFallback) return dbMatches;
+  }
+  if (!allowFallback) return [];
+  const instruments = await loadSearchInstruments();
+  return rankInstrumentMatches(instruments, query);
 }
 
 async function loadSearchInstruments() {
@@ -896,8 +915,6 @@ async function loadSearchInstruments() {
   const rows = await readJsonArray(path.join(marketStorageDir, "index-constituents.json"));
   const activeRows = rows.filter((row) => !row.effectiveTo);
   return dedupeInstruments([
-    ...registryRows.map(normalizeSearchInstrument).filter(Boolean),
-    ...securityWhitelist,
     ...activeRows.map((row) => ({
       symbol: row.symbol,
       name: row.name,
@@ -907,8 +924,22 @@ async function loadSearchInstruments() {
       exchange: row.exchange,
       currency: row.currency,
       source: row.source
-    }))
+    })),
+    ...registryRows.map(normalizeSearchInstrument).filter(Boolean),
+    ...securityWhitelist
   ]);
+}
+
+function rankInstrumentMatches(instruments, query) {
+  return instruments
+    .map((item) => ({ item, score: scoreInstrumentSearchMatch(item, query) }))
+    .filter((match) => match.score > 0)
+    .sort((left, right) => (
+      right.score - left.score ||
+      marketSearchPriority(left.item) - marketSearchPriority(right.item) ||
+      `${left.item.market}:${left.item.symbol}:${left.item.name}`.localeCompare(`${right.item.market}:${right.item.symbol}:${right.item.name}`, "zh-CN")
+    ))
+    .map((match) => match.item);
 }
 
 function normalizeSearchInstrument(row) {
@@ -944,12 +975,15 @@ function bestInstrumentMatch(instruments, normalizedQuery) {
 
 function scoreInstrumentSearchMatch(item, normalizedQuery) {
   const symbol = normalizeQuery(item.symbol);
+  const rawSymbol = symbol.replace(/\.OF$/u, "");
   const name = normalizeQuery(item.name);
   const aliases = Array.isArray(item.aliases) ? item.aliases.map(normalizeQuery) : [];
   if (symbol === normalizedQuery) return 1000;
+  if (rawSymbol && rawSymbol === normalizedQuery) return 980;
   if (name === normalizedQuery) return 900;
   if (aliases.some((alias) => alias === normalizedQuery)) return 850;
   if (symbol.startsWith(normalizedQuery)) return 700 - Math.abs(symbol.length - normalizedQuery.length);
+  if (rawSymbol.startsWith(normalizedQuery)) return 680 - Math.abs(rawSymbol.length - normalizedQuery.length);
   if (normalizedQuery.length < 2) return 0;
   if (name.includes(normalizedQuery)) return 600 - Math.abs(name.length - normalizedQuery.length);
   if (aliases.some((alias) => alias.includes(normalizedQuery))) return 500;
@@ -992,6 +1026,7 @@ async function upsertStoredInstrumentRegistry(instrument) {
   nextRows.push(normalized);
   nextRows.sort((left, right) => `${left.market}:${left.symbol}`.localeCompare(`${right.market}:${right.symbol}`));
   await writeJson(file, nextRows);
+  if (isMarketDataDatabaseEnabled()) await upsertInstrumentRegistryRows([normalized]);
   state.auditLogs.push(audit("upsert_instrument_registry", "instrument", key, normalized));
   return normalizeSearchInstrument(normalized);
 }

@@ -9,12 +9,18 @@
 - `npm run data:backfill`：默认拉取最近三个月数据。
 - `npm run data:daily`：默认拉取当天数据，也可指定日期；同时拉取默认汇率对和分析页收益表现对比基准。
 
-数据写入本地目录：
+无 `DATABASE_URL` 时，数据写入本地目录：
 
 ```text
 storage/market-data/
   instrument-registry.json
   instrument-registry-summary.json
+  source-cache/
+    szse/stock-list/page-1.json
+    sse/stock-list/page-1.json
+    hkex/list-of-securities/ListOfSecurities.xlsx
+    eastmoney/fund-code-search/fundcode_search.js
+    eastmoney/cn-clist/page-1.json
   index-universes.json
   index-constituents.json
   prices/
@@ -27,7 +33,9 @@ storage/market-data/
   market-data-runs.json
 ```
 
-`instrument-registry.json` 是资产搜索主库，只保存名称、代码、市场、类型、币种和来源等主数据，不保存用户持仓，也不会触发价格抓取。脚本默认覆盖阈值为 A 股 `5000`、港股 `2000`、美股 `4000`；如果某个市场低于阈值，同步运行会在 `market-data-runs.json` 中标记失败，便于发现源失效或缓存不足。历史兼容：旧版 `price-snapshots.json` 和 `fund-nav-snapshots.json` 仍可被 API 读取，但新脚本默认写入按证券代码分片的小文件。
+`instrument-registry.json` 是资产搜索主库的导入缓存，只保存名称、代码、市场、类型、币种和来源等主数据，不保存用户持仓，也不会触发价格抓取。脚本默认覆盖阈值为 A 股 `5000`、港股 `2000`、美股 `4000`；如果某个市场低于阈值，同步运行会在 `market-data-runs.json` 中标记失败，便于发现源失效或缓存不足。
+
+设置 `DATABASE_URL` 后，`npm run data:sync-registry` 会同时把完整主库写入 PostgreSQL：`market_data_instruments` 保存标的主数据，`market_data_instrument_aliases` 保存裸代码、简称、拼音等搜索别名，`market_data_instrument_sources` 保存来源快照。API 的 `/api/instruments/search` 和 `/api/instruments/lookup` 优先查询 PostgreSQL；数据库不可用或尚未导入时才回退 `instrument-registry.json`。前端源码只保留 `src/domain/instrumentRegistry.seed.js` 常用资产兜底，避免把数万条主库打进首屏 bundle。历史兼容：旧版 `price-snapshots.json` 和 `fund-nav-snapshots.json` 仍可被 API 读取，但新脚本默认写入按证券代码分片的小文件。
 
 `storage/` 已加入 `.gitignore`，不会提交真实行情缓存。
 
@@ -69,12 +77,12 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 
 - A 股股票、A 股 ETF 和港股：当前代码主路径使用腾讯证券公开 K 线接口，并补充腾讯实时 quote 作为同日最新参考价。
 - 东方财富 K 线适配函数仍保留在脚本中，但当前 `fetchInstrument()` 主流程没有调用；不要在产品文案中写成当前默认源。
-- 国内公募基金：东方财富基金净值公开脚本。
+- 国内公募基金：东方财富 `fundcode_search.js` 用于基金名称/代码主库，东方财富基金净值公开脚本用于单位净值。
 - 贵金属：Gold API 公开价格接口，默认按 `USD / troy ounce` 存储黄金、白银、铂金和钯金；如配置 `METALS_DEV_API_KEY`，可作为备用源。
 - 货币汇率：Frankfurter 参考汇率，默认抓取 `USD/CNY`、`HKD/CNY`、`USD/HKD` 和 `EUR/CNY`。
 - 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产，按 USD/USDT 近似存储价格；CoinGecko 保留为部分稳定币兜底。
 - 美股和美股 ETF：Nasdaq historical 公开接口。
-- 资产主库：A 股优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底；港股支持读取 `hkex-list-of-securities.csv` 或 `hkex-list-of-securities.txt` 本地缓存，也可回退到东方财富港股列表；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/*stock-list*.json`、`storage/market-data/*clist*.json`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源。
+- 资产主库：A 股优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底；国内公募基金使用东方财富 `fundcode_search.js` 基金代码列表，代码统一存为 `{code}.OF` 并保留裸代码别名；港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量证券清单，纳入普通股票、REIT 和非杠杆/反向 ETF，并排除债券、权证、牛熊证和 RMB counter 重复柜台；港股还会尝试用东方财富港股股票列表补充中文简称，失败时不影响 HKEX 官方清单入库；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/source-cache/**/page-*.json`、`storage/market-data/source-cache/eastmoney/fund-code-search/fundcode_search.js`、`storage/market-data/source-cache/hkex/list-of-securities/ListOfSecurities.xlsx`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源；为兼容旧缓存，也会回退读取根目录下旧版 `*stock-list*.json`、`*clist*.json`、`hkex-list-of-securities.csv` 和 `hkex-list-of-securities.txt` 文件。
 - 沪深 300 成分股：东方财富 datacenter 公开接口。
 - 恒生科技成分股：Goldman Sachs Warrants 公开 AJAX。
 - 纳斯达克 100 成分股：Nasdaq list-type 公开接口。
@@ -97,7 +105,13 @@ npm run data:sync-registry
 npm run data:sync-registry -- --sources=cn,us,core --min-cn=100 --min-hk=0
 ```
 
-生产或正式发布前不要降低默认阈值；如果 A 股低于 `5000` 或港股低于 `2000`，应补齐缓存或修复源适配器后再生成主库。港股官方清单可先转换为 CSV/制表符文本，放入：
+生产或正式发布前不要降低默认阈值；如果 A 股低于 `5000` 或港股低于 `2000`，应补齐缓存或修复源适配器后再生成主库。港股官方清单会自动缓存到：
+
+```text
+storage/market-data/source-cache/hkex/list-of-securities/ListOfSecurities.xlsx
+```
+
+如果需要离线调试，也可把港股官方清单转换为 CSV/制表符文本后放入：
 
 ```text
 storage/market-data/hkex-list-of-securities.csv

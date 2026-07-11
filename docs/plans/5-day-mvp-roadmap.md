@@ -35,7 +35,7 @@
 - [ ] 强化行情边界：同步价格是增强能力，失败不影响手动录入和本地计算；不承诺实时、完整或全市场覆盖。
 - [ ] 强化资产识别边界：支持手动录入和部分资产自动识别，不宣传全量 A 股、港股或基金覆盖。
 - [ ] 完成 390px、768px、1280px 的手动或浏览器截图验收。
-- [ ] 压测线上首屏和资产搜索体验，重点观察 `instrumentRegistry.generated.js` 体积对加载和输入响应的影响。
+- [ ] 压测线上首屏和资产搜索体验，重点观察 API 资产搜索延迟、输入响应和 seed 兜底命中率。
 - [ ] 完成线上冒烟：打开首页、新增资产、刷新保留数据、导出 JSON、错误 JSON 导入失败、有效 JSON 导入预览、写复盘、反馈入口、风险提示可见。
 - [ ] 准备回滚方案：记录部署版本号或 commit，确认托管平台可回滚到上一个稳定版本。
 
@@ -122,13 +122,13 @@
 - [ ] 本地执行 `npm run typecheck`。
 - [ ] 本地执行 `npm run build:static`。
 - [ ] 本地执行 `npm run build`。
-- [ ] 使用本地静态服务预览 `dist-static`，检查 `/`、`/src/app.js`、`/src/styles/app.css` 和 `/src/domain/instrumentRegistry.generated.js` 可正常加载。
+- [ ] 使用本地静态服务预览 `dist-static`，检查 `/`、`/src/app.js`、`/src/styles/app.css` 和 `/src/domain/instrumentRegistry.seed.js` 可正常加载。
 
 性能和资源：
 
 - [ ] 检查线上或预览环境首屏加载时间。
 - [ ] 检查资产搜索输入时是否明显卡顿。
-- [ ] 如 `instrumentRegistry.generated.js` 影响体验，本轮优先考虑延迟加载或缩小 beta 发布库；若来不及，文档中记录为上线已知风险，并控制种子用户规模。
+- [ ] 如 API 资产搜索影响体验，本轮优先考虑服务端索引、结果缓存或缩小 beta 发布库；若来不及，文档中记录为上线已知风险，并控制种子用户规模。
 
 部署边界：
 

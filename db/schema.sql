@@ -100,6 +100,55 @@ create table asset_aliases (
   unique (source, source_symbol)
 );
 
+-- Runtime instrument master used by the standalone API resource search.
+-- This table family is intentionally symbol-based and source-auditable so the
+-- large registry can live in PostgreSQL while JSON files remain import caches.
+create table market_data_instruments (
+  instrument_key text primary key,
+  symbol text not null,
+  name text not null,
+  market text not null,
+  exchange text not null default '',
+  asset_type text not null,
+  currency char(3) not null,
+  universe_key text not null default '',
+  market_data_supported boolean not null default true,
+  status text not null default 'active',
+  data_source text not null default '',
+  source_updated_at timestamptz,
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (market, symbol)
+);
+
+create table market_data_instrument_aliases (
+  instrument_key text not null references market_data_instruments(instrument_key) on delete cascade,
+  alias text not null,
+  normalized_alias text not null,
+  created_at timestamptz not null default now(),
+  primary key (instrument_key, normalized_alias)
+);
+
+create table market_data_instrument_sources (
+  instrument_key text not null references market_data_instruments(instrument_key) on delete cascade,
+  source text not null,
+  source_updated_at timestamptz,
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (instrument_key, source)
+);
+
+create index market_data_instruments_symbol_idx
+  on market_data_instruments(symbol, market);
+
+create index market_data_instruments_market_type_idx
+  on market_data_instruments(market, asset_type);
+
+create index market_data_instrument_aliases_normalized_idx
+  on market_data_instrument_aliases(normalized_alias);
+
 create table attachments (
   id uuid primary key,
   user_id uuid not null references users(id) on delete cascade,
