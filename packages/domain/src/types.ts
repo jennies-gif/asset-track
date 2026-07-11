@@ -110,6 +110,7 @@ export interface Security {
   universe: string;
   market: string;
   currency: Currency | string;
+  aliases?: string[];
   source?: string;
 }
 

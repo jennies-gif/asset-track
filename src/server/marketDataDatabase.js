@@ -1,6 +1,50 @@
 let poolPromise = null;
 let schemaReadyPromise = null;
 
+export const instrumentRegistrySearchSql = `
+  with matched_instruments as (
+    select distinct i.*
+    from market_data_instruments i
+    left join market_data_instrument_aliases a
+      on a.instrument_key = i.instrument_key
+    where i.status = 'active'
+      and (
+        upper(i.symbol) = $3
+        or upper(replace(i.symbol, '.OF', '')) = $3
+        or a.normalized_alias = $2
+        or upper(i.symbol) like $4
+        or upper(replace(i.symbol, '.OF', '')) like $4
+        or a.normalized_alias like $5
+        or upper(replace(i.name, ' ', '')) like $1
+        or upper(replace(coalesce(a.alias, ''), ' ', '')) like $1
+      )
+    order by i.market asc, i.symbol asc
+    limit $6
+  )
+  select
+    i.instrument_key,
+    i.symbol,
+    i.name,
+    i.market,
+    i.exchange,
+    i.asset_type,
+    i.currency,
+    i.universe_key,
+    i.market_data_supported,
+    i.status,
+    i.data_source,
+    i.source_updated_at,
+    i.updated_at,
+    coalesce(alias_rows.aliases, '[]'::jsonb) as aliases
+  from matched_instruments i
+  left join lateral (
+    select jsonb_agg(distinct alias) filter (where alias is not null) as aliases
+    from market_data_instrument_aliases
+    where instrument_key = i.instrument_key
+  ) alias_rows on true
+  order by i.market asc, i.symbol asc
+`;
+
 export function isMarketDataDatabaseEnabled() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -32,50 +76,7 @@ export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {
   if (!normalizedQuery) return [];
   const exactQuery = normalizedQuery.toUpperCase();
   const result = await pool.query(
-    `
-      with matched_instruments as (
-        select distinct i.*
-        from market_data_instruments i
-        left join market_data_instrument_aliases a
-          on a.instrument_key = i.instrument_key
-        where i.status = 'active'
-          and (
-            upper(i.symbol) = $3
-            or upper(replace(i.symbol, '.OF', '')) = $3
-            or a.normalized_alias = $2
-            or upper(i.symbol) like $4
-            or upper(replace(i.symbol, '.OF', '')) like $4
-            or a.normalized_alias like $5
-            or upper(replace(i.name, ' ', '')) like $1
-            or upper(replace(coalesce(a.alias, ''), ' ', '')) like $1
-          )
-        order by i.market asc, i.symbol asc
-        limit $6
-      )
-      select
-        i.instrument_key,
-        i.symbol,
-        i.name,
-        i.market,
-        i.exchange,
-        i.asset_type,
-        i.currency,
-        i.universe_key,
-        i.market_data_supported,
-        i.status,
-        i.data_source,
-        i.source_updated_at,
-        i.updated_at,
-        coalesce(
-          jsonb_agg(distinct a.alias) filter (where a.alias is not null),
-          '[]'::jsonb
-        ) as aliases
-      from matched_instruments i
-      left join market_data_instrument_aliases a
-        on a.instrument_key = i.instrument_key
-      group by i.instrument_key
-      order by i.market asc, i.symbol asc
-    `,
+    instrumentRegistrySearchSql,
     [`%${normalizedQuery}%`, normalizedQuery, exactQuery, `${exactQuery}%`, `${normalizedQuery}%`, boundedLimit]
   );
   return result.rows.map(instrumentRegistryRowFromDatabase);

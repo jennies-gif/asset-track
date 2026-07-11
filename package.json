@@ -25,7 +25,8 @@
     "build": "npm run build -w apps/web",
     "build:static": "node scripts/build-static.mjs",
     "typecheck": "npm run typecheck -w packages/domain && npm run typecheck -w apps/web",
-    "test": "node --test"
+    "test": "node --test",
+    "verify:release": "npm test && npm run typecheck && npm run build && npm run build:static"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

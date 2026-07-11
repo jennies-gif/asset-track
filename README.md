@@ -69,6 +69,7 @@
 
 - 构建命令：`npm run build:static`
 - 发布目录：`dist-static`
+- 发布前统一运行：`npm run verify:release`。该命令依次执行完整测试、共享领域与 React 并行入口类型检查、React 构建和正式静态入口构建；任一失败都不得发布。
 - 发布内容只包含 `index.html`、`src/`、`public/`，不要把仓库根目录、`storage/`、`docs/`、`node_modules/` 或本地缓存作为静态资源发布。
 - 部署后必须使用 HTTPS 链接访问，不要长期暴露本地 `npm start` 预览服务。
 - HTTPS 页面不会调用硬编码的本地 HTTP API，避免 mixed content。默认会请求同源 `/api`；如果静态站没有同源 API，“同步价格”和基准同步会显示失败，但不影响手动录入、计算、复盘和导入导出。
