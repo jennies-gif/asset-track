@@ -143,6 +143,12 @@ create table market_data_instrument_sources (
 create index market_data_instruments_symbol_idx
   on market_data_instruments(symbol, market);
 
+create index market_data_instruments_upper_symbol_idx
+  on market_data_instruments(upper(symbol));
+
+create index market_data_instruments_upper_symbol_no_fund_suffix_idx
+  on market_data_instruments(upper(replace(symbol, '.OF', '')));
+
 create index market_data_instruments_market_type_idx
   on market_data_instruments(market, asset_type);
 
@@ -348,6 +354,40 @@ create table market_data_runs (
   created_at timestamptz not null default now()
 );
 
+create table market_data_backfill_tasks (
+  id text primary key,
+  user_id text not null,
+  asset_id text not null,
+  account text not null default '',
+  symbol text not null,
+  market text not null,
+  currency char(3) not null,
+  asset_name text not null,
+  date_from date not null,
+  date_to date not null,
+  status text not null default 'pending',
+  trigger text not null default 'asset_created',
+  requested_at timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  retry_count integer not null default 0,
+  success_count integer not null default 0,
+  missing_count integer not null default 0,
+  failure_reason text,
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, asset_id, symbol, market, date_from, date_to),
+  check (date_to >= date_from),
+  check (status in ('pending', 'running', 'completed', 'partial', 'failed', 'cancelled'))
+);
+
+create index market_data_backfill_tasks_status_idx
+  on market_data_backfill_tasks(status, requested_at);
+
+create index market_data_backfill_tasks_symbol_date_idx
+  on market_data_backfill_tasks(symbol, market, date_from, date_to);
+
 create table valuation_snapshots (
   id uuid primary key,
   user_id uuid not null references users(id) on delete cascade,
@@ -389,6 +429,62 @@ create table user_asset_daily_price_snapshots (
 
 create index user_asset_daily_prices_user_instrument_date_idx
   on user_asset_daily_price_snapshots(user_id, instrument_id, price_date desc);
+
+create table user_assets (
+  user_id text not null,
+  asset_id text not null,
+  account text not null default '',
+  symbol text not null default '',
+  market text not null default 'UNKNOWN',
+  currency char(3) not null,
+  asset_name text not null,
+  asset_type text not null,
+  quantity_decimal numeric(38, 12) not null default 0,
+  cost_price_decimal numeric(38, 12) not null default 0,
+  purchase_date date,
+  status text not null default 'open',
+  raw_payload jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, asset_id),
+  check (quantity_decimal >= 0),
+  check (cost_price_decimal >= 0),
+  check (status in ('open', 'closed'))
+);
+
+create index user_assets_user_symbol_idx
+  on user_assets(user_id, symbol, market);
+
+alter table market_data_instruments enable row level security;
+alter table market_data_instrument_aliases enable row level security;
+alter table market_data_instrument_sources enable row level security;
+alter table market_data_price_snapshots enable row level security;
+alter table market_data_fund_nav_snapshots enable row level security;
+alter table market_data_fx_rate_snapshots enable row level security;
+alter table market_data_runs enable row level security;
+alter table market_data_backfill_tasks enable row level security;
+alter table user_asset_daily_price_snapshots enable row level security;
+alter table user_assets enable row level security;
+
+create policy "market data instruments are publicly readable"
+  on market_data_instruments for select
+  using (true);
+
+create policy "market data instrument aliases are publicly readable"
+  on market_data_instrument_aliases for select
+  using (true);
+
+create policy "market data price snapshots are publicly readable"
+  on market_data_price_snapshots for select
+  using (true);
+
+create policy "market data fund nav snapshots are publicly readable"
+  on market_data_fund_nav_snapshots for select
+  using (true);
+
+create policy "market data fx rate snapshots are publicly readable"
+  on market_data_fx_rate_snapshots for select
+  using (true);
 
 create table attribution_runs (
   id uuid primary key,

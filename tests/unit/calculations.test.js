@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -540,6 +543,46 @@ test("keeps analysis benchmark symbols in the default market sync set", () => {
     [...new Set(defaultBenchmarkSyncSymbols)].sort(),
     [...new Set(benchmarkInstruments.map((benchmark) => benchmark.symbol))].sort()
   );
+});
+
+test("does not use the full instrument registry as the default market data sync set", async () => {
+  const marketDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "asset-trail-registry-boundary-"));
+  await fs.writeFile(
+    path.join(marketDataDir, "instrument-registry.json"),
+    JSON.stringify([
+      {
+        symbol: "ZZZ999",
+        name: "不应默认抓取的资源库标的",
+        market: "US",
+        type: "股票",
+        currency: "USD"
+      }
+    ])
+  );
+
+  const previousMarketDataDir = process.env.MARKET_DATA_DIR;
+  process.env.MARKET_DATA_DIR = marketDataDir;
+  try {
+    const moduleUrl = `../../scripts/market-data/fetch-market-data.mjs?boundary=${Date.now()}`;
+    const { selectInstruments } = await import(moduleUrl);
+    const defaultSelection = await selectInstruments({}, "2026-07-11");
+    assert.equal(defaultSelection.some((item) => item.symbol === "ZZZ999"), false);
+    assert.ok(defaultSelection.length < 500);
+
+    const fullRegistrySelection = await selectInstruments({ "all-registry": "true" }, "2026-07-11");
+    assert.equal(fullRegistrySelection.some((item) => item.symbol === "ZZZ999"), true);
+  } finally {
+    if (previousMarketDataDir === undefined) delete process.env.MARKET_DATA_DIR;
+    else process.env.MARKET_DATA_DIR = previousMarketDataDir;
+  }
+});
+
+test("keeps seed-version private asset data out of default API payloads", async () => {
+  const assetFormSource = await fs.readFile(path.resolve("src/features/assets/assetForm.js"), "utf8");
+  const marketServiceSource = await fs.readFile(path.resolve("src/features/market/marketService.js"), "utf8");
+  assert.equal(assetFormSource.includes("/api/assets"), false);
+  assert.equal(marketServiceSource.includes("assetsForMarketSyncPayload"), false);
+  assert.equal(marketServiceSource.includes("JSON.stringify({ symbols, assets"), false);
 });
 
 test("searches the lightweight instrument seed for common assets", () => {

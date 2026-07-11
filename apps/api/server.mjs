@@ -22,11 +22,15 @@ import {
   securityWhitelist
 } from "../../src/domain/marketData.js";
 import {
+  appendMarketDataRun,
   isMarketDataDatabaseEnabled,
   readInstrumentRegistryRows,
   readMarketDataRows,
+  readUserAssetRows,
   readUserAssetDailyPriceRows,
   upsertInstrumentRegistryRows,
+  upsertMarketDataBackfillTask,
+  upsertUserAssetRow,
   upsertUserAssetDailyPriceRows
 } from "../../src/server/marketDataDatabase.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
@@ -39,6 +43,7 @@ const marketStorageDir = path.resolve(repoRoot, process.env.MARKET_DATA_DIR || "
 const dailySyncHour = Number(process.env.MARKET_DAILY_SYNC_HOUR || "22");
 const dailySyncMinute = Number(process.env.MARKET_DAILY_SYNC_MINUTE || "0");
 const dailySyncEnabled = process.env.MARKET_DAILY_SYNC_ENABLED !== "false";
+const privateAssetCloudSyncEnabled = process.env.PRIVATE_ASSET_CLOUD_SYNC_ENABLED === "true";
 const execFileAsync = promisify(execFile);
 const demoUser = {
   id: "demo-user",
@@ -123,6 +128,8 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/auth/logout") return logout(response);
     if (request.method === "GET" && url.pathname === "/api/accounts") return listAccounts(response);
     if (request.method === "POST" && url.pathname === "/api/accounts") return createAccount(request, response);
+    if (request.method === "GET" && url.pathname === "/api/assets") return listAssets(response);
+    if (request.method === "POST" && url.pathname === "/api/assets") return createAsset(request, response);
     if (request.method === "GET" && url.pathname === "/api/instruments/search") return searchInstruments(url, response);
     if (request.method === "GET" && url.pathname === "/api/instruments/lookup") return lookupInstrumentWithLatestPrice(url, response);
     if (request.method === "GET" && url.pathname === "/api/positions") return listPositions(url, response);
@@ -184,6 +191,38 @@ async function createAccount(request, response) {
   state.accounts.push(account);
   state.auditLogs.push(audit("create", "account", account.id, account));
   return sendJson(response, { account }, 201);
+}
+
+async function listAssets(response) {
+  if (!privateAssetCloudSyncEnabled) {
+    return sendError(response, 403, "private_asset_cloud_sync_disabled", "当前种子版默认本地保存私人资产数据，未启用资产云同步");
+  }
+  const assets = isMarketDataDatabaseEnabled()
+    ? await readUserAssetRows({ userId: demoUser.id })
+    : state.assets;
+  return sendJson(response, { assets });
+}
+
+async function createAsset(request, response) {
+  if (!privateAssetCloudSyncEnabled) {
+    return sendError(response, 403, "private_asset_cloud_sync_disabled", "当前种子版默认本地保存私人资产数据，未启用资产云同步");
+  }
+  const body = await readJson(request);
+  const asset = normalizeAsset(body.asset || body);
+  const error = validateAsset(asset);
+  if (error) return sendError(response, 400, "validation_error", "资产信息不完整", { asset: error });
+
+  const duplicateIndex = state.assets.findIndex((item) => item.id === asset.id);
+  if (duplicateIndex >= 0) {
+    state.assets[duplicateIndex] = { ...state.assets[duplicateIndex], ...asset, updatedAt: new Date().toISOString() };
+  } else {
+    state.assets.unshift(asset);
+  }
+
+  if (isMarketDataDatabaseEnabled()) await upsertUserAssetRow({ ...asset, userId: demoUser.id });
+  const backfillTask = await enqueueAssetBackfillTask(asset, "asset_created");
+  state.auditLogs.push(audit("create", "asset", asset.id, { asset, backfillTask }));
+  return sendJson(response, { asset, backfillTask }, 201);
 }
 
 async function searchInstruments(url, response) {
@@ -340,6 +379,14 @@ async function fetchRecentMarketData(request, response) {
 
 async function syncDailyMarketData(request, response) {
   const body = await readJson(request);
+  if (Array.isArray(body.assets) && body.assets.length && !privateAssetCloudSyncEnabled) {
+    return sendError(
+      response,
+      403,
+      "private_asset_payload_disabled",
+      "当前种子版同步价格只接收公共代码，不接收数量、成本、账户、买入日期或备注等私人资产数据"
+    );
+  }
   try {
     const result = await runDailyMarketDataSync(body, "manual");
     return sendJson(response, result, 202);
@@ -388,8 +435,9 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
   const fallbackHistoryDays = Math.max(1, Number(body.days || 7));
   const historyDateFrom = normalizeDateParam(body.dateFrom) ||
-    earliestAssetHistoryDate(stateCandidates) ||
-    addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1);
+    (body.autoFetch === false
+      ? earliestAssetHistoryDate(stateCandidates) || addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1)
+      : historyDateTo || todayIsoDate());
 
   if (body.autoFetch !== false) {
     try {
@@ -398,7 +446,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
         symbols: candidates.map((asset) => asset.symbol).filter(Boolean),
         dateFrom: historyDateFrom,
         dateTo: historyDateTo || todayIsoDate(),
-        days: body.days || 7
+        days: body.days || 1
       });
       state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
     } catch (error) {
@@ -450,7 +498,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
         userId: demoUser.id,
         asset,
         history,
-        dateFrom: assetHistoryStartDate(asset, body.dateFrom),
+        dateFrom: userAssetDailySyncStartDate(asset, body.dateFrom, historyDateTo, body.autoFetch),
         dateTo: historyDateTo
       });
       dailyPriceGapCount += dailyPrices.missingDates.length;
@@ -488,7 +536,30 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   };
   const payload = { trigger, syncedAt, summary, results, fetch: fetchResult };
   state.auditLogs.push(audit("sync_daily_market_data", "market_data", `sync-${Date.now()}`, payload));
+  await appendSyncDailyRun(payload, candidates);
   return payload;
+}
+
+async function appendSyncDailyRun(payload, candidates) {
+  if (!isMarketDataDatabaseEnabled()) return;
+  try {
+    await appendMarketDataRun({
+      id: `run-sync-daily-${Date.now()}`,
+      command: `sync-daily:${payload.trigger}`,
+      status: payload.summary.missingCount ? "completed_with_warnings" : "completed",
+      startedAt: payload.syncedAt,
+      finishedAt: new Date().toISOString(),
+      requestedSymbols: [...new Set(candidates.map((asset) => String(asset.symbol || "").toUpperCase()).filter(Boolean))],
+      successCount: payload.summary.syncedCount,
+      skippedCount: payload.summary.skippedCount,
+      failureCount: payload.summary.missingCount,
+      summary: payload.summary,
+      fetch: payload.fetch
+    });
+  } catch (error) {
+    const message = errorMessage(error, "记录同步运行失败");
+    console.error(`[market-data] append sync_daily run failed: ${message}`);
+  }
 }
 
 async function getAssetDailyPrices(url, response) {
@@ -621,23 +692,114 @@ function assetHistoryStartDate(asset, explicitDateFrom) {
   return normalizeDateParam(explicitDateFrom) || normalizeDateParam(asset.purchaseDate || asset.buyDate || asset.acquiredAt) || "";
 }
 
+function userAssetDailySyncStartDate(asset, explicitDateFrom, latestDate, autoFetch) {
+  const requestedDateFrom = normalizeDateParam(explicitDateFrom);
+  if (requestedDateFrom) return requestedDateFrom;
+  if (autoFetch === false) return assetHistoryStartDate(asset, "");
+  return normalizeDateParam(latestDate) || todayIsoDate();
+}
+
 async function createBackfillTask(request, response) {
   const body = await readJson(request);
-  const symbol = String(body.symbol || "").trim().toUpperCase();
+  let task;
+  try {
+    task = await enqueueBackfillTask({
+      assetId: body.assetId || body.instrumentId,
+      symbol: body.symbol,
+      assetName: body.assetName || body.name,
+      account: body.account,
+      dateFrom: body.dateFrom || body.startDate,
+      dateTo: body.dateTo || body.endDate,
+      trigger: body.trigger || body.reason || "asset_created"
+    });
+  } catch (error) {
+    const details = parseBackfillTaskError(error);
+    return sendError(response, details.status, details.code, details.message, details.fieldErrors);
+  }
+  return sendJson(response, { task }, 202);
+}
+
+async function enqueueAssetBackfillTask(asset, trigger) {
+  if (!asset.symbol || !normalizeDateParam(asset.purchaseDate)) return null;
+  try {
+    return await enqueueBackfillTask({
+      assetId: asset.id,
+      symbol: asset.symbol,
+      assetName: asset.name,
+      account: asset.account,
+      dateFrom: asset.purchaseDate,
+      dateTo: todayIsoDate(),
+      trigger
+    });
+  } catch (error) {
+    const message = errorMessage(error, "创建历史回补任务失败");
+    state.auditLogs.push(audit("create_backfill_task_failed", "asset", asset.id, { message, symbol: asset.symbol }));
+    return {
+      status: "failed",
+      message
+    };
+  }
+}
+
+async function enqueueBackfillTask(input) {
+  const symbol = String(input.symbol || "").trim().toUpperCase();
+  const assetId = String(input.assetId || `instrument-${symbol}`).trim();
+  const dateFrom = normalizeDateParam(input.dateFrom);
+  const dateTo = normalizeDateParam(input.dateTo) || todayIsoDate();
+  if (!symbol) throw backfillTaskError(400, "validation_error", "资产代码不能为空", { symbol: "资产代码不能为空" });
+  if (!dateFrom) throw backfillTaskError(400, "validation_error", "历史回补开始日期不能为空", { dateFrom: "请传入 YYYY-MM-DD 格式的 dateFrom" });
+  if (dateTo < dateFrom) throw backfillTaskError(400, "validation_error", "历史回补结束日期不能早于开始日期", { dateTo: "dateTo 必须大于或等于 dateFrom" });
   const security = await findInstrument(symbol);
-  if (!security) return sendError(response, 404, "instrument_not_found", "首版白名单中未找到该资产");
+  if (!security) throw backfillTaskError(404, "instrument_not_found", "资源库中未找到该资产");
+  const market = security.market || inferMarket(security);
   const task = {
-    id: `task-backfill-${symbol}-${Date.now()}`,
+    id: stableBackfillTaskId({
+      userId: demoUser.id,
+      assetId,
+      symbol: security.symbol,
+      market,
+      dateFrom,
+      dateTo
+    }),
+    userId: demoUser.id,
+    assetId,
+    account: String(input.account || "").trim(),
+    symbol: security.symbol,
+    market,
+    currency: security.currency || "USD",
+    assetName: String(input.assetName || security.name || security.symbol).trim(),
     universeKey: security.universe,
     taskType: "backfill",
-    status: "queued",
+    status: "pending",
+    trigger: String(input.trigger || "asset_created").trim(),
     source: security.source || inferUniverse({ symbol })?.source || "授权数据源待配置",
-    startDate: body.dateFrom || null,
-    endDate: body.dateTo || null,
+    dateFrom,
+    dateTo,
+    startDate: dateFrom,
+    endDate: dateTo,
+    requestedAt: new Date().toISOString(),
     retryCount: 0
   };
+  if (isMarketDataDatabaseEnabled()) await upsertMarketDataBackfillTask(task);
   state.auditLogs.push(audit("create_backfill_task", "market_data_task", task.id, task));
-  return sendJson(response, { task }, 202);
+  return task;
+}
+
+function backfillTaskError(status, code, message, fieldErrors = {}) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  error.fieldErrors = fieldErrors;
+  return error;
+}
+
+function parseBackfillTaskError(error) {
+  return {
+    status: error?.status || 500,
+    code: error?.code || "internal_error",
+    message: errorMessage(error, "创建历史回补任务失败"),
+    fieldErrors: error?.fieldErrors || {}
+  };
 }
 
 async function createAttributionRun(request, response) {
@@ -832,6 +994,18 @@ function sanitizePathSegment(value) {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9._-]/gu, "_");
+}
+
+function stableBackfillTaskId({ userId, assetId, symbol, market, dateFrom, dateTo }) {
+  return [
+    "task-backfill",
+    sanitizePathSegment(userId),
+    sanitizePathSegment(assetId),
+    sanitizePathSegment(market),
+    sanitizePathSegment(symbol),
+    sanitizePathSegment(dateFrom),
+    sanitizePathSegment(dateTo)
+  ].join("-");
 }
 
 async function assetFromSymbol(symbol) {

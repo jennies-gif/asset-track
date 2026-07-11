@@ -6,8 +6,8 @@
 
 - `npm run data:sync-registry`：同步资产名称/代码/市场主库，生成录入搜索使用的 `instrument-registry`。默认要求 A 股、港股和美股各自达到覆盖阈值，避免美股数量掩盖中国市场缺口。
 - `npm run data:sync-universes`：同步沪深 300、恒生科技和纳斯达克 100 成分股全集。
-- `npm run data:backfill`：默认拉取最近三个月数据。
-- `npm run data:daily`：默认拉取当天数据，也可指定日期；同时拉取默认汇率对和分析页收益表现对比基准。
+- `npm run data:backfill`：默认只拉取轻量白名单和分析基准的最近三个月数据。
+- `npm run data:daily`：默认只拉取轻量白名单和分析基准的当天数据，也可指定日期；同时拉取默认汇率对和分析页收益表现对比基准。
 
 无 `DATABASE_URL` 时，数据写入本地目录：
 
@@ -37,7 +37,59 @@ storage/market-data/
 
 设置 `DATABASE_URL` 后，`npm run data:sync-registry` 会同时把完整主库写入 PostgreSQL：`market_data_instruments` 保存标的主数据，`market_data_instrument_aliases` 保存裸代码、简称、拼音等搜索别名，`market_data_instrument_sources` 保存来源快照。API 的 `/api/instruments/search` 和 `/api/instruments/lookup` 优先查询 PostgreSQL；数据库不可用或尚未导入时才回退 `instrument-registry.json`。前端源码只保留 `src/domain/instrumentRegistry.seed.js` 常用资产兜底，避免把数万条主库打进首屏 bundle。历史兼容：旧版 `price-snapshots.json` 和 `fund-nav-snapshots.json` 仍可被 API 读取，但新脚本默认写入按证券代码分片的小文件。
 
+完整资源库只用于资产搜索和按需匹配，不会被行情脚本默认全量抓取。`data:daily` 和 `data:backfill` 默认使用轻量白名单、用户传入代码或指定 universe；只有显式传入 `--all-registry=true` 时，才会尝试把完整 `instrument-registry.json` 作为行情抓取候选源。
+
 `storage/` 已加入 `.gitignore`，不会提交真实行情缓存。
+
+## 历史回补任务
+
+长期云同步启用后，用户首次录入资产可由服务端创建历史回补任务：
+
+```text
+POST /api/market-data/tasks/backfill
+```
+
+当前种子版坚持私人资产本地优先，主体验默认不上传完整资产对象，也不默认调用 `/api/assets`。公共资源库、代码搜索、行情、基金净值和汇率可以请求服务端；用户的数量、成本价、账户名、买入日期和备注默认保存在浏览器本地。
+
+该接口只创建 `pending` 任务，不在用户请求内直接抓取多年历史行情。线上 PostgreSQL 表为 `market_data_backfill_tasks`，唯一键是 `user_id + asset_id + symbol + market + date_from + date_to`，用于保证同一个资产同一段历史只排一次队。
+
+后续 worker 消费任务时应遵守以下边界：
+
+- 只抓取任务指定的单个资产和日期区间。
+- 抓取成功后写入全局行情缓存表，再生成或刷新 `user_asset_daily_price_snapshots`。
+- 部分日期缺失时标记 `partial`，记录 `missing_count` 和 `failure_reason`，不要填造假价格。
+- 用户手动“同步价格”不创建历史回补任务，只拉取录入资产的最新价。
+
+手动处理少量待回补任务：
+
+```bash
+npm run data:process-backfill-tasks -- --limit=5
+```
+
+只预览不抓取：
+
+```bash
+npm run data:process-backfill-tasks -- --limit=5 --dry-run=true
+```
+
+该 worker 逐条读取 `pending` 任务，标记 `running` 后调用 `fetch-market-data.mjs backfill --symbols={symbol}`，完成后写回 `completed`、`partial` 或 `failed`。Render Cron 后续可调用同一条 npm script；免费数据库上建议先保持 `--limit=5` 或更小批量。
+
+## 同步运行记录
+
+设置 `DATABASE_URL` 后，行情抓取脚本和 API 同步都会写入 `market_data_runs`：
+
+- `data:daily`、`data:backfill` 和资源库同步脚本记录脚本级运行结果。
+- `POST /api/market-data/sync-daily` 记录 `sync-daily:manual` 或 `sync-daily:scheduled`。
+- `success_count` 表示成功同步的资产数量，`failure_count` 表示缺少可用价格缓存的资产数量，`requested_symbols` 保存本次触达的去重代码。
+- 这张表用于排查 Render 定时任务、用户手动同步和外部数据源失败，不存用户持仓明细。
+
+## Supabase RLS
+
+运行时 schema 会为市场数据相关表启用 RLS：
+
+- `market_data_instruments`、`market_data_instrument_aliases`、`market_data_price_snapshots`、`market_data_fund_nav_snapshots`、`market_data_fx_rate_snapshots`：公开只读，用于资源搜索和公开行情读取。
+- `user_asset_daily_price_snapshots`、`market_data_backfill_tasks`、`market_data_runs`：启用 RLS 但默认不创建公开读写 policy，避免用户资产维度价格、任务和运行日志被 PostgREST 直接暴露。
+- 服务端 API 使用受控的 PostgreSQL 连接写入数据；前端不应直接持有数据库连接串。
 
 ## 用户资产每日价格表
 
@@ -47,11 +99,11 @@ storage/market-data/
 storage/market-data/user-asset-prices/{userId}/{assetId}.json
 ```
 
-线上使用 PostgreSQL 时，对应运行时表为 `user_asset_daily_price_snapshots`。正式 schema 也保留同名领域表，主键语义是当前用户、资产/持仓和价格日期。
+线上使用 PostgreSQL 时，对应运行时表为 `user_asset_daily_price_snapshots`。正式 schema 也保留同名领域表，主键语义是当前用户、资产/持仓和价格日期。当前种子版默认不启用私人资产云同步，因此主体验不依赖这张表保存用户持仓数据。
 
 生成口径：
 
-- 手动或自动同步会覆盖所有录入过且有代码的资产，包含当前持仓和历史持仓。
+- 启用云同步后，手动或自动同步可覆盖所有录入过且有代码的资产，包含当前持仓和历史持仓。
 - 每个资产单独确定起点：优先取该资产 `purchaseDate`，没有持有日期时从已缓存行情的第一天开始。
 - 股票、ETF 和指数使用日收盘价；基金使用单位净值；贵金属和虚拟货币使用数据源提供的日价格。
 - 每个自然日最多一条价格。非交易日或单日缺缓存时沿用上一条可用价格，并标记 `priceBasis=carry_forward`、`qualityStatus=carried_forward` 和 `carriedFromDate`。
@@ -63,7 +115,7 @@ storage/market-data/user-asset-prices/{userId}/{assetId}.json
 GET /api/asset-prices/daily?assetId=asset-00700
 ```
 
-手动同步最新价会同时刷新这张表：
+种子版手动同步最新价默认只发送公共代码：
 
 ```bash
 curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
@@ -167,7 +219,14 @@ npm run data:daily -- --fx-pairs=USD/CNY,HKD/CNY,EUR/CNY
 npm run data:daily -- --fx=false
 ```
 
-收益表现对比基准会随无参数的 `npm run data:daily` 一起抓取；手动指定 `--symbols=` 时只抓指定代码。前端“同步价格”会把当前开放资产和分析页已选基准一起提交给 API，API 每日固定同步会抓取默认基准集合。
+收益表现对比基准会随无参数的 `npm run data:daily` 一起抓取；手动指定 `--symbols=` 时只抓指定代码。前端“同步价格”只提交用户已录入资产；API 每日固定同步会抓取用户录入资产和默认基准集合。
+
+行情抓取触发规则：
+
+- 用户搜索或 lookup 某个代码时，只触发该代码的按需抓取。
+- 用户录入过的资产，会在 API 每日定时同步中被抓取。
+- 系统收益表现对比基准，会在每日定时任务中抓取。
+- 用户点击“同步价格”时，只实时抓取该用户录入过的资产。
 
 汇率写入：
 

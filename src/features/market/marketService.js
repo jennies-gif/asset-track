@@ -21,7 +21,7 @@ export function hideMarketSyncResult() {
 export async function syncLatestMarketPrices() {
   await runMarketPriceSync({
     trigger: "manual",
-    loadingMessage: (count) => `正在按持有日期回补并同步 ${count} 个代码的历史收盘价...`
+    loadingMessage: (count) => `正在同步 ${count} 个已录入资产的最新价格...`
   });
 }
 
@@ -36,7 +36,7 @@ export async function syncDailyMarketPricesIfDue() {
   writeAutoSyncState({ ...autoSync, lastAttemptedDate: today, lastAttemptedAt: new Date().toISOString() });
   await runMarketPriceSync({
     trigger: "auto",
-    loadingMessage: (count) => `正在自动补齐历史收盘价，覆盖 ${count} 个代码...`,
+    loadingMessage: (count) => `正在自动同步 ${count} 个已录入资产的最新价格...`,
     onSettled: (state) => {
       const latest = readAutoSyncState();
       if (state.status === "success" || state.status === "warning") {
@@ -71,7 +71,7 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
     const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols, assets: assetsForMarketSyncPayload(), trigger })
+      body: JSON.stringify({ symbols, trigger })
     });
     if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
@@ -219,31 +219,7 @@ function symbolsForRecordedAssets() {
 }
 
 function symbolsForMarketSync() {
-  return [...new Set([...symbolsForRecordedAssets(), ...benchmarkSymbolsForAnalysis()].filter(Boolean))];
-}
-
-function assetsForMarketSyncPayload() {
-  return ctx.getState().assets
-    .filter((asset) => syncSymbolForAsset(asset) && inferAssetMarket(asset) !== "CASH")
-    .map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      symbol: syncSymbolForAsset(asset),
-      type: asset.type,
-      market: asset.market,
-      account: asset.account,
-      currency: asset.currency,
-      quantity: asset.quantity,
-      costPrice: asset.costPrice,
-      currentPrice: asset.currentPrice,
-      previousPrice: asset.previousPrice,
-      fxRate: asset.fxRate,
-      purchaseDate: asset.purchaseDate,
-      pricedAt: asset.pricedAt,
-      updatedAt: asset.updatedAt,
-      closed: Boolean(asset.closed),
-      closedAt: asset.closedAt || ""
-    }));
+  return symbolsForRecordedAssets();
 }
 
 function benchmarkSymbolsForAnalysis() {

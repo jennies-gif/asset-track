@@ -257,25 +257,27 @@
 
 ### `POST /api/market-data/sync-daily`
 
-用途：手动同步最新价格。默认会根据所有录入过且有代码资产的首次持有日期回补历史行情缓存，包含当前持仓和历史持仓；再从本地行情缓存读取最新可用价格或净值，并应用到资产状态；同步成功后刷新当前用户资产的每日价格快照。前端可随请求传入本地资产列表，API 会按每个资产 ID、代码和首次持有日期生成用户资产维度价格表。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时，也会默认按本机时区每天 `22:00` 调用同一套同步逻辑。
+用途：手动同步最新价格。默认只针对所有录入过且有代码的资产抓取最新价格或净值，并应用到资产状态；同步成功后刷新当前用户资产当天的每日价格快照。历史区间回补不走这个接口，应通过 `POST /api/market-data/tasks/backfill` 创建一次性任务。前端可随请求传入本地资产列表。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源，主要用于本地测试和故障降级。API 服务常驻运行时，也会默认按本机时区每天 `22:00` 调用同一套同步逻辑，并通过 `includeBenchmarks` 同步少量系统默认基准。完整资产资源库只用于搜索和识别，不会被该接口默认全量抓取行情。
 
 请求：
 
 ```json
 {
   "symbols": ["00700", "BTC"],
-  "assets": [
-    {
-      "id": "asset-00700",
-      "symbol": "00700",
-      "purchaseDate": "2026-01-10",
-      "quantity": "700",
-      "closed": false
-    }
-  ],
   "account": "港股账户",
   "days": 7,
   "autoFetch": true
+}
+```
+
+种子版前端默认只发送 `symbols`、`trigger` 等公共行情参数，不发送用户资产数量、成本价、账户名、买入日期或备注。
+
+如果请求包含 `assets` 且未显式启用 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true`，API 会返回：
+
+```json
+{
+  "code": "private_asset_payload_disabled",
+  "message": "当前种子版同步价格只接收公共代码，不接收数量、成本、账户、买入日期或备注等私人资产数据"
 }
 ```
 
@@ -342,16 +344,112 @@
 
 ### `POST /api/market-data/tasks/backfill`
 
-用途：为单个资产或首版白名单创建历史回补任务。
+用途：为用户录入的单个资产创建一次历史价格/净值回补任务。这个接口只排队，不在请求内完成多年历史抓取。
 
 请求：
 
 ```json
 {
-  "instrumentId": "uuid",
+  "assetId": "asset-110020",
+  "symbol": "110020",
+  "assetName": "易方达沪深300ETF联接A",
+  "account": "长期账户",
   "dateFrom": "2026-01-29",
   "dateTo": "2026-04-29",
-  "reason": "user_created_asset"
+  "trigger": "asset_created"
+}
+```
+
+响应：
+
+```json
+{
+  "task": {
+    "id": "task-backfill-DEMO-USER-ASSET-110020-CN-110020.OF-2026-01-29-2026-04-29",
+    "userId": "demo-user",
+    "assetId": "asset-110020",
+    "symbol": "110020.OF",
+    "market": "CN",
+    "currency": "CNY",
+    "assetName": "易方达沪深300ETF联接A",
+    "taskType": "backfill",
+    "status": "pending",
+    "trigger": "asset_created",
+    "dateFrom": "2026-01-29",
+    "dateTo": "2026-04-29",
+    "retryCount": 0
+  }
+}
+```
+
+幂等规则：同一 `userId + assetId + symbol + market + dateFrom + dateTo` 只保留一条任务，重复请求会更新同一任务。
+
+### `GET /api/assets`
+
+用途：未来云端资产同步能力接口。当前种子版默认本地保存私人资产数据，因此该接口默认关闭。只有显式设置 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true` 后，才返回当前用户已录入资产。
+
+默认响应：
+
+```json
+{
+  "code": "private_asset_cloud_sync_disabled",
+  "message": "当前种子版默认本地保存私人资产数据，未启用资产云同步"
+}
+```
+
+启用云同步后的响应：
+
+
+```json
+{
+  "assets": [
+    {
+      "id": "asset-110020",
+      "name": "易方达沪深300ETF联接A",
+      "symbol": "110020.OF",
+      "market": "CN",
+      "currency": "CNY"
+    }
+  ]
+}
+```
+
+### `POST /api/assets`
+
+用途：未来云端资产同步能力接口。当前种子版默认关闭，不作为主体验调用路径。只有显式设置 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true` 后，才创建或更新当前用户资产，并在资产有代码和首次持有日期时自动创建一次历史回补任务。
+
+请求：
+
+```json
+{
+  "id": "asset-110020",
+  "name": "易方达沪深300ETF联接A",
+  "symbol": "110020",
+  "type": "基金",
+  "market": "CN",
+  "account": "长期账户",
+  "currency": "CNY",
+  "quantity": "1000",
+  "costPrice": "1.25",
+  "currentPrice": "1.25",
+  "fxRate": "1",
+  "purchaseDate": "2026-01-29"
+}
+```
+
+响应：
+
+```json
+{
+  "asset": {
+    "id": "asset-110020",
+    "symbol": "110020"
+  },
+  "backfillTask": {
+    "status": "pending",
+    "symbol": "110020.OF",
+    "dateFrom": "2026-01-29"
+  }
 }
 ```
 

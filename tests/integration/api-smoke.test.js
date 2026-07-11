@@ -255,6 +255,39 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(fundSearch.instruments[0].symbol, "110020.OF");
     assert.equal(fundSearch.instruments[0].type, "基金");
 
+    const backfillTask = await postJson("/api/market-data/tasks/backfill", {
+      assetId: "asset-110020",
+      symbol: "110020",
+      assetName: "易方达沪深300ETF联接A",
+      account: "长期账户",
+      dateFrom: "2026-01-29",
+      dateTo: "2026-06-02",
+      trigger: "asset_created"
+    });
+    assert.equal(backfillTask.task.status, "pending");
+    assert.equal(backfillTask.task.userId, "demo-user");
+    assert.equal(backfillTask.task.assetId, "asset-110020");
+    assert.equal(backfillTask.task.symbol, "110020.OF");
+    assert.equal(backfillTask.task.market, "CN");
+    assert.equal(backfillTask.task.dateFrom, "2026-01-29");
+
+    const privateAssetUpload = await rawPostJson("/api/assets", {
+      id: "asset-created-110020",
+      name: "易方达沪深300ETF联接A",
+      symbol: "110020",
+      type: "基金",
+      market: "CN",
+      account: "长期账户",
+      currency: "CNY",
+      quantity: "1000",
+      costPrice: "1.25",
+      currentPrice: "1.25",
+      fxRate: "1",
+      purchaseDate: "2026-01-29"
+    });
+    assert.equal(privateAssetUpload.status, 403);
+    assert.equal(privateAssetUpload.body.code, "private_asset_cloud_sync_disabled");
+
     const cryptoHistory = await getJson("/api/market-data/history?symbol=BTC");
     assert.equal(cryptoHistory.points[0].close, 68000.55);
     assert.equal(cryptoHistory.points[0].source, "CoinGecko simple price");
@@ -296,7 +329,7 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(dailyPrices.points[0].priceBasis, "actual");
     assert.equal(dailyPrices.points[1].closePrice, "341.5");
 
-    const allRecordedAssetsSync = await postJson("/api/market-data/sync-daily", {
+    const privateAssetPayloadSync = await rawPostJson("/api/market-data/sync-daily", {
       symbols: ["00700"],
       autoFetch: false,
       assets: [
@@ -334,37 +367,8 @@ test("api skeleton serves health, positions and attribution", async () => {
         }
       ]
     });
-    assert.equal(allRecordedAssetsSync.summary.syncedCount, 2);
-    assert.equal(allRecordedAssetsSync.results.find((result) => result.name.includes("当前持仓")).dailyPrices.length, 2);
-    const closedAssetResult = allRecordedAssetsSync.results.find((result) => result.name.includes("历史持仓"));
-    assert.equal(closedAssetResult.status, "synced");
-    assert.deepEqual(closedAssetResult.dailyPrices.map((row) => row.priceDate), ["2026-06-02"]);
-    assert.equal(closedAssetResult.dailyPrices[0].priceType, "close");
-
-    const spyFundLabelSync = await postJson("/api/market-data/sync-daily", {
-      symbols: ["SPY"],
-      autoFetch: false,
-      assets: [
-        {
-          id: "asset-spy-fund-label",
-          name: "标普500 ETF",
-          symbol: "SPY",
-          type: "基金",
-          market: "US",
-          account: "美股账户",
-          currency: "USD",
-          quantity: "3",
-          costPrice: "500",
-          currentPrice: "520",
-          previousPrice: "520",
-          fxRate: "1",
-          purchaseDate: "2026-06-01"
-        }
-      ]
-    });
-    assert.equal(spyFundLabelSync.summary.syncedCount, 1);
-    assert.equal(spyFundLabelSync.results[0].after.currentPrice, "522.5");
-    assert.equal(spyFundLabelSync.results[0].dailyPrices[0].priceType, "close");
+    assert.equal(privateAssetPayloadSync.status, 403);
+    assert.equal(privateAssetPayloadSync.body.code, "private_asset_payload_disabled");
 
     const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["IWM"], autoFetch: false });
     assert.equal(missingSync.fetch, null);
@@ -428,11 +432,20 @@ async function getJson(path) {
 }
 
 async function postJson(path, body) {
+  const response = await rawPostJson(path, body);
+  assert.equal(response.ok, true);
+  return response.body;
+}
+
+async function rawPostJson(path, body) {
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-  assert.equal(response.ok, true);
-  return response.json();
+  return {
+    ok: response.ok,
+    status: response.status,
+    body: await response.json()
+  };
 }

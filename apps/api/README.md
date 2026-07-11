@@ -53,14 +53,16 @@ MARKET_DAILY_SYNC_ENABLED=true
 - `POST /api/auth/logout`
 - `GET /api/accounts`
 - `POST /api/accounts`
+- `GET /api/assets`：未来云端资产同步接口；种子版默认关闭，需 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true`。
+- `POST /api/assets`：未来云端资产同步接口；种子版默认关闭，避免默认上传私人资产数据。
 - `GET /api/instruments/search?query=00700`
 - `GET /api/positions`
 - `GET /api/market-data/history?symbol=00700`
 - `GET /api/market-data/fx-rates?base=USD&quote=CNY`
 - `POST /api/market-data/fetch-recent`
-- `POST /api/market-data/sync-daily`：默认按每个录入资产的首次持有日期回补历史行情，包含当前持仓和历史持仓；再把本地缓存中的最新价格和用户资产每日价格快照应用到资产；传入 `"autoFetch": false` 可只使用已有缓存。
+- `POST /api/market-data/sync-daily`：只按传入公共代码同步最新行情；种子版前端不上传数量、成本、账户、买入日期或备注。
 - `GET /api/market-data/tasks`
-- `POST /api/market-data/tasks/backfill`
+- `POST /api/market-data/tasks/backfill`：用户首次录入资产后创建一次历史价格/净值回补任务，任务排队后由后续 worker 消费。
 - `POST /api/attribution/runs`
 - `POST /api/imports/preview`
 - `GET /api/exports/backup.json`
@@ -69,5 +71,5 @@ MARKET_DAILY_SYNC_ENABLED=true
 
 - 用 PostgreSQL repository 替换内存 state。
 - 将登录占位替换为真实认证和服务端会话。
-- 将市场数据任务接入队列和授权数据源。
+- 将市场数据任务接入 Render Cron 和授权数据源。
 - 将导入预览的校验规则迁移到服务层并加集成测试。

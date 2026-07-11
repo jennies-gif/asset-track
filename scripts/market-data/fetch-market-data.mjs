@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { benchmarkInstruments, securityWhitelist } from "../../src/domain/marketData.js";
 import {
@@ -39,105 +40,109 @@ const command = process.argv[2] || "daily";
 const options = parseArgs(process.argv.slice(3));
 const today = isoDate(new Date());
 
-if (!["backfill", "daily"].includes(command)) {
-  console.error("Usage: npm run data:backfill OR npm run data:daily -- --date=YYYY-MM-DD");
-  process.exit(1);
-}
+if (isDirectRun()) await main();
 
-if (!isMarketDataDatabaseEnabled()) await fs.mkdir(storageDir, { recursive: true });
-
-const range = buildRange(command, options);
-const instruments = await selectInstruments(options, range.dateTo);
-const requestDelayMs = Number(options["delay-ms"] || (options.universes ? "350" : "0"));
-const run = {
-  id: `run-${command}-${Date.now()}`,
-  command,
-  startedAt: new Date().toISOString(),
-  dateFrom: range.dateFrom,
-  dateTo: range.dateTo,
-  requestedUniverses: parseList(options.universes || ""),
-  requestedSymbols: instruments.map((item) => item.symbol),
-  requestedFxPairs: parseFxPairs(options["fx-pairs"] || "USD/CNY,HKD/CNY,USD/HKD,EUR/CNY"),
-  status: "running",
-  successCount: 0,
-  skippedCount: 0,
-  failureCount: 0,
-  messages: []
-};
-
-let processedCount = 0;
-for (const instrument of instruments) {
-  if (requestDelayMs > 0 && processedCount > 0) {
-    await delay(requestDelayMs);
+async function main() {
+  if (!["backfill", "daily"].includes(command)) {
+    console.error("Usage: npm run data:backfill OR npm run data:daily -- --date=YYYY-MM-DD");
+    process.exit(1);
   }
-  try {
-    const result = await fetchInstrument(instrument, range);
-    if (result.status === "skipped") {
-      run.skippedCount += 1;
-      run.messages.push({ symbol: instrument.symbol, level: "warn", message: result.reason });
-      continue;
-    }
 
-    const changedCount = isMarketDataDatabaseEnabled()
-      ? await upsertMarketDataRows({ instrument, rows: result.rows, kind: result.kind })
-      : upsertSnapshots(await readSnapshotShard(instrument, result.kind), result.rows, result.kind);
-    if (!isMarketDataDatabaseEnabled()) {
-      const target = await readSnapshotShard(instrument, result.kind);
-      upsertSnapshots(target, result.rows, result.kind);
-      await writeSnapshotShard(instrument, result.kind, target.sort(compareSnapshot));
+  if (!isMarketDataDatabaseEnabled()) await fs.mkdir(storageDir, { recursive: true });
+
+  const range = buildRange(command, options);
+  const instruments = await selectInstruments(options, range.dateTo);
+  const requestDelayMs = Number(options["delay-ms"] || (options.universes ? "350" : "0"));
+  const run = {
+    id: `run-${command}-${Date.now()}`,
+    command,
+    startedAt: new Date().toISOString(),
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+    requestedUniverses: parseList(options.universes || ""),
+    requestedSymbols: instruments.map((item) => item.symbol),
+    requestedFxPairs: parseFxPairs(options["fx-pairs"] || "USD/CNY,HKD/CNY,USD/HKD,EUR/CNY"),
+    status: "running",
+    successCount: 0,
+    skippedCount: 0,
+    failureCount: 0,
+    messages: []
+  };
+
+  let processedCount = 0;
+  for (const instrument of instruments) {
+    if (requestDelayMs > 0 && processedCount > 0) {
+      await delay(requestDelayMs);
     }
-    run.successCount += changedCount;
-    run.messages.push({
-      symbol: instrument.symbol,
-      level: "info",
-      message: `${result.rows.length} rows fetched, ${changedCount} inserted or updated`
-    });
-  } catch (error) {
-    run.failureCount += 1;
-    run.messages.push({
-      symbol: instrument.symbol,
-      level: "error",
-      message: error instanceof Error ? error.message : String(error)
-    });
-  } finally {
-    processedCount += 1;
+    try {
+      const result = await fetchInstrument(instrument, range);
+      if (result.status === "skipped") {
+        run.skippedCount += 1;
+        run.messages.push({ symbol: instrument.symbol, level: "warn", message: result.reason });
+        continue;
+      }
+
+      const changedCount = isMarketDataDatabaseEnabled()
+        ? await upsertMarketDataRows({ instrument, rows: result.rows, kind: result.kind })
+        : upsertSnapshots(await readSnapshotShard(instrument, result.kind), result.rows, result.kind);
+      if (!isMarketDataDatabaseEnabled()) {
+        const target = await readSnapshotShard(instrument, result.kind);
+        upsertSnapshots(target, result.rows, result.kind);
+        await writeSnapshotShard(instrument, result.kind, target.sort(compareSnapshot));
+      }
+      run.successCount += changedCount;
+      run.messages.push({
+        symbol: instrument.symbol,
+        level: "info",
+        message: `${result.rows.length} rows fetched, ${changedCount} inserted or updated`
+      });
+    } catch (error) {
+      run.failureCount += 1;
+      run.messages.push({
+        symbol: instrument.symbol,
+        level: "error",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      processedCount += 1;
+    }
   }
-}
 
-if (options.fx !== "false") {
-  try {
-    const result = await fetchFrankfurterFx(run.requestedFxPairs, range);
-    const changedCount = isMarketDataDatabaseEnabled()
-      ? await upsertFxRateRows(result.rows)
-      : upsertFxRates(await readJsonArray(fxFile), result.rows);
-    if (!isMarketDataDatabaseEnabled()) {
-      const target = await readJsonArray(fxFile);
-      upsertFxRates(target, result.rows);
-      await writeJson(fxFile, target.sort(compareFxRate));
+  if (options.fx !== "false") {
+    try {
+      const result = await fetchFrankfurterFx(run.requestedFxPairs, range);
+      const changedCount = isMarketDataDatabaseEnabled()
+        ? await upsertFxRateRows(result.rows)
+        : upsertFxRates(await readJsonArray(fxFile), result.rows);
+      if (!isMarketDataDatabaseEnabled()) {
+        const target = await readJsonArray(fxFile);
+        upsertFxRates(target, result.rows);
+        await writeJson(fxFile, target.sort(compareFxRate));
+      }
+      run.successCount += changedCount;
+      run.messages.push({
+        symbol: "FX",
+        level: "info",
+        message: `${result.rows.length} rows fetched, ${changedCount} inserted or updated`
+      });
+    } catch (error) {
+      run.failureCount += 1;
+      run.messages.push({
+        symbol: "FX",
+        level: "error",
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
-    run.successCount += changedCount;
-    run.messages.push({
-      symbol: "FX",
-      level: "info",
-      message: `${result.rows.length} rows fetched, ${changedCount} inserted or updated`
-    });
-  } catch (error) {
-    run.failureCount += 1;
-    run.messages.push({
-      symbol: "FX",
-      level: "error",
-      message: error instanceof Error ? error.message : String(error)
-    });
   }
+
+  run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
+  run.finishedAt = new Date().toISOString();
+
+  if (isMarketDataDatabaseEnabled()) await appendMarketDataRun(run);
+  else await appendRun(runFile, run);
+
+  console.log(JSON.stringify(run, null, 2));
 }
-
-run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
-run.finishedAt = new Date().toISOString();
-
-if (isMarketDataDatabaseEnabled()) await appendMarketDataRun(run);
-else await appendRun(runFile, run);
-
-console.log(JSON.stringify(run, null, 2));
 
 function parseArgs(args) {
   const parsed = {};
@@ -162,11 +167,14 @@ function buildRange(mode, args) {
   return { dateFrom: args.from || isoDate(startDate), dateTo: end };
 }
 
-async function selectInstruments(args, asOfDate) {
+export async function selectInstruments(args, asOfDate) {
   const symbols = parseList(args.symbols || "").map((item) => item.toUpperCase());
   const universes = parseList(args.universes || "");
   const registryRows = await readJsonArray(registryFile);
-  const source = universes.length ? await loadUniverseInstruments(universes, asOfDate) : dedupeInstruments([...registryRows, ...securityWhitelist]);
+  const useFullRegistry = args["all-registry"] === "true";
+  const source = universes.length
+    ? await loadUniverseInstruments(universes, asOfDate)
+    : dedupeInstruments(useFullRegistry ? [...registryRows, ...securityWhitelist] : [...securityWhitelist, ...benchmarkInstruments]);
   if (!symbols.length) {
     return universes.length ? source : dedupeInstruments([...source, ...benchmarkInstruments]);
   }
@@ -177,6 +185,10 @@ async function selectInstruments(args, asOfDate) {
     .map(inferInstrumentFromSymbol)
     .filter(Boolean);
   return dedupeInstruments([...matched, ...inferred]);
+}
+
+function isDirectRun() {
+  return process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 }
 
 function inferInstrumentFromSymbol(symbol) {

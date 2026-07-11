@@ -30,6 +30,7 @@ export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {
   const normalizedQuery = normalizeSearchText(query);
   const boundedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 500) : 200;
   if (!normalizedQuery) return [];
+  const exactQuery = normalizedQuery.toUpperCase();
   const result = await pool.query(
     `
       with matched_instruments as (
@@ -39,13 +40,17 @@ export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {
           on a.instrument_key = i.instrument_key
         where i.status = 'active'
           and (
-            upper(replace(i.symbol, '.OF', '')) like $1
-            or upper(i.symbol) like $1
+            upper(i.symbol) = $3
+            or upper(replace(i.symbol, '.OF', '')) = $3
+            or a.normalized_alias = $2
+            or upper(i.symbol) like $4
+            or upper(replace(i.symbol, '.OF', '')) like $4
+            or a.normalized_alias like $5
             or upper(replace(i.name, ' ', '')) like $1
             or upper(replace(coalesce(a.alias, ''), ' ', '')) like $1
           )
         order by i.market asc, i.symbol asc
-        limit $2
+        limit $6
       )
       select
         i.instrument_key,
@@ -71,7 +76,7 @@ export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {
       group by i.instrument_key
       order by i.market asc, i.symbol asc
     `,
-    [`%${normalizedQuery}%`, boundedLimit]
+    [`%${normalizedQuery}%`, normalizedQuery, exactQuery, `${exactQuery}%`, `${normalizedQuery}%`, boundedLimit]
   );
   return result.rows.map(instrumentRegistryRowFromDatabase);
 }
@@ -315,6 +320,177 @@ export async function appendMarketDataRun(run) {
   return true;
 }
 
+export async function upsertMarketDataBackfillTask(task) {
+  const pool = await getPool();
+  if (!pool) return false;
+  await ensureMarketDataSchema(pool);
+  await pool.query(
+    `
+      insert into market_data_backfill_tasks (
+        id, user_id, asset_id, account, symbol, market, currency, asset_name,
+        date_from, date_to, status, trigger, requested_at, retry_count,
+        success_count, missing_count, failure_reason, raw_payload, updated_at
+      )
+      values (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9::date, $10::date, $11, $12, $13::timestamptz, $14,
+        $15, $16, $17, $18::jsonb, now()
+      )
+      on conflict (user_id, asset_id, symbol, market, date_from, date_to)
+      do update set
+        account = excluded.account,
+        currency = excluded.currency,
+        asset_name = excluded.asset_name,
+        status = excluded.status,
+        trigger = excluded.trigger,
+        requested_at = excluded.requested_at,
+        retry_count = excluded.retry_count,
+        success_count = excluded.success_count,
+        missing_count = excluded.missing_count,
+        failure_reason = excluded.failure_reason,
+        raw_payload = excluded.raw_payload,
+        updated_at = now()
+    `,
+    [
+      task.id,
+      task.userId,
+      task.assetId,
+      task.account || "",
+      task.symbol,
+      task.market || "UNKNOWN",
+      task.currency || "USD",
+      task.assetName || task.symbol,
+      task.dateFrom,
+      task.dateTo,
+      task.status || "pending",
+      task.trigger || "asset_created",
+      task.requestedAt,
+      task.retryCount || 0,
+      task.successCount || 0,
+      task.missingCount || 0,
+      task.failureReason || null,
+      JSON.stringify(task)
+    ]
+  );
+  return true;
+}
+
+export async function readPendingMarketDataBackfillTasks({ limit = 5 } = {}) {
+  const pool = await getPool();
+  if (!pool) return [];
+  await ensureMarketDataSchema(pool);
+  const boundedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 50) : 5;
+  const result = await pool.query(
+    `
+      select raw_payload
+      from market_data_backfill_tasks
+      where status = 'pending'
+      order by requested_at asc
+      limit $1
+    `,
+    [boundedLimit]
+  );
+  return result.rows.map((row) => row.raw_payload).filter(Boolean);
+}
+
+export async function updateMarketDataBackfillTaskStatus({ id, status, startedAt, finishedAt, successCount, missingCount, failureReason, rawPayload }) {
+  const pool = await getPool();
+  if (!pool) return false;
+  await ensureMarketDataSchema(pool);
+  const updates = [];
+  const values = [];
+  addUpdate("status", status);
+  addUpdate("started_at", startedAt);
+  addUpdate("finished_at", finishedAt);
+  addUpdate("success_count", successCount);
+  addUpdate("missing_count", missingCount);
+  addUpdate("failure_reason", failureReason);
+  addUpdate("raw_payload", rawPayload ? JSON.stringify(rawPayload) : null, "::jsonb");
+  updates.push("updated_at = now()");
+  values.push(id);
+  await pool.query(
+    `
+      update market_data_backfill_tasks
+      set ${updates.join(", ")}
+      where id = $${values.length}
+    `,
+    values
+  );
+  return true;
+
+  function addUpdate(column, value, cast = "") {
+    if (value === undefined) return;
+    values.push(value);
+    updates.push(`${column} = $${values.length}${cast}`);
+  }
+}
+
+export async function readUserAssetRows({ userId }) {
+  const pool = await getPool();
+  if (!pool) return [];
+  await ensureMarketDataSchema(pool);
+  const result = await pool.query(
+    `
+      select raw_payload
+      from user_assets
+      where user_id = $1
+      order by created_at desc
+    `,
+    [userId]
+  );
+  return result.rows.map((row) => row.raw_payload).filter(Boolean);
+}
+
+export async function upsertUserAssetRow(asset) {
+  const pool = await getPool();
+  if (!pool) return false;
+  await ensureMarketDataSchema(pool);
+  await pool.query(
+    `
+      insert into user_assets (
+        user_id, asset_id, account, symbol, market, currency, asset_name,
+        asset_type, quantity_decimal, cost_price_decimal, purchase_date,
+        status, raw_payload, updated_at
+      )
+      values (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11::date,
+        $12, $13::jsonb, now()
+      )
+      on conflict (user_id, asset_id)
+      do update set
+        account = excluded.account,
+        symbol = excluded.symbol,
+        market = excluded.market,
+        currency = excluded.currency,
+        asset_name = excluded.asset_name,
+        asset_type = excluded.asset_type,
+        quantity_decimal = excluded.quantity_decimal,
+        cost_price_decimal = excluded.cost_price_decimal,
+        purchase_date = excluded.purchase_date,
+        status = excluded.status,
+        raw_payload = excluded.raw_payload,
+        updated_at = now()
+    `,
+    [
+      asset.userId,
+      asset.id,
+      asset.account || "",
+      asset.symbol || "",
+      asset.market || "UNKNOWN",
+      asset.currency || "USD",
+      asset.name || asset.symbol || "",
+      asset.type || "其他",
+      asset.quantity || "0",
+      asset.costPrice || "0",
+      asset.purchaseDate || null,
+      asset.closed ? "closed" : "open",
+      JSON.stringify(asset)
+    ]
+  );
+  return true;
+}
+
 async function upsertPriceRows(pool, instrument, rows) {
   let changedCount = 0;
   for (const row of rows.filter((item) => item.qualityStatus === "ok")) {
@@ -525,6 +701,31 @@ async function createMarketDataSchema(pool) {
     create index if not exists user_asset_daily_price_symbol_date_idx
       on user_asset_daily_price_snapshots(user_id, symbol, market, price_date desc);
 
+    create table if not exists user_assets (
+      user_id text not null,
+      asset_id text not null,
+      account text not null default '',
+      symbol text not null default '',
+      market text not null default 'UNKNOWN',
+      currency char(3) not null,
+      asset_name text not null,
+      asset_type text not null,
+      quantity_decimal numeric(38, 12) not null default 0,
+      cost_price_decimal numeric(38, 12) not null default 0,
+      purchase_date date,
+      status text not null default 'open',
+      raw_payload jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (user_id, asset_id),
+      check (quantity_decimal >= 0),
+      check (cost_price_decimal >= 0),
+      check (status in ('open', 'closed'))
+    );
+
+    create index if not exists user_assets_user_symbol_idx
+      on user_assets(user_id, symbol, market);
+
     create table if not exists market_data_runs (
       id text primary key,
       command text not null,
@@ -539,6 +740,40 @@ async function createMarketDataSchema(pool) {
       created_at timestamptz not null default now()
     );
 
+    create table if not exists market_data_backfill_tasks (
+      id text primary key,
+      user_id text not null,
+      asset_id text not null,
+      account text not null default '',
+      symbol text not null,
+      market text not null,
+      currency char(3) not null,
+      asset_name text not null,
+      date_from date not null,
+      date_to date not null,
+      status text not null default 'pending',
+      trigger text not null default 'asset_created',
+      requested_at timestamptz not null default now(),
+      started_at timestamptz,
+      finished_at timestamptz,
+      retry_count integer not null default 0,
+      success_count integer not null default 0,
+      missing_count integer not null default 0,
+      failure_reason text,
+      raw_payload jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (user_id, asset_id, symbol, market, date_from, date_to),
+      check (date_to >= date_from),
+      check (status in ('pending', 'running', 'completed', 'partial', 'failed', 'cancelled'))
+    );
+
+    create index if not exists market_data_backfill_tasks_status_idx
+      on market_data_backfill_tasks(status, requested_at);
+
+    create index if not exists market_data_backfill_tasks_symbol_date_idx
+      on market_data_backfill_tasks(symbol, market, date_from, date_to);
+
     create index if not exists market_data_price_symbol_date_idx
       on market_data_price_snapshots(symbol, market, trade_date desc);
 
@@ -548,11 +783,91 @@ async function createMarketDataSchema(pool) {
     create index if not exists market_data_instruments_symbol_idx
       on market_data_instruments(symbol, market);
 
+    create index if not exists market_data_instruments_upper_symbol_idx
+      on market_data_instruments(upper(symbol));
+
+    create index if not exists market_data_instruments_upper_symbol_no_fund_suffix_idx
+      on market_data_instruments(upper(replace(symbol, '.OF', '')));
+
     create index if not exists market_data_instruments_market_type_idx
       on market_data_instruments(market, asset_type);
 
     create index if not exists market_data_instrument_aliases_normalized_idx
       on market_data_instrument_aliases(normalized_alias);
+  `);
+  await enableMarketDataRowLevelSecurity(pool);
+}
+
+async function enableMarketDataRowLevelSecurity(pool) {
+  await pool.query(`
+    alter table market_data_instruments enable row level security;
+    alter table market_data_instrument_aliases enable row level security;
+    alter table market_data_instrument_sources enable row level security;
+    alter table market_data_price_snapshots enable row level security;
+    alter table market_data_fund_nav_snapshots enable row level security;
+    alter table market_data_fx_rate_snapshots enable row level security;
+    alter table market_data_runs enable row level security;
+    alter table market_data_backfill_tasks enable row level security;
+    alter table user_asset_daily_price_snapshots enable row level security;
+    alter table user_assets enable row level security;
+
+    do $$
+    begin
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'market_data_instruments'
+          and policyname = 'market data instruments are publicly readable'
+      ) then
+        create policy "market data instruments are publicly readable"
+          on market_data_instruments for select
+          using (true);
+      end if;
+
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'market_data_instrument_aliases'
+          and policyname = 'market data instrument aliases are publicly readable'
+      ) then
+        create policy "market data instrument aliases are publicly readable"
+          on market_data_instrument_aliases for select
+          using (true);
+      end if;
+
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'market_data_price_snapshots'
+          and policyname = 'market data price snapshots are publicly readable'
+      ) then
+        create policy "market data price snapshots are publicly readable"
+          on market_data_price_snapshots for select
+          using (true);
+      end if;
+
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'market_data_fund_nav_snapshots'
+          and policyname = 'market data fund nav snapshots are publicly readable'
+      ) then
+        create policy "market data fund nav snapshots are publicly readable"
+          on market_data_fund_nav_snapshots for select
+          using (true);
+      end if;
+
+      if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'market_data_fx_rate_snapshots'
+          and policyname = 'market data fx rate snapshots are publicly readable'
+      ) then
+        create policy "market data fx rate snapshots are publicly readable"
+          on market_data_fx_rate_snapshots for select
+          using (true);
+      end if;
+    end $$;
   `);
 }
 

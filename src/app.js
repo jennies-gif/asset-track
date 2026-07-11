@@ -287,6 +287,7 @@ const assetContext = {
   openNoteById,
   openReviewNoteForAsset,
   persistAndRender,
+  marketApiBaseUrl: MARKET_API_BASE_URL,
   renderPortfolio: () => renderPortfolio(),
   showCloseReviewPrompt,
   startCloseAsset,
