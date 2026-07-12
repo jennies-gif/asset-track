@@ -159,10 +159,9 @@
 
 查询参数：
 
-- `query`：资产代码或名称；
-- `purchaseDate`：首次持有日期，格式为 `YYYY-MM-DD`。
+- `query`：资产代码或名称。
 
-用途：为新增资产匹配公共标的并取得买入价格。服务端先读取已保存的公共历史行情；如果指定日期没有缓存，则现场抓取覆盖该日期的行情，再返回指定日期或之前最近交易日的收盘价。响应中的 `priceLookup.source` 明确标记为 `cache`、`fetched` 或 `missing`，不得将缺失价格表达为已同步价格。
+用途：为新增资产匹配公共标的并取得最新公共行情。当前 local-first 种子版不向行情服务发送首次持有日期，也不由服务端自动推断买入价格；买入日期和买入价格只在浏览器本地保存。除 `query` 外的查询字段返回 `400 request_field_not_allowed`。
 
 ### `GET /api/market-data/history`
 
@@ -218,7 +217,7 @@
 
 ### `GET /api/asset-prices/daily`
 
-用途：读取当前用户某个资产从首次持有日期开始的每日价格快照，供历史收益走势、回撤和归因复算使用。该接口读取用户资产维度的价格表，不直接暴露其他用户资产。
+用途：未来用户资产维度每日价格能力。当前 local-first 种子版不调用该接口；默认返回 `403 private_asset_api_disabled`。当前主入口从浏览器本地资产快照读取 `dailyPrices`。
 
 查询参数：
 
@@ -266,30 +265,37 @@
 
 ### `POST /api/market-data/sync-daily`
 
-用途：同步最新价格，也为本地种子版执行公共历史行情的“确保覆盖”。新增资产后，前端只提交 `symbols + dateFrom + dateTo + includeHistory`；服务端先检查该标的公共缓存区间，只抓取首端或尾端尚未覆盖的区间，已完整覆盖时不重复访问外部数据源。返回的公共历史行情由浏览器在本地结合资产 ID 和首次持有日期生成每日价格，不上传数量、成本、账户或备注。未来云端异步回补仍通过 `POST /api/market-data/tasks/backfill` 排队。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时也会默认按本机时区每天 `22:00` 调用同一套同步逻辑，并通过 `includeBenchmarks` 同步少量系统默认基准。
+用途：同步最新公共行情，也可按固定公共窗口返回历史行情。浏览器不发送首次持有日期；返回的公共历史行情由浏览器在本地结合 `purchaseDate` 生成每日价格。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时也会默认按本机时区每天 `22:00` 同步少量系统默认基准。
 
 请求：
 
 ```json
 {
   "symbols": ["00700", "BTC"],
-  "account": "港股账户",
-  "days": 7,
-  "dateFrom": "2026-01-29",
-  "dateTo": "2026-06-02",
+  "trigger": "manual",
+  "days": 365,
   "includeHistory": true,
   "autoFetch": true
 }
 ```
 
-种子版前端默认只发送 `symbols`、`trigger` 等公共行情参数，不发送用户资产数量、成本价、账户名、买入日期或备注。
+HTTP 请求字段采用白名单，只允许：
 
-如果请求包含 `assets` 且未显式启用 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true`，API 会返回：
+- `symbols`：1–50 个公共资产代码；只同步系统基准时可省略。
+- `trigger`：`manual`、`auto` 或 `asset_created`。
+- `days`：1–365 天的固定公共历史窗口。
+- `includeHistory`、`includeBenchmarks`、`autoFetch`：布尔值。
+
+任何其他字段返回 `400 request_field_not_allowed`。尤其不接受 `assets`、`assetId`、`account`、`purchaseDate`、`dateFrom`、`dateTo`、数量、成本或备注。
+
+用户触发的代码集合只用于本次公共行情请求，不写入 `market_data_runs.requested_symbols`、本地运行记录或运行记录的 `raw_payload`；服务端只允许保存不含代码的聚合成功、失败和跳过数量。
+
+如果请求包含白名单外字段，API 返回：
 
 ```json
 {
-  "code": "private_asset_payload_disabled",
-  "message": "当前种子版同步价格只接收公共代码，不接收数量、成本、账户、买入日期或备注等私人资产数据"
+  "code": "request_field_not_allowed",
+  "message": "同步价格只接受公共行情字段"
 }
 ```
 
@@ -356,7 +362,7 @@
 
 ### `POST /api/market-data/tasks/backfill`
 
-用途：为用户录入的单个资产创建一次历史价格/净值回补任务。这个接口只排队，不在请求内完成多年历史抓取。
+用途：未来私人资产云端回补任务。当前 local-first 种子版默认返回 `403 private_asset_api_disabled`，主入口不调用。
 
 请求：
 

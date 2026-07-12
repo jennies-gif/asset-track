@@ -28,6 +28,7 @@ import {
 } from "../../src/domain/marketData.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
+import { isCnExchangeListedFundSymbol, normalizeCnListedFundInstrument, removeOtcDuplicatesOfListedCnInstruments } from "../../src/domain/cnInstrumentClassification.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
 import { priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
 import {
@@ -661,6 +662,46 @@ test("keeps analysis benchmark symbols in the default market sync set", () => {
   );
 });
 
+test("normalizes exchange-listed CN funds without changing OTC feeder funds", () => {
+  assert.equal(isCnExchangeListedFundSymbol("513050.OF", "中概互联网ETF易方达"), true);
+  assert.equal(isCnExchangeListedFundSymbol("159915.OF", "创业板ETF"), true);
+  assert.equal(isCnExchangeListedFundSymbol("110020.OF", "易方达沪深300ETF联接A"), false);
+  assert.equal(isCnExchangeListedFundSymbol("150005.OF", "银河银富货币A"), false);
+  assert.deepEqual(
+    normalizeCnListedFundInstrument({
+      symbol: "513050.OF",
+      name: "中概互联网ETF易方达",
+      market: "CN",
+      exchange: "OTC",
+      type: "基金",
+      universe: "fund",
+      aliases: ["513050"]
+    }),
+    {
+      symbol: "513050",
+      name: "中概互联网ETF易方达",
+      market: "CN",
+      exchange: "SSE",
+      type: "ETF",
+      universe: "etf",
+      aliases: ["513050", "513050.OF"],
+      id: undefined,
+      dataSource: "",
+      source: ""
+    }
+  );
+  assert.equal(normalizeCnListedFundInstrument({ symbol: "110020.OF", market: "CN" }).symbol, "110020.OF");
+});
+
+test("lets authoritative exchange listings suppress conflicting OTC registry rows", () => {
+  const rows = removeOtcDuplicatesOfListedCnInstruments([
+    { symbol: "513050", market: "CN", exchange: "SSE", type: "ETF", dataSource: "SSE official fund list" },
+    { symbol: "513050.OF", market: "CN", exchange: "OTC", type: "基金", dataSource: "Eastmoney fund code search" },
+    { symbol: "110020.OF", market: "CN", exchange: "OTC", type: "基金", dataSource: "Eastmoney fund code search" }
+  ]);
+  assert.deepEqual(rows.map((row) => row.symbol), ["513050", "110020.OF"]);
+});
+
 test("does not use the full instrument registry as the default market data sync set", async () => {
   const marketDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "asset-trail-registry-boundary-"));
   await fs.writeFile(
@@ -696,12 +737,21 @@ test("does not use the full instrument registry as the default market data sync 
 test("keeps seed-version private asset data out of default API payloads", async () => {
   const assetFormSource = await fs.readFile(path.resolve("src/features/assets/assetForm.js"), "utf8");
   const marketServiceSource = await fs.readFile(path.resolve("src/features/market/marketService.js"), "utf8");
+  const marketRenderSource = await fs.readFile(path.resolve("src/features/market/marketRender.js"), "utf8");
+  const apiSource = await fs.readFile(path.resolve("apps/api/server.mjs"), "utf8");
+  const fetchScriptSource = await fs.readFile(path.resolve("scripts/market-data/fetch-market-data.mjs"), "utf8");
   assert.equal(assetFormSource.includes("/api/assets"), false);
+  assert.equal(assetFormSource.includes("&purchaseDate="), false);
   assert.equal(marketServiceSource.includes("assetsForMarketSyncPayload"), false);
   assert.equal(marketServiceSource.includes("JSON.stringify({ symbols, assets"), false);
   assert.equal(marketServiceSource.includes("quantity: asset.quantity"), false);
   assert.equal(marketServiceSource.includes("costPrice: asset.costPrice"), false);
   assert.equal(marketServiceSource.includes("account: asset.account"), false);
+  assert.equal(marketServiceSource.includes("body: JSON.stringify({\n        symbols: [symbol],\n        dateFrom"), false);
+  assert.equal(marketRenderSource.includes("/api/asset-prices/daily"), false);
+  assert.equal(apiSource.includes("requestedSymbols: []"), true);
+  assert.equal(apiSource.includes('{ persistRun: false }'), true);
+  assert.equal(fetchScriptSource.includes('options["persist-run"] !== "false"'), true);
 });
 
 test("searches the lightweight instrument seed for common assets", () => {

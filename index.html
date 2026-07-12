@@ -504,6 +504,26 @@
       <details class="legal-card" id="changelog"><summary>Changelog / 更新日志</summary><p>已支持：本地资产记录、交易记录、收益概览、复盘、JSON 导入导出和 CSV 导出。</p></details>
     </section>
 
+    <div class="modal-backdrop is-hidden" id="storage-recovery-modal" role="presentation">
+      <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="storage-recovery-title" aria-describedby="storage-recovery-message">
+        <div>
+          <h2 id="storage-recovery-title">需要恢复本地资产数据</h2>
+          <p id="storage-recovery-message">未能读取此浏览器中的资产数据。为避免覆盖，当前没有加载或修改任何资产。</p>
+        </div>
+        <label>
+          <span>选择 JSON 备份文件</span>
+          <input id="storage-recovery-file" type="file" accept="application/json,.json">
+        </label>
+        <div class="import-preview" id="storage-recovery-preview"></div>
+        <p class="form-error" id="storage-recovery-error" role="alert"></p>
+        <p class="form-status" id="storage-recovery-status" role="status"></p>
+        <div class="modal-actions">
+          <button class="secondary-button" id="download-corrupted-storage" type="button">下载损坏数据</button>
+          <button class="secondary-button" id="storage-recovery-cancel" type="button">取消所选备份</button>
+          <button class="primary-button" id="storage-recovery-confirm" type="button" disabled>确认恢复</button>
+        </div>
+      </section>
+    </div>
     <div class="modal-backdrop is-hidden" id="import-confirm-modal" role="presentation">
       <section class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="import-confirm-title">
         <div><h2 id="import-confirm-title">确认导入备份数据？</h2><p>导入后会替换当前浏览器中的本地数据。建议你先导出当前数据备份，并确认导入文件来自你信任的来源。</p></div>

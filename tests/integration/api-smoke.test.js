@@ -48,6 +48,19 @@ test("api skeleton serves health, positions and attribution", async () => {
           universe: "fund",
           marketDataSupported: true,
           dataSource: "test fixture"
+        },
+        {
+          id: "CN:FUND:OTC:513050.OF",
+          symbol: "513050.OF",
+          name: "中概互联网ETF易方达",
+          market: "CN",
+          exchange: "OTC",
+          type: "基金",
+          currency: "CNY",
+          aliases: ["513050"],
+          universe: "fund",
+          marketDataSupported: true,
+          dataSource: "legacy test fixture"
         }
       ],
       null,
@@ -97,6 +110,23 @@ test("api skeleton serves health, positions and attribution", async () => {
   await fs.mkdir(path.join(marketDataDir, "prices", "HK"), { recursive: true });
   await fs.mkdir(path.join(marketDataDir, "prices", "CN"), { recursive: true });
   await fs.mkdir(path.join(marketDataDir, "prices", "US"), { recursive: true });
+  await fs.writeFile(
+    path.join(marketDataDir, "prices", "CN", "513050.json"),
+    JSON.stringify([
+      {
+        instrumentSymbol: "513050",
+        instrumentName: "中概互联网ETF易方达",
+        market: "CN",
+        currency: "CNY",
+        tradeDate: "2026-06-02",
+        closePrice: "1.038",
+        adjustedClosePrice: "1.038",
+        source: "Tencent finance realtime quote",
+        sourceFetchedAt: "2026-06-02T10:00:00.000Z",
+        qualityStatus: "ok"
+      }
+    ], null, 2)
+  );
   await fs.writeFile(
     path.join(marketDataDir, "prices", "CN", "000300.json"),
     JSON.stringify(
@@ -242,10 +272,19 @@ test("api skeleton serves health, positions and attribution", async () => {
     const health = await getJson("/api/health");
     assert.deepEqual(health, { ok: true });
 
-    const positions = await getJson("/api/positions");
-    assert.ok(Array.isArray(positions.positions));
-    assert.ok(positions.positions.length >= 1);
-    assert.equal(typeof positions.totals.marketValueCents, "string");
+    const positions = await rawGetJson("/api/positions");
+    assert.equal(positions.status, 403);
+    assert.equal(positions.body.code, "private_asset_api_disabled");
+    for (const path of ["/api/accounts", "/api/assets", "/api/market-data/tasks", "/api/exports/backup.json"]) {
+      const disabled = await rawGetJson(path);
+      assert.equal(disabled.status, 403);
+      assert.equal(disabled.body.code, "private_asset_api_disabled");
+    }
+    for (const path of ["/api/accounts", "/api/imports/preview"]) {
+      const disabled = await rawPostJson(path, {});
+      assert.equal(disabled.status, 403);
+      assert.equal(disabled.body.code, "private_asset_api_disabled");
+    }
 
     const instruments = await getJson("/api/instruments/search?query=00020");
     assert.equal(instruments.instruments[0].symbol, "00020");
@@ -255,7 +294,12 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(fundSearch.instruments[0].symbol, "110020.OF");
     assert.equal(fundSearch.instruments[0].type, "基金");
 
-    const backfillTask = await postJson("/api/market-data/tasks/backfill", {
+    const listedEtfSearch = await getJson("/api/instruments/search?query=513050");
+    assert.equal(listedEtfSearch.instruments[0].symbol, "513050");
+    assert.equal(listedEtfSearch.instruments[0].exchange, "SSE");
+    assert.equal(listedEtfSearch.instruments[0].type, "ETF");
+
+    const backfillTask = await rawPostJson("/api/market-data/tasks/backfill", {
       assetId: "asset-110020",
       symbol: "110020",
       assetName: "易方达沪深300ETF联接A",
@@ -264,12 +308,8 @@ test("api skeleton serves health, positions and attribution", async () => {
       dateTo: "2026-06-02",
       trigger: "asset_created"
     });
-    assert.equal(backfillTask.task.status, "pending");
-    assert.equal(backfillTask.task.userId, "demo-user");
-    assert.equal(backfillTask.task.assetId, "asset-110020");
-    assert.equal(backfillTask.task.symbol, "110020.OF");
-    assert.equal(backfillTask.task.market, "CN");
-    assert.equal(backfillTask.task.dateFrom, "2026-01-29");
+    assert.equal(backfillTask.status, 403);
+    assert.equal(backfillTask.body.code, "private_asset_api_disabled");
 
     const privateAssetUpload = await rawPostJson("/api/assets", {
       id: "asset-created-110020",
@@ -286,16 +326,17 @@ test("api skeleton serves health, positions and attribution", async () => {
       purchaseDate: "2026-01-29"
     });
     assert.equal(privateAssetUpload.status, 403);
-    assert.equal(privateAssetUpload.body.code, "private_asset_cloud_sync_disabled");
+    assert.equal(privateAssetUpload.body.code, "private_asset_api_disabled");
 
     const cryptoHistory = await getJson("/api/market-data/history?symbol=BTC");
     assert.equal(cryptoHistory.points[0].close, 68000.55);
     assert.equal(cryptoHistory.points[0].source, "CoinGecko simple price");
 
-    const cachedPurchasePrice = await getJson("/api/instruments/lookup?query=BTC&purchaseDate=2026-06-02");
-    assert.equal(cachedPurchasePrice.priceLookup.source, "cache");
-    assert.equal(cachedPurchasePrice.purchasePrice.priceDate, "2026-06-02");
-    assert.equal(cachedPurchasePrice.purchasePrice.price, "68000.55");
+    const latestLookup = await getJson("/api/instruments/lookup?query=BTC");
+    assert.equal(latestLookup.price.currentPrice, "68000.55");
+    const privateLookupField = await rawGetJson("/api/instruments/lookup?query=BTC&purchaseDate=2026-06-02");
+    assert.equal(privateLookupField.status, 400);
+    assert.equal(privateLookupField.body.code, "request_field_not_allowed");
 
     const fxRates = await getJson("/api/market-data/fx-rates?base=USD&quote=CNY");
     assert.equal(fxRates.rates[0].rate, "7.12");
@@ -311,38 +352,35 @@ test("api skeleton serves health, positions and attribution", async () => {
     const sync = await postJson("/api/market-data/sync-daily", { symbols: ["00700"], autoFetch: false });
     assert.equal(sync.summary.syncedCount, 1);
     assert.equal(sync.fetch, null);
-    assert.equal(sync.summary.dailyPriceRowsUpserted, 2);
+    assert.equal(sync.summary.dailyPriceRowsUpserted, 0);
     assert.equal(sync.summary.dailyPriceGapCount, 0);
     assert.equal(sync.results[0].after.currentPrice, "341.5");
     assert.equal(sync.results[0].after.previousPrice, "338");
     assert.equal(sync.results[0].after.priceStatus, "synced");
     assert.equal(sync.results[0].after.sourceFetchedAt, "2026-06-02T10:00:00.000Z");
-    assert.equal(sync.results[0].dailyPrices.length, 2);
-    assert.equal(sync.results[0].dailyPrices[0].priceDate, "2026-06-01");
+    assert.equal(sync.results[0].dailyPrices.length, 0);
+
+    const legacyListedEtfSync = await postJson("/api/market-data/sync-daily", {
+      symbols: ["513050.OF", "513050"],
+      autoFetch: false
+    });
+    assert.equal(legacyListedEtfSync.summary.requestedCount, 1);
+    assert.equal(legacyListedEtfSync.summary.syncedCount, 1);
+    assert.equal(legacyListedEtfSync.results[0].symbol, "513050");
+    assert.equal(legacyListedEtfSync.results[0].after.currentPrice, "1.038");
 
     const coveredHistory = await postJson("/api/market-data/sync-daily", {
       symbols: ["00700"],
-      dateFrom: "2026-06-01",
-      dateTo: "2026-06-02",
-      includeHistory: true
+      days: 2,
+      includeHistory: true,
+      autoFetch: false
     });
-    assert.equal(coveredHistory.fetch.status, "covered");
-    assert.equal(coveredHistory.fetch.run.skippedCount, 1);
+    assert.equal(coveredHistory.fetch, null);
     assert.equal(coveredHistory.results[0].history.length, 2);
 
-    await fs.mkdir(path.join(marketDataDir, "user-asset-prices", "DEMO-USER"), { recursive: true });
-    await fs.writeFile(
-      path.join(marketDataDir, "user-asset-prices", "DEMO-USER", "ASSET-00700.json"),
-      JSON.stringify([sync.results[0].dailyPrices[0]], null, 2)
-    );
-    const dailyPrices = await getJson("/api/asset-prices/daily?assetId=asset-00700");
-    assert.equal(dailyPrices.userId, "demo-user");
-    assert.equal(dailyPrices.assetId, "asset-00700");
-    assert.equal(dailyPrices.points.length, 2);
-    assert.equal(dailyPrices.points[0].priceDate, "2026-06-01");
-    assert.equal(dailyPrices.points[0].closePrice, "338");
-    assert.equal(dailyPrices.points[0].priceBasis, "actual");
-    assert.equal(dailyPrices.points[1].closePrice, "341.5");
+    const dailyPrices = await rawGetJson("/api/asset-prices/daily?assetId=asset-00700");
+    assert.equal(dailyPrices.status, 403);
+    assert.equal(dailyPrices.body.code, "private_asset_api_disabled");
 
     const privateAssetPayloadSync = await rawPostJson("/api/market-data/sync-daily", {
       symbols: ["00700"],
@@ -382,8 +420,17 @@ test("api skeleton serves health, positions and attribution", async () => {
         }
       ]
     });
-    assert.equal(privateAssetPayloadSync.status, 403);
-    assert.equal(privateAssetPayloadSync.body.code, "private_asset_payload_disabled");
+    assert.equal(privateAssetPayloadSync.status, 400);
+    assert.equal(privateAssetPayloadSync.body.code, "request_field_not_allowed");
+
+    for (const forbiddenField of ["purchaseDate", "dateFrom", "dateTo", "account", "assetId", "notes"]) {
+      const rejected = await rawPostJson("/api/market-data/sync-daily", {
+        symbols: ["00700"],
+        [forbiddenField]: forbiddenField === "notes" ? "private" : "2026-06-01"
+      });
+      assert.equal(rejected.status, 400);
+      assert.equal(rejected.body.code, "request_field_not_allowed");
+    }
 
     const missingSync = await postJson("/api/market-data/sync-daily", { symbols: ["IWM"], autoFetch: false });
     assert.equal(missingSync.fetch, null);
@@ -400,15 +447,15 @@ test("api skeleton serves health, positions and attribution", async () => {
     const syncedSymbols = assetAndBenchmarkSync.results
       .filter((result) => result.status === "synced")
       .map((result) => result.symbol);
-    assert.ok(syncedSymbols.includes("00700"));
+    assert.equal(syncedSymbols.includes("00700"), false);
     assert.ok(syncedSymbols.includes("000300"));
 
-    const attribution = await postJson("/api/attribution/runs", {
+    const attribution = await rawPostJson("/api/attribution/runs", {
       startDate: "2026-01-29",
       endDate: "2026-04-29"
     });
-    assert.ok(attribution.run.id);
-    assert.equal(attribution.run.items.at(-1).key, "unexplained");
+    assert.equal(attribution.status, 403);
+    assert.equal(attribution.body.code, "private_asset_api_disabled");
   } finally {
     server.kill("SIGTERM");
     await fs.rm(marketDataDir, { recursive: true, force: true });
@@ -444,6 +491,15 @@ async function getJson(path) {
   const response = await fetch(`${baseUrl}${path}`);
   assert.equal(response.ok, true);
   return response.json();
+}
+
+async function rawGetJson(path) {
+  const response = await fetch(`${baseUrl}${path}`);
+  return {
+    ok: response.ok,
+    status: response.status,
+    body: await response.json()
+  };
 }
 
 async function postJson(path, body) {

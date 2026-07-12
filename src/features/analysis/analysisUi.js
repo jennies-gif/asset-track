@@ -1,4 +1,5 @@
 import { formatPercent } from "../../domain/calculations.js";
+import { buildSmoothLinePath } from "../../ui/charts.js";
 import { absBigInt } from "../../utils/bigint.js";
 import { formatShortDate } from "../../utils/date.js";
 import { escapeHtml } from "../../utils/dom.js";
@@ -170,11 +171,11 @@ export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLab
         <text x="${leftPad - 12}" y="${tick.y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" class="chart-y-label">${escapeHtml(tick.label)}</text>
       `).join("")}
       ${visibleSeries.map((item) => {
-        const renderPoints = smoothRenderPoints(item.points.map((point) => ({
+        const renderPoints = item.points.map((point) => ({
           x: xFor(point.date),
           y: yFor(point.returnBps)
-        })));
-        return `<path d="${catmullRomPath(renderPoints)}" class="benchmark-series-line benchmark-series-${item.colorIndex}"></path>`;
+        }));
+        return `<path d="${buildSmoothLinePath(renderPoints)}" class="benchmark-series-line benchmark-series-${item.colorIndex}"></path>`;
       }).join("")}
       ${visibleSeries.map((item) => {
         const last = item.points.at(-1);
@@ -189,38 +190,6 @@ export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLab
     </div>
     ${missingBenchmarkLabels.length ? `<p class="benchmark-chart-note">${escapeHtml(`${missingBenchmarkLabels.join("、")} 在当前筛选范围内没有足够历史点，暂未进入走势图。`)}</p>` : ""}
   `;
-}
-
-function smoothRenderPoints(points) {
-  if (points.length < 5) return points;
-  const windowSize = points.length > 80 ? 7 : 5;
-  const radius = Math.floor(windowSize / 2);
-  return points.map((point, index) => {
-    if (index === 0 || index === points.length - 1) return point;
-    const start = Math.max(0, index - radius);
-    const end = Math.min(points.length - 1, index + radius);
-    const neighbors = points.slice(start, end + 1);
-    const y = neighbors.reduce((sum, item) => sum + item.y, 0) / neighbors.length;
-    return { ...point, y };
-  });
-}
-
-function catmullRomPath(points) {
-  if (!points.length) return "";
-  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[Math.max(0, index - 1)];
-    const p1 = points[index];
-    const p2 = points[index + 1];
-    const p3 = points[Math.min(points.length - 1, index + 2)];
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    path += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
-  }
-  return path;
 }
 
 export function renderWaterfallChart(items) {

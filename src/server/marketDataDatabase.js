@@ -45,6 +45,18 @@ export const instrumentRegistrySearchSql = `
   order by i.market asc, i.symbol asc
 `;
 
+export const conflictingOtcInstrumentCleanupSql = `
+  delete from market_data_instruments
+  where market = 'CN'
+    and upper(symbol) = any($1::text[])
+`;
+
+export const conflictingOtcNavCleanupSql = `
+  delete from market_data_fund_nav_snapshots
+  where upper(market) = 'CN'
+    and upper(symbol) = any($1::text[])
+`;
+
 export function isMarketDataDatabaseEnabled() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -82,18 +94,23 @@ export async function readInstrumentRegistryRows({ query = "", limit = 200 } = {
   return result.rows.map(instrumentRegistryRowFromDatabase);
 }
 
-export async function upsertInstrumentRegistryRows(rows) {
+export async function upsertInstrumentRegistryRows(rows, options = {}) {
   const pool = await getPool();
   if (!pool || !Array.isArray(rows) || !rows.length) return 0;
   await ensureMarketDataSchema(pool);
+  const client = await pool.connect();
   let changedCount = 0;
-  for (const row of rows) {
-    const instrument = normalizeInstrumentRegistryRow(row);
-    if (!instrument) continue;
-    const aliases = [...new Set([instrument.symbol, instrument.name, ...(instrument.aliases || [])].filter(Boolean).map(String))];
-    const sourceUpdatedAt = instrument.sourceUpdatedAt || null;
-    const rawPayload = JSON.stringify(row);
-    const result = await pool.query(
+  let removedInstrumentCount = 0;
+  let removedNavCount = 0;
+  try {
+    await client.query("begin");
+    for (const row of rows) {
+      const instrument = normalizeInstrumentRegistryRow(row);
+      if (!instrument) continue;
+      const aliases = [...new Set([instrument.symbol, instrument.name, ...(instrument.aliases || [])].filter(Boolean).map(String))];
+      const sourceUpdatedAt = instrument.sourceUpdatedAt || null;
+      const rawPayload = JSON.stringify(row);
+      const result = await client.query(
       `
         insert into market_data_instruments (
           instrument_key, symbol, name, market, exchange, asset_type, currency,
@@ -134,11 +151,11 @@ export async function upsertInstrumentRegistryRows(rows) {
         rawPayload
       ]
     );
-    changedCount += result.rowCount;
+      changedCount += result.rowCount;
 
-    await pool.query("delete from market_data_instrument_aliases where instrument_key = $1", [instrument.instrumentKey]);
-    for (const alias of aliases) {
-      await pool.query(
+      await client.query("delete from market_data_instrument_aliases where instrument_key = $1", [instrument.instrumentKey]);
+      for (const alias of aliases) {
+        await client.query(
         `
           insert into market_data_instrument_aliases (instrument_key, alias, normalized_alias)
           values ($1, $2, $3)
@@ -147,9 +164,9 @@ export async function upsertInstrumentRegistryRows(rows) {
         `,
         [instrument.instrumentKey, alias, normalizeSearchText(alias)]
       );
-    }
+      }
 
-    await pool.query(
+      await client.query(
       `
         insert into market_data_instrument_sources (
           instrument_key, source, source_updated_at, raw_payload, updated_at
@@ -161,10 +178,36 @@ export async function upsertInstrumentRegistryRows(rows) {
           raw_payload = excluded.raw_payload,
           updated_at = now()
       `,
-      [instrument.instrumentKey, instrument.dataSource || "unknown", sourceUpdatedAt, rawPayload]
-    );
+        [instrument.instrumentKey, instrument.dataSource || "unknown", sourceUpdatedAt, rawPayload]
+      );
+    }
+
+    const listedCnSymbols = [...new Set(rows
+      .map(normalizeInstrumentRegistryRow)
+      .filter((instrument) => instrument?.market === "CN" && instrument.exchange !== "OTC" && !instrument.symbol.endsWith(".OF"))
+      .map((instrument) => `${instrument.symbol}.OF`.toUpperCase()))];
+    if (listedCnSymbols.length) {
+      const removedInstruments = await client.query(conflictingOtcInstrumentCleanupSql, [listedCnSymbols]);
+      const removedNavRows = await client.query(conflictingOtcNavCleanupSql, [listedCnSymbols]);
+      removedInstrumentCount = removedInstruments.rowCount;
+      removedNavCount = removedNavRows.rowCount;
+    }
+    await client.query("commit");
+    if (options.returnSummary) {
+      return {
+        upsertedCount: changedCount,
+        removedInstrumentCount,
+        removedNavCount,
+        changedCount: changedCount + removedInstrumentCount + removedNavCount
+      };
+    }
+    return changedCount + removedInstrumentCount + removedNavCount;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
   }
-  return changedCount;
 }
 
 export async function readUserAssetDailyPriceRows({ userId, assetId, dateFrom, dateTo }) {

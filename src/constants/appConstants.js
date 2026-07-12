@@ -1,4 +1,5 @@
 export const storageKey = "asset-trail-state-v1";
+export const storageSchemaVersion = 1;
 export const QUANTITY_SCALE = 6;
 export const RATE_SCALE = 4;
 export const RATE_FACTOR = 10n ** BigInt(RATE_SCALE);

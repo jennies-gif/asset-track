@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { benchmarkInstruments, securityWhitelist } from "../../src/domain/marketData.js";
+import { normalizeCnListedFundInstrument } from "../../src/domain/cnInstrumentClassification.js";
 import {
   cryptoInstruments,
   defaultFxPairs,
@@ -138,8 +139,10 @@ async function main() {
   run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
   run.finishedAt = new Date().toISOString();
 
-  if (isMarketDataDatabaseEnabled()) await appendMarketDataRun(run);
-  else await appendRun(runFile, run);
+  if (options["persist-run"] !== "false") {
+    if (isMarketDataDatabaseEnabled()) await appendMarketDataRun(run);
+    else await appendRun(runFile, run);
+  }
 
   console.log(JSON.stringify(run, null, 2));
 }
@@ -200,14 +203,14 @@ function inferInstrumentFromSymbol(symbol) {
   const metal = preciousMetalInstruments.find((item) => item.symbol === normalized);
   if (metal) return metal;
   if (normalized.endsWith(".OF")) {
-    return {
+    return normalizeCnListedFundInstrument({
       symbol: normalized,
       name: normalized,
       type: "基金",
       universe: "fund",
       market: "CN",
       currency: "CNY"
-    };
+    });
   }
   if (/^\d{5}$/.test(normalized)) {
     return {
@@ -244,7 +247,7 @@ function inferInstrumentFromSymbol(symbol) {
 
 function instrumentSymbolMatches(item, symbol) {
   const normalized = String(symbol || "").trim().toUpperCase();
-  const itemSymbol = String(item?.symbol || "").trim().toUpperCase();
+  const itemSymbol = String(normalizeCnListedFundInstrument(item)?.symbol || "").trim().toUpperCase();
   return (
     itemSymbol === normalized ||
     itemSymbol.replace(/\.OF$/u, "") === normalized ||
@@ -278,7 +281,7 @@ async function loadUniverseInstruments(universes, asOfDate) {
 
 function dedupeInstruments(instruments) {
   const seen = new Set();
-  return instruments.filter((instrument) => {
+  return instruments.map(normalizeCnListedFundInstrument).filter((instrument) => {
     const key = `${instrument.market}:${instrument.symbol}`;
     if (seen.has(key)) return false;
     seen.add(key);

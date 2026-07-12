@@ -21,6 +21,7 @@ import {
   marketUniverses,
   securityWhitelist
 } from "../../src/domain/marketData.js";
+import { normalizeCnListedFundInstrument } from "../../src/domain/cnInstrumentClassification.js";
 import {
   appendMarketDataRun,
   isMarketDataDatabaseEnabled,
@@ -45,6 +46,19 @@ const dailySyncHour = Number(process.env.MARKET_DAILY_SYNC_HOUR || "22");
 const dailySyncMinute = Number(process.env.MARKET_DAILY_SYNC_MINUTE || "0");
 const dailySyncEnabled = process.env.MARKET_DAILY_SYNC_ENABLED !== "false";
 const privateAssetCloudSyncEnabled = process.env.PRIVATE_ASSET_CLOUD_SYNC_ENABLED === "true";
+const privateAssetApiPaths = new Set([
+  "/api/accounts",
+  "/api/assets",
+  "/api/positions",
+  "/api/asset-prices/daily",
+  "/api/market-data/tasks",
+  "/api/market-data/tasks/backfill",
+  "/api/attribution/runs",
+  "/api/imports/preview",
+  "/api/exports/backup.json"
+]);
+const syncDailyAllowedFields = new Set(["symbols", "trigger", "includeHistory", "includeBenchmarks", "autoFetch", "days"]);
+const syncDailyAllowedTriggers = new Set(["manual", "auto", "asset_created"]);
 const execFileAsync = promisify(execFile);
 const demoUser = {
   id: "demo-user",
@@ -127,6 +141,9 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/health") return sendJson(response, { ok: true });
     if (request.method === "POST" && url.pathname === "/api/auth/login") return login(request, response);
     if (request.method === "POST" && url.pathname === "/api/auth/logout") return logout(response);
+    if (privateAssetApiPaths.has(url.pathname) && !privateAssetCloudSyncEnabled) {
+      return sendError(response, 403, "private_asset_api_disabled", "当前种子版仅在浏览器本地保存私人资产数据，私人资产 API 未启用");
+    }
     if (request.method === "GET" && url.pathname === "/api/accounts") return listAccounts(response);
     if (request.method === "POST" && url.pathname === "/api/accounts") return createAccount(request, response);
     if (request.method === "GET" && url.pathname === "/api/assets") return listAssets(response);
@@ -234,6 +251,12 @@ async function searchInstruments(url, response) {
 }
 
 async function lookupInstrumentWithLatestPrice(url, response) {
+  const unexpectedFields = [...url.searchParams.keys()].filter((field) => field !== "query");
+  if (unexpectedFields.length) {
+    return sendError(response, 400, "request_field_not_allowed", "资产查询只接受公共代码或名称", {
+      fields: `不允许字段：${unexpectedFields.join(", ")}`
+    });
+  }
   const rawQuery = String(url.searchParams.get("query") || "").trim();
   const query = normalizeQuery(rawQuery);
   if (!query) return sendError(response, 400, "validation_error", "资产代码或名称不能为空", { query: "资产代码或名称不能为空" });
@@ -436,17 +459,10 @@ async function fetchRecentMarketData(request, response) {
 }
 
 async function syncDailyMarketData(request, response) {
-  const body = await readJson(request);
-  if (Array.isArray(body.assets) && body.assets.length && !privateAssetCloudSyncEnabled) {
-    return sendError(
-      response,
-      403,
-      "private_asset_payload_disabled",
-      "当前种子版同步价格只接收公共代码，不接收数量、成本、账户、买入日期或备注等私人资产数据"
-    );
-  }
+  const validation = validateSyncDailyRequest(await readJson(request));
+  if (!validation.ok) return sendError(response, 400, validation.code, validation.message, validation.fieldErrors);
   try {
-    const result = await runDailyMarketDataSync(body, "manual");
+    const result = await runDailyMarketDataSync(validation.body, validation.body.trigger || "manual", { publicOnly: true });
     return sendJson(response, result, 202);
   } catch (error) {
     const message = errorMessage(error, "同步失败");
@@ -455,10 +471,10 @@ async function syncDailyMarketData(request, response) {
   }
 }
 
-async function runDailyMarketDataSync(body = {}, trigger = "manual") {
-  const requestedSymbols = parseSymbols(body.symbols || body.symbol);
-  const clientAssets = Array.isArray(body.assets) ? body.assets.map(normalizeAsset).filter((asset) => asset.symbol) : [];
-  const assetSource = clientAssets.length ? clientAssets : state.assets;
+async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {}) {
+  const requestedSymbols = parseSymbols(body.symbols || body.symbol).map(canonicalMarketSymbol);
+  const clientAssets = !options.publicOnly && Array.isArray(body.assets) ? body.assets.map(normalizeAsset).filter((asset) => asset.symbol) : [];
+  const assetSource = options.publicOnly ? [] : clientAssets.length ? clientAssets : state.assets;
   const benchmarkSymbols = body.includeBenchmarks
     ? defaultBenchmarkSyncSymbols.map((symbol) => symbol.toUpperCase())
     : [];
@@ -466,14 +482,12 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
     ? [...new Set([...requestedSymbols, ...benchmarkSymbols])]
     : [];
   const externalSymbolsToSync = [...new Set([...symbolsToSync, ...benchmarkSymbols])];
-  const account = String(body.account || "").trim();
   const stateCandidates = assetSource.filter((asset) => {
     if (!asset.symbol) return false;
-    if (account && asset.account !== account) return false;
-    if (symbolsToSync.length && !symbolsToSync.includes(asset.symbol.toUpperCase())) return false;
+    if (symbolsToSync.length && !symbolsToSync.includes(canonicalMarketSymbol(asset.symbol))) return false;
     return true;
   });
-  const stateSymbols = new Set(stateCandidates.map((asset) => asset.symbol.toUpperCase()));
+  const stateSymbols = new Set(stateCandidates.map((asset) => canonicalMarketSymbol(asset.symbol)));
   const requestedExternalCandidates = externalSymbolsToSync.length
     ? await Promise.all(
         externalSymbolsToSync
@@ -484,7 +498,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
           })
       )
     : [];
-  const candidates = [...stateCandidates, ...requestedExternalCandidates.filter(Boolean)];
+  const candidates = dedupeInstruments([...stateCandidates, ...requestedExternalCandidates.filter(Boolean)]);
   const syncedAt = new Date().toISOString();
   const results = [];
   let fetchResult = null;
@@ -495,7 +509,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   const historyDateFrom = normalizeDateParam(body.dateFrom) ||
     (body.autoFetch === false
       ? earliestAssetHistoryDate(stateCandidates) || addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1)
-      : historyDateTo || todayIsoDate());
+      : addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1));
 
   if (body.autoFetch !== false) {
     try {
@@ -519,7 +533,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
           dateFrom: range.dateFrom,
           dateTo: range.dateTo,
           days: body.days || 1
-        }));
+        }, { persistRun: false }));
       }
       fetchResult = summarizeCoverageFetchRuns(fetchRuns, candidates);
       state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
@@ -615,7 +629,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   };
   const payload = { trigger, syncedAt, summary, results, fetch: fetchResult };
   state.auditLogs.push(audit("sync_daily_market_data", "market_data", `sync-${Date.now()}`, payload));
-  await appendSyncDailyRun(payload, candidates);
+  await appendSyncDailyRun(payload);
   return payload;
 }
 
@@ -652,7 +666,7 @@ function summarizeCoverageFetchRuns(fetchRuns, candidates) {
   };
 }
 
-async function appendSyncDailyRun(payload, candidates) {
+async function appendSyncDailyRun(payload) {
   if (!isMarketDataDatabaseEnabled()) return;
   try {
     await appendMarketDataRun({
@@ -661,12 +675,11 @@ async function appendSyncDailyRun(payload, candidates) {
       status: payload.summary.missingCount ? "completed_with_warnings" : "completed",
       startedAt: payload.syncedAt,
       finishedAt: new Date().toISOString(),
-      requestedSymbols: [...new Set(candidates.map((asset) => String(asset.symbol || "").toUpperCase()).filter(Boolean))],
+      requestedSymbols: [],
       successCount: payload.summary.syncedCount,
       skippedCount: payload.summary.skippedCount,
       failureCount: payload.summary.missingCount,
-      summary: payload.summary,
-      fetch: payload.fetch
+      summary: payload.summary
     });
   } catch (error) {
     const message = errorMessage(error, "记录同步运行失败");
@@ -735,7 +748,11 @@ function scheduleDailyMarketSync() {
   console.log(`Next daily market data sync scheduled at ${nextRunAt.toLocaleString()} local time`);
   setTimeout(async () => {
     try {
-      const result = await runDailyMarketDataSync({ includeBenchmarks: true }, "scheduled");
+      const result = await runDailyMarketDataSync(
+        { includeBenchmarks: true },
+        "scheduled",
+        { publicOnly: !privateAssetCloudSyncEnabled }
+      );
       console.log(
         `Daily market data sync finished: ${result.summary.syncedCount} synced, ${result.summary.missingCount} missing`
       );
@@ -758,7 +775,7 @@ function nextDailySyncAt(now, hour, minute) {
   return next;
 }
 
-async function fetchRecentMarketDataRun(body) {
+async function fetchRecentMarketDataRun(body, options = {}) {
   const requestedSymbols = parseSymbols(body.symbols || body.symbol);
   const stateSymbols = state.assets
     .filter((asset) => !asset.closed && asset.symbol)
@@ -777,7 +794,8 @@ async function fetchRecentMarketDataRun(body) {
     `--from=${dateFrom}`,
     `--to=${dateTo}`,
     `--symbols=${symbols.join(",")}`,
-    "--fx=false"
+    "--fx=false",
+    `--persist-run=${options.persistRun === false ? "false" : "true"}`
   ];
   const { stdout } = await execFileAsync(process.execPath, args, {
     cwd: repoRoot,
@@ -968,6 +986,7 @@ function exportBackup(response) {
 }
 
 async function readStoredMarketHistory(asset) {
+  asset = normalizeCnListedFundInstrument(asset);
   const sourceRows = isFundNavAsset(asset)
     ? await readStoredRowsForSymbol(asset, "nav")
     : await readStoredRowsForSymbol(asset, "price");
@@ -986,6 +1005,7 @@ async function readStoredMarketHistory(asset) {
 }
 
 function isFundNavAsset(asset) {
+  asset = normalizeCnListedFundInstrument(asset);
   const symbol = String(asset.symbol || "").trim().toUpperCase();
   const type = String(asset.type || "").trim();
   return symbol.endsWith(".OF") || type === "公募基金" || type === "开放式基金";
@@ -1122,7 +1142,7 @@ function stableBackfillTaskId({ userId, assetId, symbol, market, dateFrom, dateT
 
 async function assetFromSymbol(symbol) {
   const security = await findInstrument(symbol);
-  const inferred = security || inferInstrumentFromSymbol(symbol);
+  const inferred = normalizeCnListedFundInstrument(security || inferInstrumentFromSymbol(symbol));
   if (!inferred) return null;
   return normalizeAsset({
     id: `instrument-${inferred.symbol}`,
@@ -1174,7 +1194,7 @@ async function findInstrument(symbol) {
       item.symbol.toUpperCase().replace(/\.OF$/u, "") === normalized ||
       (item.aliases || []).some((alias) => String(alias || "").trim().toUpperCase() === normalized)
     ));
-  if (dbMatch) return dbMatch;
+  if (dbMatch) return normalizeCnListedFundInstrument(dbMatch);
 
   const instruments = await loadSearchInstruments();
   return instruments.find((item) => (
@@ -1188,7 +1208,7 @@ async function searchInstrumentRepository(query, options = {}) {
   const allowFallback = options.allowFallback !== false;
   if (isMarketDataDatabaseEnabled()) {
     const dbRows = await readInstrumentRegistryRows({ query, limit: 300 });
-    const dbMatches = rankInstrumentMatches(dbRows, query);
+    const dbMatches = rankInstrumentMatches(dbRows.map(normalizeSearchInstrument).filter(Boolean), query);
     if (dbMatches.length || !allowFallback) return dbMatches;
   }
   if (!allowFallback) return [];
@@ -1229,6 +1249,7 @@ function rankInstrumentMatches(instruments, query) {
 }
 
 function normalizeSearchInstrument(row) {
+  row = normalizeCnListedFundInstrument(row);
   const symbol = String(row?.symbol || "").trim().toUpperCase();
   if (!symbol) return null;
   return {
@@ -1319,12 +1340,74 @@ async function upsertStoredInstrumentRegistry(instrument) {
 
 function dedupeInstruments(instruments) {
   const seen = new Set();
-  return instruments.filter((instrument) => {
+  return instruments.map(normalizeCnListedFundInstrument).filter((instrument) => {
     const key = `${instrument.market}:${instrument.symbol}`.toUpperCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function canonicalMarketSymbol(symbol) {
+  return String(symbol || "").trim().toUpperCase();
+}
+
+function validateSyncDailyRequest(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, code: "validation_error", message: "请求体必须是 JSON 对象", fieldErrors: { body: "必须是 JSON 对象" } };
+  }
+  const unexpectedFields = Object.keys(body).filter((field) => !syncDailyAllowedFields.has(field));
+  if (unexpectedFields.length) {
+    return {
+      ok: false,
+      code: "request_field_not_allowed",
+      message: "同步价格只接受公共行情字段",
+      fieldErrors: { fields: `不允许字段：${unexpectedFields.join(", ")}` }
+    };
+  }
+  const benchmarkOnly = body.includeBenchmarks === true && body.symbols === undefined;
+  if ((!benchmarkOnly && (!Array.isArray(body.symbols) || body.symbols.length < 1)) || (Array.isArray(body.symbols) && body.symbols.length > 50)) {
+    return {
+      ok: false,
+      code: "validation_error",
+      message: "symbols 必须包含 1 到 50 个公共资产代码",
+      fieldErrors: { symbols: "必须是长度为 1 到 50 的数组" }
+    };
+  }
+  const rawSymbols = benchmarkOnly ? [] : body.symbols;
+  const symbols = [...new Set(rawSymbols.map(canonicalMarketSymbol).filter((symbol) => /^[A-Z0-9._-]{1,24}$/u.test(symbol)))];
+  if ((!benchmarkOnly && !symbols.length) || symbols.length !== new Set(rawSymbols.map(canonicalMarketSymbol).filter(Boolean)).size) {
+    return {
+      ok: false,
+      code: "validation_error",
+      message: "symbols 包含无效公共资产代码",
+      fieldErrors: { symbols: "仅接受 1 到 24 位字母、数字、点、下划线或连字符" }
+    };
+  }
+  const trigger = body.trigger === undefined ? "manual" : String(body.trigger);
+  if (!syncDailyAllowedTriggers.has(trigger)) {
+    return { ok: false, code: "validation_error", message: "trigger 无效", fieldErrors: { trigger: "只允许 manual、auto 或 asset_created" } };
+  }
+  for (const field of ["includeHistory", "includeBenchmarks", "autoFetch"]) {
+    if (body[field] !== undefined && typeof body[field] !== "boolean") {
+      return { ok: false, code: "validation_error", message: `${field} 必须是布尔值`, fieldErrors: { [field]: "必须是布尔值" } };
+    }
+  }
+  const days = body.days === undefined ? 7 : Number(body.days);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    return { ok: false, code: "validation_error", message: "days 必须在 1 到 365 之间", fieldErrors: { days: "必须是 1 到 365 的整数" } };
+  }
+  return {
+    ok: true,
+    body: {
+      symbols,
+      trigger,
+      days,
+      ...(body.includeHistory === undefined ? {} : { includeHistory: body.includeHistory }),
+      ...(body.includeBenchmarks === undefined ? {} : { includeBenchmarks: body.includeBenchmarks }),
+      ...(body.autoFetch === undefined ? {} : { autoFetch: body.autoFetch })
+    }
+  };
 }
 
 function sendJson(response, data, status = 200) {

@@ -51,22 +51,25 @@ MARKET_DAILY_SYNC_ENABLED=true
 - `GET /api/health`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
-- `GET /api/accounts`
-- `POST /api/accounts`
+- `GET /api/accounts`：私人资产 API，种子版默认关闭。
+- `POST /api/accounts`：私人资产 API，种子版默认关闭。
 - `GET /api/assets`：未来云端资产同步接口；种子版默认关闭，需 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true`。
 - `POST /api/assets`：未来云端资产同步接口；种子版默认关闭，避免默认上传私人资产数据。
 - `GET /api/instruments/search?query=00700`
-- `GET /api/instruments/lookup?query=00700&purchaseDate=2026-06-02`：先读取指定首次持有日期的价格缓存；未命中时现场抓取并返回该日或之前最近交易日价格。
-- `GET /api/positions`
+- `GET /api/instruments/lookup?query=00700`：查询公共标的和最新行情，不接收首次持有日期。
+- `GET /api/positions`：私人资产 API，种子版默认关闭。
 - `GET /api/market-data/history?symbol=00700`
 - `GET /api/market-data/fx-rates?base=USD&quote=CNY`
 - `POST /api/market-data/fetch-recent`
-- `POST /api/market-data/sync-daily`：按公共代码同步最新行情；新增资产时可附带 `dateFrom`、`dateTo` 和 `includeHistory=true`，服务端先检查共享缓存覆盖，只增量抓取未覆盖的首尾区间。种子版前端不上传数量、成本、账户或备注。
-- `GET /api/market-data/tasks`
-- `POST /api/market-data/tasks/backfill`：用户首次录入资产后创建一次历史价格/净值回补任务，任务排队后由后续 worker 消费。
-- `POST /api/attribution/runs`
-- `POST /api/imports/preview`
-- `GET /api/exports/backup.json`
+- `POST /api/market-data/sync-daily`：按公共代码同步最新行情；只接受 `symbols`、`trigger`、`days`、`includeHistory`、`includeBenchmarks`、`autoFetch`。不接收首次持有日期、账户、资产 ID、数量、成本或备注，也不持久化用户请求的代码集合。
+- `GET /api/asset-prices/daily`：私人资产 API，种子版默认关闭；主入口读取本地 `dailyPrices`。
+- `GET /api/market-data/tasks`：私人资产 API，种子版默认关闭。
+- `POST /api/market-data/tasks/backfill`：私人资产 API，种子版默认关闭。
+- `POST /api/attribution/runs`：私人资产 API，种子版默认关闭。
+- `POST /api/imports/preview`：私人资产 API，种子版默认关闭。
+- `GET /api/exports/backup.json`：私人资产 API，种子版默认关闭。
+
+上述私人资产 API 只有显式设置 `PRIVATE_ASSET_CLOUD_SYNC_ENABLED=true` 才会开放；当前种子版不应启用该配置。开放这些实验接口不代表已经具备生产级鉴权、用户隔离或云同步能力。
 
 ## 下一步
 

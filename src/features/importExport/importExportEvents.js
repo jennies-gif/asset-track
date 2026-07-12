@@ -1,9 +1,13 @@
 import {
   applyPendingImport,
+  applyPendingRecovery,
+  cancelPendingRecovery,
   cancelPendingImport,
+  downloadCorruptedStorage,
   exportCsvBackup,
   exportJsonBackup,
-  importJsonBackup
+  importJsonBackup,
+  selectRecoveryBackup
 } from "./importExportService.js";
 
 export function initImportExportEvents(elements) {
@@ -25,6 +29,10 @@ export function initImportExportEvents(elements) {
   elements.importForm?.addEventListener("submit", importJsonBackup);
   elements.importCancel?.addEventListener("click", cancelPendingImport);
   elements.importContinue?.addEventListener("click", applyPendingImport);
+  elements.recoveryFile?.addEventListener("change", selectRecoveryBackup);
+  elements.recoveryCancel?.addEventListener("click", cancelPendingRecovery);
+  elements.recoveryConfirm?.addEventListener("click", applyPendingRecovery);
+  elements.downloadCorruptedButton?.addEventListener("click", downloadCorruptedStorage);
   elements.importConfirmModal?.addEventListener("click", (event) => {
     if (event.target === elements.importConfirmModal) cancelPendingImport();
   });

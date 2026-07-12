@@ -7,6 +7,7 @@ import {
   getPortfolioFilter,
   getSelectedBenchmarkKeys,
   getState,
+  getAppStorageLoadResult,
   loadDemoState,
   persistAndRender,
   saveCurrentState,
@@ -47,7 +48,8 @@ import {
 } from "./features/analysis/analysisRender.js";
 import { getImportExportElements } from "./features/importExport/importExportElements.js";
 import { initImportExportEvents } from "./features/importExport/importExportEvents.js";
-import { configureImportExportService } from "./features/importExport/importExportService.js";
+import { configureImportExportService, initializeStorageRecovery } from "./features/importExport/importExportService.js";
+import { replaceStateFromRecovery } from "./state/storage.js";
 import { getMarketElements } from "./features/market/marketElements.js";
 import { initMarketEvents } from "./features/market/marketEvents.js";
 import { configureMarketRender, renderAssetPriceChart, renderMarketSyncResult } from "./features/market/marketRender.js";
@@ -409,7 +411,10 @@ configureImportExportService({
   syncSettingsForm,
   applySettings,
   initializeTrendControls,
-  persistAndRender
+  persistAndRender,
+  getStorageLoadResult: getAppStorageLoadResult,
+  replaceStateFromRecovery,
+  reloadApp: () => globalThis.location?.reload()
 });
 
 configureAnalysisRender({
@@ -530,7 +535,8 @@ bindHomeEvents({
 initTrendEvents(trendContext);
 
 initImportExportEvents(importExportElements);
+initializeStorageRecovery();
 
 initializeTrendControls();
 render();
-syncDailyMarketPricesIfDue();
+if (["ready", "empty"].includes(getAppStorageLoadResult()?.status)) syncDailyMarketPricesIfDue();

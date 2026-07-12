@@ -1,11 +1,13 @@
 import { todayIsoDate } from "../../utils/date.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../domain/userAssetDailyPrices.js";
+import { normalizeCnListedFundInstrument } from "../../domain/cnInstrumentClassification.js";
 import { findAssetQuickMatch, normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
 import { inferAssetMarket } from "../assets/marketOptions.js";
 import { renderMarketSyncResult } from "./marketRender.js";
 
 let ctx = {};
 const marketAutoSyncKey = "asset-trail-market-auto-sync-v1";
+const publicHistoryWindowDays = 365;
 
 export function configureMarketService(context) {
   ctx = context;
@@ -68,15 +70,14 @@ export async function ensureAssetMarketHistory(asset) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         symbols: [symbol],
-        dateFrom: asset.purchaseDate,
-        dateTo: todayIsoDate(),
+        days: publicHistoryWindowDays,
         includeHistory: true,
         trigger: "asset_created"
       })
     });
     if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
-    const result = (payload.results || []).find((item) => String(item.symbol || "").toUpperCase() === symbol);
+    const result = (payload.results || []).find((item) => canonicalSyncSymbol(item.symbol) === canonicalSyncSymbol(symbol));
     const daily = buildUserAssetDailyPriceSnapshots({
       userId: "local-user",
       asset,
@@ -185,20 +186,20 @@ function applyMarketSyncResults(results, syncedAt) {
   let appliedCount = 0;
   let missingCount = 0;
   let benchmarkSyncedCount = 0;
-  const benchmarkSymbols = new Set(benchmarkSymbolsForAnalysis());
+  const benchmarkSymbols = new Set(benchmarkSymbolsForAnalysis().map(canonicalSyncSymbol));
   const bySymbol = new Map(
     results
       .filter((result) => result.status === "synced" && result.after?.currentPrice)
-      .map((result) => [String(result.symbol || "").toUpperCase(), result])
+      .map((result) => [canonicalSyncSymbol(result.symbol), result])
   );
   for (const result of results) {
     if (result.status !== "synced") missingCount += 1;
   }
   state.assets = state.assets.map((asset) => {
-    const symbol = syncSymbolForAsset(asset);
+    const symbol = canonicalSyncSymbol(syncSymbolForAsset(asset));
     const result = bySymbol.get(symbol);
     if (!result) {
-      const missing = results.find((item) => String(item.symbol || "").toUpperCase() === symbol && item.status !== "synced");
+      const missing = results.find((item) => canonicalSyncSymbol(item.symbol) === symbol && item.status !== "synced");
       if (!missing) return asset;
       return {
         ...asset,
@@ -228,7 +229,7 @@ function applyMarketSyncResults(results, syncedAt) {
     };
   });
   for (const result of results) {
-    if (result.status === "synced" && benchmarkSymbols.has(String(result.symbol || "").toUpperCase())) {
+    if (result.status === "synced" && benchmarkSymbols.has(canonicalSyncSymbol(result.symbol))) {
       benchmarkSyncedCount += 1;
     }
   }
@@ -300,7 +301,7 @@ function writeAutoSyncState(state) {
 function syncSymbolForAsset(asset) {
   if (inferAssetMarket(asset) === "CASH") return "";
   const explicit = String(asset.symbol || "").trim().toUpperCase();
-  if (explicit) return explicit;
+  if (explicit) return normalizeCnListedFundInstrument({ ...asset, market: asset.market || inferAssetMarket(asset), symbol: explicit })?.symbol || explicit;
   const quickMatch = findAssetQuickMatch([asset.name, asset.type, asset.currency].filter(Boolean).join(" "));
   if (quickMatch?.symbol) return quickMatch.symbol.toUpperCase();
   const normalizedName = normalizeQuickMatchText(asset.name);
@@ -311,4 +312,8 @@ function syncSymbolForAsset(asset) {
   if (normalizedName.includes("腾讯控股")) return "00700";
   if (normalizedName.includes("现货黄金") || normalizedName === "黄金") return "XAU";
   return "";
+}
+
+function canonicalSyncSymbol(symbol) {
+  return String(symbol || "").trim().toUpperCase();
 }

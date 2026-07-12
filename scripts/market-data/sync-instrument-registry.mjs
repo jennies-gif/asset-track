@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 import { securityWhitelist } from "../../src/domain/marketData.js";
 import { aliasesForInstrument } from "../../src/domain/instrumentAliases.js";
+import { removeOtcDuplicatesOfListedCnInstruments } from "../../src/domain/cnInstrumentClassification.js";
 import { cryptoInstruments, preciousMetalInstruments } from "../../src/domain/marketDataSources.js";
 import { isMarketDataDatabaseEnabled, upsertInstrumentRegistryRows } from "../../src/server/marketDataDatabase.js";
 
@@ -98,13 +99,13 @@ await writeJson(summaryFile, summary);
 
 if (isMarketDataDatabaseEnabled()) {
   try {
-    const changedCount = await upsertInstrumentRegistryRows(rows);
+    const syncSummary = await upsertInstrumentRegistryRows(rows, { returnSummary: true });
     run.messages.push({
       source: "postgres",
       level: "info",
-      message: `${rows.length} instruments synced to PostgreSQL (${changedCount} changed rows)`
+      message: `${rows.length} instruments synced to PostgreSQL (${syncSummary.upsertedCount} upserted, ${syncSummary.removedInstrumentCount} conflicting OTC instruments and ${syncSummary.removedNavCount} conflicting NAV rows removed)`
     });
-    run.postgres = { enabled: true, changedCount };
+    run.postgres = { enabled: true, ...syncSummary };
   } catch (error) {
     run.failureCount += 1;
     run.messages.push({
@@ -133,7 +134,12 @@ async function fetchSource(source) {
 }
 
 async function fetchOfficialCn() {
-  const settled = await Promise.allSettled([fetchSseCnStocks(), fetchSzseCnStocks()]);
+  const settled = await Promise.allSettled([
+    fetchSseCnStocks(),
+    fetchSzseCnStocks(),
+    fetchSseListedFunds(),
+    fetchSzseListedEtfs()
+  ]);
   const rows = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
   settled
     .filter((result) => result.status === "rejected")
@@ -166,6 +172,70 @@ async function fetchOfficialCn() {
     }
     throw error;
   }
+}
+
+async function fetchSseListedFunds() {
+  const subClass = "01,02,03,04,05,06,07,08,09,11,14,15,31,32,33,34,35,36,37,38";
+  const url = new URL("https://query.sse.com.cn/commonSoaQuery.do");
+  url.searchParams.set("isPagination", "true");
+  url.searchParams.set("sqlId", "FUND_LIST");
+  url.searchParams.set("fundType", "00");
+  url.searchParams.set("subClass", subClass);
+  url.searchParams.set("pageHelp.pageSize", "2000");
+  url.searchParams.set("pageHelp.pageNo", "1");
+  url.searchParams.set("pageHelp.beginPage", "1");
+  url.searchParams.set("pageHelp.endPage", "1");
+  url.searchParams.set("pageHelp.cacheSize", "1");
+  const payload = await fetchJson(url, { referer: "https://www.sse.com.cn/assortment/fund/list/" });
+  if (!Array.isArray(payload.result)) throw new Error("SSE fund list missing result");
+  return payload.result.map((row) => registryRow({
+    symbol: row.fundCode,
+    name: row.secNameFull || row.secName,
+    type: String(row.subClass || "").startsWith("1") ? "基金" : "ETF",
+    market: "CN",
+    exchange: "SSE",
+    currency: "CNY",
+    universe: String(row.subClass || "").startsWith("1") ? "listed-fund" : "etf",
+    dataSource: "SSE official fund list",
+    sourceUpdatedAt: now
+  })).filter(Boolean);
+}
+
+async function fetchSzseListedEtfs() {
+  const firstPayload = await fetchSzseListedEtfPage(1);
+  const firstReport = firstPayload[0];
+  if (!Array.isArray(firstReport?.data)) throw new Error("SZSE ETF list missing report data");
+  const rows = [...firstReport.data];
+  const pageCount = Number(firstReport.metadata?.pagecount || 1);
+  for (let page = 2; page <= pageCount; page += 1) {
+    const payload = await fetchSzseListedEtfPage(page);
+    if (!Array.isArray(payload[0]?.data)) throw new Error(`SZSE ETF list page ${page} missing report data`);
+    rows.push(...payload[0].data);
+  }
+  return rows.map((row) => registryRow({
+    symbol: stripHtml(row.sys_key),
+    name: stripHtml(row.kzjcurl),
+    type: "ETF",
+    market: "CN",
+    exchange: "SZSE",
+    currency: "CNY",
+    universe: "etf",
+    dataSource: "SZSE official ETF list",
+    sourceUpdatedAt: now
+  })).filter(Boolean);
+}
+
+async function fetchSzseListedEtfPage(page) {
+  const cached = await readCachedEastmoneyPage("szse-etf-list", page);
+  if (cached) return cached;
+  const url = new URL("https://www.szse.cn/api/report/ShowReport/data");
+  url.searchParams.set("SHOWTYPE", "JSON");
+  url.searchParams.set("CATALOGID", "1945_GP");
+  url.searchParams.set("TABKEY", "tab1");
+  url.searchParams.set("PAGENO", String(page));
+  const payload = await fetchJson(url, { referer: "https://www.szse.cn/market/fund/list/stockFundList/index.html" });
+  await writeCachedSourcePage("szse-etf-list", page, payload);
+  return payload;
 }
 
 async function fetchSseCnStocks() {
@@ -641,7 +711,7 @@ function normalizeRegistryRows(rawRows) {
       byKey.set(key, mergeRegistryRows(normalized, current));
     }
   }
-  return [...byKey.values()].sort(compareRegistryRows);
+  return removeOtcDuplicatesOfListedCnInstruments([...byKey.values()]).sort(compareRegistryRows);
 }
 
 function mergeRegistryRows(base, preferred) {

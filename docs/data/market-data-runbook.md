@@ -138,7 +138,7 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 - 货币汇率：Frankfurter 参考汇率，默认抓取 `USD/CNY`、`HKD/CNY`、`USD/HKD` 和 `EUR/CNY`。
 - 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产，按 USD/USDT 近似存储价格；CoinGecko 保留为部分稳定币兜底。
 - 美股和美股 ETF：Nasdaq historical 公开接口。
-- 资产主库：A 股优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底；国内公募基金使用东方财富 `fundcode_search.js` 基金代码列表，代码统一存为 `{code}.OF` 并保留裸代码别名；港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量证券清单，纳入普通股票、REIT 和非杠杆/反向 ETF，并排除债券、权证、牛熊证和 RMB counter 重复柜台；港股还会尝试用东方财富港股股票列表补充中文简称，失败时不影响 HKEX 官方清单入库；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/source-cache/**/page-*.json`、`storage/market-data/source-cache/eastmoney/fund-code-search/fundcode_search.js`、`storage/market-data/source-cache/hkex/list-of-securities/ListOfSecurities.xlsx`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源；为兼容旧缓存，也会回退读取根目录下旧版 `*stock-list*.json`、`*clist*.json`、`hkex-list-of-securities.csv` 和 `hkex-list-of-securities.txt` 文件。
+- 资产主库：A 股股票优先使用上交所和深交所官方股票列表；场内基金优先使用上交所官方 `FUND_LIST` 和深交所官方 ETF 目录；东方财富市场列表仅作为股票兜底，`fundcode_search.js` 只用于补充国内公募基金。官方场内记录使用交易代码和交易所类型；场外基金统一存为 `{code}.OF` 并保留裸代码别名。同一裸代码同时出现官方场内记录和东方财富 `.OF` 记录时，主库必须保留官方场内记录并剔除冲突的 `.OF` 记录。港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量证券清单，纳入普通股票、REIT 和非杠杆/反向 ETF，并排除债券、权证、牛熊证和 RMB counter 重复柜台；港股还会尝试用东方财富港股股票列表补充中文简称，失败时不影响 HKEX 官方清单入库；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/source-cache/**/page-*.json`、`storage/market-data/source-cache/eastmoney/fund-code-search/fundcode_search.js`、`storage/market-data/source-cache/hkex/list-of-securities/ListOfSecurities.xlsx`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源；为兼容旧缓存，也会回退读取根目录下旧版 `*stock-list*.json`、`*clist*.json`、`hkex-list-of-securities.csv` 和 `hkex-list-of-securities.txt` 文件。
 - 沪深 300 成分股：东方财富 datacenter 公开接口。
 - 恒生科技成分股：Goldman Sachs Warrants 公开 AJAX。
 - 纳斯达克 100 成分股：Nasdaq list-type 公开接口。
@@ -148,6 +148,12 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 资产主库和价格缓存是两套任务：主库用于录入时匹配名称、代码、市场、类型和币种；价格脚本按用户录入且需要行情的资产抓取价格，同时稳定维护分析页收益表现对比使用的少量基准指数或 ETF 缓存。
 
 当前 A 股主库策略是官方源优先：上交所接口提供 `SECURITY_CODE_A`、`SECURITY_ABBR_A` 和 `LISTING_DATE` 等字段，深交所接口提供 `agdm`、`agjc`、`bk` 和 `agssrq` 等字段。公开官网接口可能限流或临时返回空响应；同步脚本会保留已成功分页和既有缓存，不应因为单个市场失败而用更薄的数据覆盖已生成主库。
+
+为兼容修复前已经导入文件或数据库的错误主数据，API 搜索、行情抓取和前端结果匹配还会对“交易所基金号段 + 名称明确包含 ETF/LOF + 非 ETF 联接”的旧 `{code}.OF` 记录做保守归一。该名称规则只是旧数据兼容兜底，新的主库分类以交易所官方挂牌清单为准。兼容只改变公共标的代码与行情路由，不修改用户数量、成本、账户、交易或笔记数据；重新同步主库后应以无 `.OF` 的场内记录替代旧记录。
+
+配置 `DATABASE_URL` 运行主库同步时，PostgreSQL 写入与冲突清理在同一事务内完成。脚本先 upsert 官方场内记录，再按本次官方场内代码集合删除冲突的 `{code}.OF` 公共主记录；`market_data_instrument_aliases` 和 `market_data_instrument_sources` 通过外键级联删除，同时删除相同错误代码的 `market_data_fund_nav_snapshots`。任何一步失败都会回滚整个批次。同步日志必须分别报告 upsert 数量、删除的冲突主记录数量和错误净值数量。该清理不修改 `user_assets`、用户交易、账户、持仓、笔记或用户每日价格快照。
+
+生产执行前应备份上述四张公共行情表或创建数据库恢复点。回滚方式是恢复同步前的公共主库、别名、来源和基金净值快照，并回滚对应应用版本；不得用用户资产备份覆盖公共行情表，也不得在未核对同步日志和搜索结果时直接发布。
 
 面向中国用户时，不应为了控制总量而降低美股覆盖，因为美元资产录入仍然常见。当前策略是保留美股普通股票和 ETF，同时用市场级覆盖闸门要求 A 股和港股必须补齐：
 

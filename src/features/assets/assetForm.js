@@ -420,8 +420,7 @@ async function lookupDraftMarketPrice(query) {
   draftMarketLookupQuery = query;
   setDraftPriceStatus("loading", "正在查询行情...");
   try {
-    const purchaseDate = form.elements.purchaseDate?.value || todayIsoDate();
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}&purchaseDate=${encodeURIComponent(purchaseDate)}`);
+    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error(await readDraftLookupError(response));
     const payload = await response.json();
     if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== query) return;
@@ -448,14 +447,12 @@ function applyDraftLookupPayload(payload, query) {
   if (instrument) {
     selectAssetMatch(instrument, query, { skipLookup: true });
   }
-  if (!price?.currentPrice && !payload?.purchasePrice?.price) {
-    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用行情，请手动填写买入价格。");
+  if (!price?.currentPrice) {
+    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用行情，请手动填写当前价格和买入价格。");
     return;
   }
   const currentPriceField = form.elements.currentPrice;
-  const costPriceField = form.elements.costPrice;
   const previousPriceField = form.elements.previousPrice;
-  const previousAutoPrice = form.dataset.autoDraftPrice || "";
   const previousAutoCurrentPrice = form.dataset.autoDraftCurrentPrice || "";
   const nextPrice = String(price.currentPrice || "").trim();
   const canFillCurrentPrice = !currentPriceField?.value.trim() || currentPriceField.value.trim() === previousAutoCurrentPrice;
@@ -469,30 +466,8 @@ function applyDraftLookupPayload(payload, query) {
     if (form.elements.pricedAt) form.elements.pricedAt.value = price.pricedAt || "";
     if (form.elements.priceStatus) form.elements.priceStatus.value = "synced";
   }
-  applyPurchaseDatePrice(payload.purchasePrice, payload.priceLookup, previousAutoPrice);
+  setDraftPriceStatus("synced", "已带入最新公共行情；买入日期和买入价格仅保存在当前浏览器，请手动填写买入价格。");
   updateAssetLiveSummary();
-}
-
-function applyPurchaseDatePrice(purchasePrice, priceLookup, previousAutoPrice) {
-  const form = ctx.elements.assetForm;
-  const purchaseDate = form.elements.purchaseDate?.value || todayIsoDate();
-  const costPriceField = form.elements.costPrice;
-  const canFillCostPrice = !costPriceField?.value.trim() || costPriceField.value.trim() === previousAutoPrice;
-  if (!purchasePrice?.price) {
-    if (costPriceField?.value.trim() === previousAutoPrice) costPriceField.value = "";
-    delete form.dataset.autoDraftPrice;
-    setDraftPriceStatus("warning", `${purchaseDate} 暂无可用历史价格，请手动填写买入价格。`);
-    return;
-  }
-  if (canFillCostPrice && costPriceField) {
-    costPriceField.value = purchasePrice.price;
-    form.dataset.autoDraftPrice = purchasePrice.price;
-    const dateLabel = purchasePrice.priceDate === purchaseDate ? purchasePrice.priceDate : `${purchasePrice.priceDate}（最近交易日）`;
-    const sourceLabel = priceLookup?.source === "cache" ? "缓存" : "现场抓取";
-    setDraftPriceStatus("synced", `已从${sourceLabel}带入 ${dateLabel} 的买入价格，可直接修改。`);
-  } else {
-    setDraftPriceStatus("synced", `已查到 ${purchasePrice.priceDate} 的历史价格，已保留你手动填写的买入价格。`);
-  }
 }
 
 function setDraftPriceStatus(status, message) {

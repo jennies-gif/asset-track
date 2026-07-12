@@ -62,10 +62,10 @@ export function renderAssetPriceChart() {
   const requestId = ++assetPriceChartRequestId;
   const fallbackSeries = buildHistorySeries(asset);
   renderAssetPriceChartSeries(asset, fallbackSeries, "fallback");
-  loadDailyAssetPriceSeries(asset).then((series) => {
-    if (requestId !== assetPriceChartRequestId || !series.length) return;
+  const series = loadDailyAssetPriceSeries(asset);
+  if (requestId === assetPriceChartRequestId && series.length) {
     renderAssetPriceChartSeries(asset, series, "daily");
-  });
+  }
 }
 
 function renderAssetPriceChartSeries(asset, series, sourceKind) {
@@ -126,27 +126,19 @@ function renderAssetPriceChartSeries(asset, series, sourceKind) {
   `;
 }
 
-async function loadDailyAssetPriceSeries(asset) {
-  if (!ctx.marketApiBaseUrl || !asset.id) return [];
-  try {
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/asset-prices/daily?assetId=${encodeURIComponent(asset.id)}`);
-    if (!response.ok) return [];
-    const payload = await response.json();
-    return (payload.points || [])
-      .map((point) => ({
-        date: point.priceDate,
-        close: Number(point.closePrice),
-        source: point.source,
-        sourceFetchedAt: point.sourceFetchedAt,
-        type: point.priceType === "unit_nav" ? "单位净值" : "日收盘价",
-        priceBasis: point.priceBasis,
-        carriedFromDate: point.carriedFromDate
-      }))
-      .filter((point) => point.date && Number.isFinite(point.close) && point.close > 0)
-      .sort((left, right) => left.date.localeCompare(right.date));
-  } catch {
-    return [];
-  }
+function loadDailyAssetPriceSeries(asset) {
+  return (Array.isArray(asset.dailyPrices) ? asset.dailyPrices : [])
+    .map((point) => ({
+      date: point.priceDate,
+      close: Number(point.closePrice),
+      source: point.source,
+      sourceFetchedAt: point.sourceFetchedAt,
+      type: point.priceType === "unit_nav" ? "单位净值" : "日收盘价",
+      priceBasis: point.priceBasis,
+      carriedFromDate: point.carriedFromDate
+    }))
+    .filter((point) => point.date && Number.isFinite(point.close) && point.close > 0)
+    .sort((left, right) => left.date.localeCompare(right.date));
 }
 
 function renderMarketSyncRow(result) {

@@ -6,11 +6,19 @@
 | --- | --- | --- | --- | --- |
 | 0001 | 上线顺序和数据边界 | [0001-launch-sequence-and-data-boundaries.md](./0001-launch-sequence-and-data-boundaries.md) | Accepted | 文档包含显式状态。 |
 | 0002 | React + TypeScript 并行迁移 | [0002-react-typescript-parallel-migration.md](./0002-react-typescript-parallel-migration.md) | Accepted | 文档包含显式状态。 |
-| 0003 | app.js 第一阶段低风险模块拆分 | [0003-app-js-phase-1-modularization.md](./0003-app-js-phase-1-modularization.md) | 待确认 | 未发现显式状态字段。 |
-| 0004 | app.js 第二阶段资产配置模块拆分 | [0004-asset-options-phase-2-modularization.md](./0004-asset-options-phase-2-modularization.md) | 待确认 | 未发现显式状态字段。 |
-| 0005 | app.js 第三阶段状态模块拆分 | [0005-state-phase-3-modularization.md](./0005-state-phase-3-modularization.md) | 待确认 | 未发现显式状态字段。 |
-| 0006 | app.js 第四阶段写作表单 UI 模块拆分 | [0006-compose-form-phase-4-modularization.md](./0006-compose-form-phase-4-modularization.md) | 待确认 | 未发现显式状态字段。 |
-| 0007 | 市场资源库和行情抓取边界 | [0007-market-data-boundaries.md](./0007-market-data-boundaries.md) | 待确认 | 未发现显式状态字段。 |
+| 0003 | app.js 第一阶段低风险模块拆分 | [0003-app-js-phase-1-modularization.md](./0003-app-js-phase-1-modularization.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
+| 0004 | app.js 第二阶段资产配置模块拆分 | [0004-asset-options-phase-2-modularization.md](./0004-asset-options-phase-2-modularization.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
+| 0005 | app.js 第三阶段状态模块拆分 | [0005-state-phase-3-modularization.md](./0005-state-phase-3-modularization.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
+| 0006 | app.js 第四阶段写作表单 UI 模块拆分 | [0006-compose-form-phase-4-modularization.md](./0006-compose-form-phase-4-modularization.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
+| 0007 | 市场资源库和行情抓取边界 | [0007-market-data-boundaries.md](./0007-market-data-boundaries.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
+
+## 状态定义
+
+- `Proposed`：提出的方案，未批准。
+- `Draft`：已授权创建，但未最终批准。
+- `Accepted`：已确认生效。
+- `Deprecated`：历史决策，不再适用。
+- `Status Unknown`：历史记录存在，但当前状态无法确认，不作为有效规则。
 
 ## 决策记录规则
 
