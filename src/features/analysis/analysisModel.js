@@ -153,9 +153,10 @@ function pointDrawdownBps(points, target) {
   return 0n;
 }
 
-function buildWorstMonth(points) {
-  const monthly = points.slice(1).map((point, index) => {
-    const previous = points[index];
+export function buildWorstMonth(points) {
+  const monthEnds = [...points.reduce((groups, point) => groups.set(point.date.slice(0, 7), point), new Map()).values()];
+  const monthly = monthEnds.slice(1).map((point, index) => {
+    const previous = monthEnds[index];
     return {
       month: point.date.slice(0, 7),
       returnBps: previous.valueCents === 0n ? 0n : roundDivide((point.valueCents - previous.valueCents) * 10000n, previous.valueCents)

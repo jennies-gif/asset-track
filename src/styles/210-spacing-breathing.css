@@ -376,6 +376,15 @@ body,
   box-shadow: none;
 }
 
+#assets-panel > .panel-heading .button-row {
+  align-items: center;
+}
+
+#assets-panel > .panel-heading .button-row > button,
+#assets-panel > .panel-heading .backup-menu summary {
+  min-height: 38px;
+}
+
 .avatar-button {
   width: 34px;
   min-width: 34px;

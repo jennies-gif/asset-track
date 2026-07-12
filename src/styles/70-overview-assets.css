@@ -128,6 +128,12 @@
   font-size: 12px;
 }
 
+.trend-summary-panel .trend-summary-detail {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .trend-summary-panel b {
   color: var(--text-primary);
   font-size: 13px;

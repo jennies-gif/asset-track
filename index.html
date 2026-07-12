@@ -226,23 +226,23 @@
         <div class="panel-heading">
           <div>
             <h2>资产台账</h2>
-            <p class="section-description">添加资产、管理持仓；通过“导入 / 备份数据”恢复或导出 JSON 备份。</p>
+            <p class="section-description">添加资产、管理持仓；可导入 JSON 完整备份，或导出 JSON / CSV。</p>
           </div>
           <div class="button-row">
             <button class="primary-button" id="open-asset-form" type="button">添加资产</button>
             <button class="secondary-button" id="reset-demo" type="button">恢复示例</button>
-            <details class="backup-menu">
-              <summary>导入 / 备份数据</summary>
+            <details class="backup-menu" id="backup-menu">
+              <summary>导入 / 导出数据</summary>
               <div class="backup-menu-panel">
                 <section class="backup-card">
-                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↥</span><div><h3>导出与备份</h3><p>当前数据保存在本机浏览器中，建议集中录入后及时导出备份。</p></div></div>
+                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↥</span><div><h3>导出与备份</h3><p>JSON 是可恢复的完整备份；CSV 仅包含资产明细，便于在表格软件中查看和分析。</p></div></div>
                   <div class="backup-actions">
                     <button class="secondary-button backup-action-button" id="export-json-button" type="button">导出 JSON</button>
                     <button class="secondary-button backup-action-button" id="export-csv-button" type="button">导出 CSV</button>
                   </div>
                 </section>
                 <section class="backup-card">
-                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↧</span><div><h3>导入备份</h3></div></div>
+                  <div class="backup-card-heading"><span class="backup-card-icon" aria-hidden="true">↧</span><div><h3>导入完整备份</h3><p>仅支持本应用导出的 JSON；CSV 不包含设置、快照和复盘等完整状态，不能用于恢复。</p></div></div>
                   <form class="import-form" id="import-form">
                     <p class="backup-risk-note">导入会覆盖当前本地数据，建议先导出备份，并确认文件来自可信来源。</p>
                     <label><span>粘贴 JSON 备份</span><textarea id="import-json" rows="5" placeholder="请粘贴从本应用导出的 JSON 备份内容"></textarea></label>
@@ -298,7 +298,7 @@
                   </select>
                 </label>
                 <label class="advanced-field">市场 <input name="market" placeholder="US / CN / HK / CASH"></label>
-                <label>账户 <input name="account" id="account-picker" list="account-name-options" placeholder="账户名称"><datalist id="account-name-options"></datalist></label>
+                <label>账户 <input name="account" id="account-picker" list="account-name-options" placeholder="选择已录入账户或输入新账户"><datalist id="account-name-options"></datalist></label>
                 <label class="advanced-field">账户类型
                   <select name="accountType">
                     <option value="securities">证券账户</option><option value="fund">基金账户</option><option value="cash">现金账户</option><option value="crypto">数字资产账户</option><option value="long_term">养老金/长期账户</option><option value="watch">模拟/观察账户</option><option value="other">其他</option><option value="__custom__">自定义</option>
@@ -308,12 +308,12 @@
                 <label>币种
                   <select name="currency" required><option value="" selected>请选择币种</option><option value="CNY">CNY</option><option value="USD">USD</option><option value="HKD">HKD</option><option value="BTC">BTC</option></select>
                 </label>
-                <label>持有数量 <input name="quantity" required inputmode="decimal" placeholder="请输入数量"></label>
-                <label>平均成本价 <input name="costPrice" inputmode="decimal" placeholder="可后续补充"></label>
                 <label>首次持有日期 <input name="purchaseDate" type="date"></label>
-                <label>当前价格 <input name="currentPrice" inputmode="decimal" placeholder="可选"></label>
+                <label>买入价格 <input name="costPrice" inputmode="decimal" placeholder="查询持有日期当天价"></label>
+                <label>股数 <input name="quantity" required inputmode="decimal" placeholder="请输入股数"></label>
                 <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
               </div>
+              <input name="currentPrice" type="hidden">
               <input name="assetRegistryId" type="hidden">
               <input name="assetMatchStatus" type="hidden" value="unmatched">
               <input name="marketDataSupported" type="hidden" value="false">
@@ -325,7 +325,7 @@
               <input name="priceSource" type="hidden">
               <input name="pricedAt" type="hidden">
               <input name="priceStatus" type="hidden">
-              <p class="form-help" data-price-fallback>成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。</p>
+              <p class="form-help" data-price-fallback>选择资产后会查询首次持有日期当日或之前最近一个交易日的价格；缺失时请手动填写。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>
             <fieldset class="form-section optional-entry-section">
@@ -398,23 +398,28 @@
 
       <section class="panel" id="analysis-panel">
         <div class="panel-heading">
-          <div><h2>组合表现分析</h2><p class="section-description">收益、归因、风险和计算口径集中在这里查看。</p></div>
+          <div class="analysis-scope-heading"><h2>分析范围</h2><p class="section-description">收益、归因、风险和计算口径集中在这里查看。</p></div>
           <form class="analysis-filter" aria-label="分析范围筛选">
             <label>账户 <select id="analysis-account-filter"></select></label>
             <label>资产 <select id="analysis-asset-filter"></select></label>
-            <label>开始 <input id="analysis-start" type="date"></label>
-            <label>结束 <input id="analysis-end" type="date"></label>
+            <fieldset class="analysis-range-field"><legend>时间范围</legend><div class="range-pills" aria-label="分析时间范围"><button class="range-pill" data-analysis-range-value="1" type="button">一月</button><button class="range-pill" data-analysis-range-value="3" type="button">三月</button><button class="range-pill" data-analysis-range-value="6" type="button">半年</button><button class="range-pill" data-analysis-range-value="ytd" type="button">今年</button><button class="range-pill" data-analysis-range-value="custom" type="button">自定义</button></div></fieldset>
+            <label class="analysis-custom-date is-visible">开始 <input id="analysis-start" type="date"></label>
+            <label class="analysis-custom-date is-visible">结束 <input id="analysis-end" type="date"></label>
             <p class="filter-summary" id="analysis-range-summary"></p>
           </form>
         </div>
         <section class="analysis-card analysis-card-wide analysis-judgement-card">
-          <h3 id="analysis-judgement-title"></h3>
+          <div class="analysis-judgement-intro">
+            <span class="analysis-sparkle" aria-hidden="true">✦</span>
+            <div><h3>AI 分析看板</h3><p id="analysis-judgement-title"></p></div>
+          </div>
           <ol class="analysis-judgement-list" id="analysis-judgement-list"></ol>
         </section>
         <div class="analysis-grid analysis-focus-grid">
           <section class="analysis-card analysis-card-wide"><h3>关键指标</h3><div class="analysis-health-list" id="analysis-health-list"></div></section>
           <section class="analysis-card analysis-card-wide" data-analysis-requires-assets>
-            <div class="analysis-card-heading"><h3>收益表现对比</h3><div class="analysis-toggle" role="tablist" aria-label="收益表现口径"><button class="is-active" data-analysis-return-metric="mwr" type="button">MWR</button><button data-analysis-return-metric="twr" type="button">TWR</button><button data-analysis-return-metric="sr" type="button">SR</button></div></div>
+            <div class="analysis-card-heading"><h3>收益表现对比</h3><div class="analysis-toggle" role="tablist" aria-label="收益表现口径"><button class="is-active" data-analysis-return-metric="mwr" type="button">MWR</button><button data-analysis-return-metric="twr" type="button">TWR</button><button data-analysis-return-metric="sr" type="button">夏普比率</button></div></div>
+            <div class="analysis-risk-adjusted-metrics" id="analysis-risk-adjusted-metrics"></div>
             <div class="benchmark-selector" id="analysis-benchmark-selector" aria-label="选择收益对比基准"></div>
             <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
             <div class="benchmark-comparison-chart" id="analysis-benchmark-trend-chart"></div>

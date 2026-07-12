@@ -292,6 +292,11 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(cryptoHistory.points[0].close, 68000.55);
     assert.equal(cryptoHistory.points[0].source, "CoinGecko simple price");
 
+    const cachedPurchasePrice = await getJson("/api/instruments/lookup?query=BTC&purchaseDate=2026-06-02");
+    assert.equal(cachedPurchasePrice.priceLookup.source, "cache");
+    assert.equal(cachedPurchasePrice.purchasePrice.priceDate, "2026-06-02");
+    assert.equal(cachedPurchasePrice.purchasePrice.price, "68000.55");
+
     const fxRates = await getJson("/api/market-data/fx-rates?base=USD&quote=CNY");
     assert.equal(fxRates.rates[0].rate, "7.12");
 
@@ -314,6 +319,16 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(sync.results[0].after.sourceFetchedAt, "2026-06-02T10:00:00.000Z");
     assert.equal(sync.results[0].dailyPrices.length, 2);
     assert.equal(sync.results[0].dailyPrices[0].priceDate, "2026-06-01");
+
+    const coveredHistory = await postJson("/api/market-data/sync-daily", {
+      symbols: ["00700"],
+      dateFrom: "2026-06-01",
+      dateTo: "2026-06-02",
+      includeHistory: true
+    });
+    assert.equal(coveredHistory.fetch.status, "covered");
+    assert.equal(coveredHistory.fetch.run.skippedCount, 1);
+    assert.equal(coveredHistory.results[0].history.length, 2);
 
     await fs.mkdir(path.join(marketDataDir, "user-asset-prices", "DEMO-USER"), { recursive: true });
     await fs.writeFile(

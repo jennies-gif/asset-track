@@ -155,6 +155,15 @@
 
 ## Price And NAV
 
+### `GET /api/instruments/lookup`
+
+查询参数：
+
+- `query`：资产代码或名称；
+- `purchaseDate`：首次持有日期，格式为 `YYYY-MM-DD`。
+
+用途：为新增资产匹配公共标的并取得买入价格。服务端先读取已保存的公共历史行情；如果指定日期没有缓存，则现场抓取覆盖该日期的行情，再返回指定日期或之前最近交易日的收盘价。响应中的 `priceLookup.source` 明确标记为 `cache`、`fetched` 或 `missing`，不得将缺失价格表达为已同步价格。
+
 ### `GET /api/market-data/history`
 
 查询参数：
@@ -257,7 +266,7 @@
 
 ### `POST /api/market-data/sync-daily`
 
-用途：手动同步最新价格。默认只针对所有录入过且有代码的资产抓取最新价格或净值，并应用到资产状态；同步成功后刷新当前用户资产当天的每日价格快照。历史区间回补不走这个接口，应通过 `POST /api/market-data/tasks/backfill` 创建一次性任务。前端可随请求传入本地资产列表。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源，主要用于本地测试和故障降级。API 服务常驻运行时，也会默认按本机时区每天 `22:00` 调用同一套同步逻辑，并通过 `includeBenchmarks` 同步少量系统默认基准。完整资产资源库只用于搜索和识别，不会被该接口默认全量抓取行情。
+用途：同步最新价格，也为本地种子版执行公共历史行情的“确保覆盖”。新增资产后，前端只提交 `symbols + dateFrom + dateTo + includeHistory`；服务端先检查该标的公共缓存区间，只抓取首端或尾端尚未覆盖的区间，已完整覆盖时不重复访问外部数据源。返回的公共历史行情由浏览器在本地结合资产 ID 和首次持有日期生成每日价格，不上传数量、成本、账户或备注。未来云端异步回补仍通过 `POST /api/market-data/tasks/backfill` 排队。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时也会默认按本机时区每天 `22:00` 调用同一套同步逻辑，并通过 `includeBenchmarks` 同步少量系统默认基准。
 
 请求：
 
@@ -266,6 +275,9 @@
   "symbols": ["00700", "BTC"],
   "account": "港股账户",
   "days": 7,
+  "dateFrom": "2026-01-29",
+  "dateTo": "2026-06-02",
+  "includeHistory": true,
   "autoFetch": true
 }
 ```

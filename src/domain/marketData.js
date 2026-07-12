@@ -262,15 +262,15 @@ export const benchmarkInstruments = [
     source: "Nasdaq historical public API"
   },
   {
-    key: "vt",
-    label: "全球股票",
-    symbol: "VT",
-    name: "Vanguard Total World Stock ETF",
+    key: "dowjones",
+    label: "道琼斯",
+    symbol: "DIA",
+    name: "SPDR Dow Jones Industrial Average ETF Trust",
     type: "ETF",
     universe: "benchmark",
     market: "US",
     currency: "USD",
-    meta: "VT ETF 代理 · Nasdaq 历史日线",
+    meta: "DIA ETF 代理 · Nasdaq 历史日线",
     source: "Nasdaq historical public API"
   },
   {

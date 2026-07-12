@@ -9,6 +9,7 @@ export function getAnalysisElements() {
     analysisContributionRows: document.querySelector("#analysis-contribution-rows"),
     analysisQualityMetrics: document.querySelector("#analysis-quality-metrics"),
     analysisMonthlyReturnChart: document.querySelector("#analysis-monthly-return-chart"),
+    analysisRiskAdjustedMetrics: document.querySelector("#analysis-risk-adjusted-metrics"),
     analysisBenchmarkTrendChart: document.querySelector("#analysis-benchmark-trend-chart"),
     analysisBenchmarkSelector: document.querySelector("#analysis-benchmark-selector"),
     analysisTopReturnAssets: document.querySelector("#analysis-top-return-assets"),

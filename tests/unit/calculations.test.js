@@ -27,6 +27,7 @@ import {
   lookupSecurity
 } from "../../src/domain/marketData.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
+import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
 import { priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
 import {
@@ -44,13 +45,67 @@ import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.j
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
 import { configureNotesRender, noteDisplayTagsFor, noteTypeFromTags, showNoteReader } from "../../src/features/notes/notesRender.js";
-import { buildTrendPoints, configureTrendModel } from "../../src/features/trends/trendModel.js";
+import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from "../../src/features/trends/trendModel.js";
+import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
+import { buildWorstMonth } from "../../src/features/analysis/analysisModel.js";
+import { calculateRiskAdjustedMetrics } from "../../src/features/analysis/analysisReturns.js";
 import { configureFormatters, formatDisplayCurrency, formatSignedCurrency, formatUnitPrice } from "../../src/ui/formatters.js";
 
 test("parses decimal values with deterministic rounding", () => {
   assert.equal(parseDecimalToScaledInt("12.345", 2), 1235n);
   assert.equal(parseDecimalToScaledInt("-12.345", 2), -1235n);
   assert.equal(scaledIntToDecimal(123500n, 4), "12.35");
+});
+
+test("uses the same explicit analysis periods as the total asset trend", () => {
+  assert.deepEqual(analysisPresetBounds("1", "2026-07-12"), { startDate: "2026-06-12", endDate: "2026-07-12" });
+  assert.deepEqual(analysisPresetBounds("3", "2026-07-12"), { startDate: "2026-04-12", endDate: "2026-07-12" });
+  assert.deepEqual(analysisPresetBounds("6", "2026-07-12"), { startDate: "2026-01-12", endDate: "2026-07-12" });
+  assert.deepEqual(analysisPresetBounds("ytd", "2026-07-12"), { startDate: "2026-01-01", endDate: "2026-07-12" });
+});
+
+test("keeps holdings opened before the analysis period in drawdown calculations", () => {
+  const assets = [{ id: "legacy-holding", purchaseDate: "2024-06-01", account: "长期账户" }];
+  configureAnalysisFilters({
+    elements: {},
+    getAnalysisFilter: () => ({ account: "all", assetId: "all", range: "ytd", startDate: "2026-01-01", endDate: "2026-07-12" }),
+    openAssets: () => assets,
+    buildAccountSummaries: () => []
+  });
+  assert.deepEqual(selectedAnalysisAssets(), assets);
+});
+
+test("annualizes volatility and Sharpe ratio using the observed interval", () => {
+  const points = [10000n, 10100n, 9999n, 10199n].map((valueCents, index) => ({
+    date: `2026-01-${String(1 + index * 7).padStart(2, "0")}`,
+    valueCents
+  }));
+  const metrics = calculateRiskAdjustedMetrics(points);
+  assert.equal(metrics.observationCount, 3);
+  assert.equal(metrics.intervalDays, 7);
+  assert.equal(typeof metrics.annualizedVolatilityBps, "bigint");
+  assert.equal(typeof metrics.sharpeRatioBps, "bigint");
+});
+
+test("does not publish volatility or Sharpe ratio with too few observations", () => {
+  const metrics = calculateRiskAdjustedMetrics([
+    { date: "2026-01-01", valueCents: 10000n },
+    { date: "2026-01-08", valueCents: 10100n }
+  ]);
+  assert.equal(metrics.annualizedVolatilityBps, null);
+  assert.equal(metrics.sharpeRatioBps, null);
+});
+
+test("calculates the worst month from month-end values instead of sampling intervals", () => {
+  const worst = buildWorstMonth([
+    { date: "2026-01-01", valueCents: 10000n },
+    { date: "2026-01-31", valueCents: 11000n },
+    { date: "2026-02-14", valueCents: 9000n },
+    { date: "2026-02-28", valueCents: 9900n },
+    { date: "2026-03-31", valueCents: 10890n }
+  ]);
+  assert.equal(worst.month, "2026-02");
+  assert.equal(worst.returnBps, -1000n);
 });
 
 test("keeps custom review tags visible instead of replacing them with note type", () => {
@@ -275,6 +330,31 @@ test("builds auditable daily user asset prices from first holding date", () => {
   assert.equal(result.rows[2].qualityStatus, "ok");
 });
 
+test("finds only uncovered boundary ranges in shared market history", () => {
+  assert.deepEqual(
+    missingMarketHistoryRanges(
+      [{ tradeDate: "2026-06-02" }, { tradeDate: "2026-06-03" }],
+      "2026-06-01",
+      "2026-06-05"
+    ),
+    [
+      { dateFrom: "2026-06-01", dateTo: "2026-06-01" },
+      { dateFrom: "2026-06-04", dateTo: "2026-06-05" }
+    ]
+  );
+});
+
+test("does not schedule another market history fetch when the requested range is covered", () => {
+  assert.deepEqual(
+    missingMarketHistoryRanges(
+      [{ date: "2026-06-01" }, { date: "2026-06-05" }],
+      "2026-06-01",
+      "2026-06-05"
+    ),
+    []
+  );
+});
+
 test("builds portfolio trend from synced daily asset prices before falling back to estimates", () => {
   configureTrendModel({
     elements: {
@@ -308,6 +388,42 @@ test("builds portfolio trend from synced daily asset prices before falling back 
     ["2026-06-02", 100000n],
     ["2026-06-03", 120000n]
   ]);
+});
+
+test("identifies the asset with the largest value loss during the maximum drawdown interval", () => {
+  const assets = [
+    {
+      name: "资产 A",
+      quantity: "10",
+      fxRate: "1",
+      purchaseDate: "2026-06-01",
+      dailyPrices: [
+        { priceDate: "2026-06-01", closePrice: "100" },
+        { priceDate: "2026-06-03", closePrice: "70" }
+      ]
+    },
+    {
+      name: "资产 B",
+      quantity: "10",
+      fxRate: "1",
+      purchaseDate: "2026-06-01",
+      dailyPrices: [
+        { priceDate: "2026-06-01", closePrice: "100" },
+        { priceDate: "2026-06-03", closePrice: "90" }
+      ]
+    }
+  ];
+  const points = [
+    { date: "2026-06-01", valueCents: 200000n },
+    { date: "2026-06-03", valueCents: 160000n }
+  ];
+
+  assert.equal(calculateMaxDrawdownAsset(points, assets)?.name, "资产 A");
+  assert.equal(calculateMaxDrawdownAsset([{ date: "2026-06-01", valueCents: 200000n }], assets), null);
+  assert.equal(calculateMaxDrawdownAsset([
+    { date: "2026-06-01", valueCents: 200000n },
+    { date: "2026-06-03", valueCents: 210000n }
+  ], assets), null);
 });
 
 test("calculates realized PnL for partial sells with fees and taxes", () => {
@@ -583,6 +699,9 @@ test("keeps seed-version private asset data out of default API payloads", async 
   assert.equal(assetFormSource.includes("/api/assets"), false);
   assert.equal(marketServiceSource.includes("assetsForMarketSyncPayload"), false);
   assert.equal(marketServiceSource.includes("JSON.stringify({ symbols, assets"), false);
+  assert.equal(marketServiceSource.includes("quantity: asset.quantity"), false);
+  assert.equal(marketServiceSource.includes("costPrice: asset.costPrice"), false);
+  assert.equal(marketServiceSource.includes("account: asset.account"), false);
 });
 
 test("searches the lightweight instrument seed for common assets", () => {
@@ -741,6 +860,7 @@ test("collects saved account names from existing assets for future asset entry",
   const accounts = savedAccountOptionsFromAssets([
     { account: "长期账户", accountType: "long_term" },
     { account: "长期账户", accountType: "long_term" },
+    { account: "长期账户", accountType: "securities" },
     { account: "美股账户", type: "股票" },
     { account: "冷钱包", type: "数字资产" },
     { account: "  " }

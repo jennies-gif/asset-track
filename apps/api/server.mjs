@@ -34,6 +34,7 @@ import {
   upsertUserAssetDailyPriceRows
 } from "../../src/server/marketDataDatabase.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
+import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
 const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
@@ -264,12 +265,27 @@ async function lookupInstrumentWithLatestPrice(url, response) {
     currentPrice: "0",
     fxRate: instrument.currency === "HKD" ? "0.1280" : instrument.currency === "CNY" ? "0.1460" : "1"
   });
+  const requestedPurchaseDate = normalizeDateParam(url.searchParams.get("purchaseDate")) || todayIsoDate();
+  const cachedHistory = await readStoredMarketHistory(syncAsset);
+  const cachedPurchasePrice = cachedPurchasePriceForDate(cachedHistory, requestedPurchaseDate);
+  if (cachedPurchasePrice) {
+    return sendJson(response, {
+      instrument,
+      price: marketPriceFromHistory(cachedHistory),
+      purchasePrice: cachedPurchasePrice,
+      priceLookup: { source: "cache", requestedDate: requestedPurchaseDate },
+      addedToRegistry,
+      status: "synced",
+      message: "已读取本地行情缓存"
+    });
+  }
   let syncResult = null;
   try {
     syncResult = await runDailyMarketDataSync({
       symbols: [instrument.symbol],
       assets: [syncAsset],
-      days: Number(url.searchParams.get("days") || 7),
+      dateFrom: requestedPurchaseDate,
+      dateTo: todayIsoDate(),
       includeBenchmarks: false
     }, "draft_lookup");
   } catch (error) {
@@ -279,11 +295,15 @@ async function lookupInstrumentWithLatestPrice(url, response) {
 
   const result = (syncResult.results || []).find((item) => String(item.symbol || "").toUpperCase() === String(instrument.symbol || "").toUpperCase());
   const price = result?.status === "synced" ? result.after : null;
+  const refreshedHistory = await readStoredMarketHistory(syncAsset);
+  const purchasePrice = purchasePriceAtOrBefore(refreshedHistory, requestedPurchaseDate);
   return sendJson(response, {
     instrument,
     price,
+    purchasePrice,
+    priceLookup: { source: purchasePrice ? "fetched" : "missing", requestedDate: requestedPurchaseDate },
     addedToRegistry,
-    status: price ? "synced" : "missing",
+    status: purchasePrice ? "synced" : price ? "partial" : "missing",
     message: result?.message || "",
     fetch: syncResult.fetch?.run ? {
       id: syncResult.fetch.run.id,
@@ -291,6 +311,44 @@ async function lookupInstrumentWithLatestPrice(url, response) {
       failureCount: syncResult.fetch.run.failureCount
     } : null
   }, 202);
+}
+
+function cachedPurchasePriceForDate(history, requestedDate) {
+  const exact = history.find((point) => point.date === requestedDate);
+  if (exact) return purchasePriceFromPoint(exact, requestedDate);
+  const weekday = new Date(`${requestedDate}T00:00:00.000Z`).getUTCDay();
+  return weekday === 0 || weekday === 6 ? purchasePriceAtOrBefore(history, requestedDate) : null;
+}
+
+function purchasePriceAtOrBefore(history, requestedDate) {
+  const matched = history.filter((point) => point.date <= requestedDate).at(-1);
+  if (!matched) return null;
+  return purchasePriceFromPoint(matched, requestedDate);
+}
+
+function purchasePriceFromPoint(matched, requestedDate) {
+  return {
+    requestedDate,
+    priceDate: matched.date,
+    price: decimalString(matched.close),
+    priceSource: matched.source || "",
+    sourceFetchedAt: matched.sourceFetchedAt || "",
+    qualityStatus: matched.qualityStatus || "ok"
+  };
+}
+
+function marketPriceFromHistory(history) {
+  const latest = latestUsableHistoryPoint(history);
+  if (!latest) return null;
+  const previous = previousUsableHistoryPoint(history, latest.date);
+  return {
+    currentPrice: decimalString(latest.close),
+    previousPrice: previous ? decimalString(previous.close) : decimalString(latest.close),
+    pricedAt: latest.date,
+    priceSource: latest.source || "",
+    priceStatus: "synced",
+    sourceFetchedAt: latest.sourceFetchedAt || ""
+  };
 }
 
 function listPositions(url, response) {
@@ -441,13 +499,29 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
 
   if (body.autoFetch !== false) {
     try {
-      fetchResult = await fetchRecentMarketDataRun({
-        ...body,
-        symbols: candidates.map((asset) => asset.symbol).filter(Boolean),
-        dateFrom: historyDateFrom,
-        dateTo: historyDateTo || todayIsoDate(),
-        days: body.days || 1
-      });
+      const requestedTo = historyDateTo || todayIsoDate();
+      const groupedMissingRanges = new Map();
+      for (const asset of candidates) {
+        const history = await readStoredMarketHistory(asset);
+        const requestedFrom = normalizeDateParam(body.dateFrom) || assetHistoryStartDate(asset, "") || historyDateFrom;
+        for (const range of missingMarketHistoryRanges(history, requestedFrom, requestedTo)) {
+          const key = `${range.dateFrom}:${range.dateTo}`;
+          const group = groupedMissingRanges.get(key) || { ...range, symbols: [] };
+          group.symbols.push(asset.symbol);
+          groupedMissingRanges.set(key, group);
+        }
+      }
+      const fetchRuns = [];
+      for (const range of groupedMissingRanges.values()) {
+        fetchRuns.push(await fetchRecentMarketDataRun({
+          ...body,
+          symbols: [...new Set(range.symbols)],
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+          days: body.days || 1
+        }));
+      }
+      fetchResult = summarizeCoverageFetchRuns(fetchRuns, candidates);
       state.auditLogs.push(audit("auto_fetch_before_sync_daily_market_data", "market_data", fetchResult.run.id, fetchResult));
     } catch (error) {
       const message = errorMessage(error, "抓取失败");
@@ -521,6 +595,11 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
         sourceFetchedAt: latest.sourceFetchedAt
       },
       dailyPrices: asset.externalOnly ? [] : asset.dailyPrices || [],
+      history: body.includeHistory
+        ? history
+            .filter((point) => !normalizeDateParam(body.dateFrom) || point.date >= normalizeDateParam(body.dateFrom))
+            .filter((point) => !historyDateTo || point.date <= historyDateTo)
+        : undefined,
       dailyPriceStatus: asset.externalOnly ? "" : asset.dailyPriceStatus || "",
       dailyPriceMissingDates: asset.externalOnly ? [] : asset.dailyPriceMissingDates || []
     });
@@ -538,6 +617,39 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual") {
   state.auditLogs.push(audit("sync_daily_market_data", "market_data", `sync-${Date.now()}`, payload));
   await appendSyncDailyRun(payload, candidates);
   return payload;
+}
+
+function summarizeCoverageFetchRuns(fetchRuns, candidates) {
+  if (!fetchRuns.length) {
+    return {
+      status: "covered",
+      message: "公共历史行情已覆盖请求区间，无需重复抓取",
+      runs: [],
+      run: {
+        id: `run-fetch-covered-${Date.now()}`,
+        status: "covered",
+        successCount: 0,
+        skippedCount: candidates.length,
+        failureCount: 0,
+        messages: []
+      }
+    };
+  }
+  const runs = fetchRuns.map((item) => item.run).filter(Boolean);
+  const failureCount = runs.reduce((total, run) => total + Number(run.failureCount || 0), 0);
+  return {
+    status: failureCount ? "completed_with_errors" : "completed",
+    message: `已按 ${runs.length} 个缺失区间增量抓取公共历史行情`,
+    runs,
+    run: {
+      id: `run-fetch-coverage-${Date.now()}`,
+      status: failureCount ? "completed_with_errors" : "completed",
+      successCount: runs.reduce((total, run) => total + Number(run.successCount || 0), 0),
+      skippedCount: runs.reduce((total, run) => total + Number(run.skippedCount || 0), 0),
+      failureCount,
+      messages: runs.flatMap((run) => run.messages || [])
+    }
+  };
 }
 
 async function appendSyncDailyRun(payload, candidates) {

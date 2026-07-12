@@ -1,4 +1,5 @@
 import { todayIsoDate } from "../../utils/date.js";
+import { buildUserAssetDailyPriceSnapshots } from "../../domain/userAssetDailyPrices.js";
 import { findAssetQuickMatch, normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
 import { inferAssetMarket } from "../assets/marketOptions.js";
 import { renderMarketSyncResult } from "./marketRender.js";
@@ -56,6 +57,58 @@ export async function syncDailyMarketPricesIfDue() {
       }
     }
   });
+}
+
+export async function ensureAssetMarketHistory(asset) {
+  const symbol = syncSymbolForAsset(asset);
+  if (!ctx.marketApiBaseUrl || !asset?.id || !symbol || !asset.purchaseDate || inferAssetMarket(asset) === "CASH") return;
+  try {
+    const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbols: [symbol],
+        dateFrom: asset.purchaseDate,
+        dateTo: todayIsoDate(),
+        includeHistory: true,
+        trigger: "asset_created"
+      })
+    });
+    if (!response.ok) throw new Error(await marketApiErrorMessage(response));
+    const payload = await response.json();
+    const result = (payload.results || []).find((item) => String(item.symbol || "").toUpperCase() === symbol);
+    const daily = buildUserAssetDailyPriceSnapshots({
+      userId: "local-user",
+      asset,
+      history: result?.history || [],
+      dateFrom: asset.purchaseDate,
+      dateTo: todayIsoDate()
+    });
+    const state = ctx.getState();
+    ctx.setState({
+      ...state,
+      assets: state.assets.map((item) => item.id === asset.id ? {
+        ...item,
+        dailyPrices: normalizeDailyPriceRows(daily.rows),
+        dailyPriceStatus: daily.status,
+        dailyPriceMissingDates: daily.missingDates,
+        historyBackfillStatus: daily.rows.length ? daily.status : "missing",
+        historyBackfillUpdatedAt: new Date().toISOString()
+      } : item)
+    });
+    ctx.persistAndRender();
+  } catch (error) {
+    const state = ctx.getState();
+    ctx.setState({
+      ...state,
+      assets: state.assets.map((item) => item.id === asset.id ? {
+        ...item,
+        historyBackfillStatus: "error",
+        historyBackfillError: error instanceof Error ? error.message : "历史价格回补失败"
+      } : item)
+    });
+    ctx.persistAndRender();
+  }
 }
 
 async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {

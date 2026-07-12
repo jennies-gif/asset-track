@@ -1,5 +1,6 @@
 export function getImportExportElements() {
   return {
+    backupMenu: document.querySelector("#backup-menu"),
     exportJsonButton: document.querySelector("#export-json-button"),
     exportCsvButton: document.querySelector("#export-csv-button"),
     importForm: document.querySelector("#import-form"),

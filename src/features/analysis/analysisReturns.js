@@ -108,9 +108,10 @@ function compoundPointReturnsBps(points, valueKey) {
 
 function portfolioSharpeRatioBps(points, period, start, end) {
   const windowStart = periodStartDate(period.annualized ? { all: true } : period, start, end);
-  return sharpeRatioFromReturnsBps(
-    pointReturnBps(points.filter((point) => point.date >= windowStart && point.date <= end), "valueCents")
-  );
+  return calculateRiskAdjustedMetrics(
+    points.filter((point) => point.date >= windowStart && point.date <= end),
+    "valueCents"
+  ).sharpeRatioBps;
 }
 
 function periodStartDate(period, start, end) {
@@ -134,25 +135,40 @@ function benchmarkSharpeRatioBps(points, period, bounds = null) {
   const start = bounds?.start || points[0]?.date || end;
   const windowStart = periodStartDate(period.annualized ? { all: true } : period, start, end);
   const windowPoints = points.filter((point) => point.date >= windowStart && point.date <= end);
-  return sharpeRatioFromReturnsBps(pointReturnBps(windowPoints, "close"));
+  return calculateRiskAdjustedMetrics(windowPoints, "close").sharpeRatioBps;
 }
 
-function pointReturnBps(points, valueKey) {
+function pointReturns(points, valueKey) {
   const rows = [];
   for (let index = 1; index < points.length; index += 1) {
     const previousValue = Number(points[index - 1][valueKey] || 0);
     const currentValue = Number(points[index][valueKey] || 0);
     if (!Number.isFinite(previousValue) || !Number.isFinite(currentValue) || previousValue <= 0) continue;
-    rows.push(BigInt(Math.round(((currentValue - previousValue) / previousValue) * 10000)));
+    const intervalDays = Math.max(1, daysBetween(points[index - 1].date, points[index].date));
+    rows.push({ returnBps: BigInt(Math.round(((currentValue - previousValue) / previousValue) * 10000)), intervalDays });
   }
   return rows;
 }
 
-function sharpeRatioFromReturnsBps(returns) {
-  if (returns.length < 2) return null;
-  const meanBps = returns.reduce((sum, item) => sum + Number(item), 0) / returns.length;
-  const variance = returns.reduce((sum, item) => sum + (Number(item) - meanBps) ** 2, 0) / (returns.length - 1);
-  const volatilityBps = Math.sqrt(variance);
-  if (!Number.isFinite(volatilityBps) || volatilityBps === 0) return null;
-  return BigInt(Math.round((meanBps / volatilityBps) * Math.sqrt(252) * 10000));
+export function calculateRiskAdjustedMetrics(points, valueKey = "valueCents") {
+  const returns = pointReturns(points, valueKey);
+  if (returns.length < 3) {
+    return { annualizedVolatilityBps: null, sharpeRatioBps: null, observationCount: returns.length, intervalDays: null };
+  }
+  const values = returns.map((item) => Number(item.returnBps));
+  const meanBps = values.reduce((sum, item) => sum + item, 0) / values.length;
+  const variance = values.reduce((sum, item) => sum + (item - meanBps) ** 2, 0) / (values.length - 1);
+  const periodVolatilityBps = Math.sqrt(variance);
+  const sortedIntervals = returns.map((item) => item.intervalDays).sort((left, right) => left - right);
+  const intervalDays = sortedIntervals[Math.floor(sortedIntervals.length / 2)];
+  const periodsPerYear = 365 / intervalDays;
+  if (!Number.isFinite(periodVolatilityBps) || periodVolatilityBps === 0 || !Number.isFinite(periodsPerYear)) {
+    return { annualizedVolatilityBps: null, sharpeRatioBps: null, observationCount: returns.length, intervalDays };
+  }
+  return {
+    annualizedVolatilityBps: BigInt(Math.round(periodVolatilityBps * Math.sqrt(periodsPerYear))),
+    sharpeRatioBps: BigInt(Math.round((meanBps / periodVolatilityBps) * Math.sqrt(periodsPerYear) * 10000)),
+    observationCount: returns.length,
+    intervalDays
+  };
 }

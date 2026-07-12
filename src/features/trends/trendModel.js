@@ -98,6 +98,38 @@ export function calculateMaxDrawdownBps(points) {
   return maxDrawdown;
 }
 
+export function calculateMaxDrawdownAsset(points, assets) {
+  if (points.length < 2 || !assets.length) return null;
+  let peakPoint = points[0];
+  let maxDrawdownBps = 0n;
+  let maxPeakPoint = null;
+  let maxTroughPoint = null;
+
+  for (const point of points) {
+    if (point.valueCents > peakPoint.valueCents) peakPoint = point;
+    if (peakPoint.valueCents <= 0n) continue;
+    const drawdownBps = roundDivide((point.valueCents - peakPoint.valueCents) * 10000n, peakPoint.valueCents);
+    if (drawdownBps < maxDrawdownBps) {
+      maxDrawdownBps = drawdownBps;
+      maxPeakPoint = peakPoint;
+      maxTroughPoint = point;
+    }
+  }
+
+  if (!maxPeakPoint || !maxTroughPoint) return null;
+  const valuationDate = latestTrendDate(assets);
+  const contributors = assets
+    .filter((asset) => Number(asset.quantity) > 0)
+    .map((asset, index) => {
+      const peakValueCents = assetValueAtTrendDate(asset, maxPeakPoint.date, index, valuationDate);
+      const troughValueCents = assetValueAtTrendDate(asset, maxTroughPoint.date, index, valuationDate);
+      return { asset, changeCents: troughValueCents - peakValueCents };
+    })
+    .sort((left, right) => left.changeCents < right.changeCents ? -1 : left.changeCents > right.changeCents ? 1 : 0);
+
+  return contributors[0]?.asset || null;
+}
+
 export function calculateTrendValueChange() {
   const points = buildTrendPoints();
   if (points.length < 2) return 0n;

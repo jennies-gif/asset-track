@@ -2,12 +2,13 @@ import { calculateBuyPreview, calculateMoneyFromQuantity, calculateSellPreview, 
 import { escapeHtml } from "../../utils/dom.js";
 import { todayIsoDate } from "../../utils/date.js";
 import { formatDisplayCurrency, formatSignedAmountOnly } from "../../ui/formatters.js";
-import { accountTypeLabel, inferAccountType, mergeAccountOptions, normalizeAccountTypeFormValue } from "./accountOptions.js";
+import { accountTypeLabel, inferAccountType, normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "./accountOptions.js";
 import { assetQuickMatchOptions, findAssetQuickMatch, findAssetQuickMatches, isManualCashMatch, normalizeQuickMatchText } from "./assetQuickMatch.js";
 import { inferAssetMarket, marketLabel } from "./marketOptions.js";
 import { buildAssetFormPayload, defaultAssetFxRate } from "./assetFormPayload.js";
 import { buildAddAssetUpdate, buildSellAssetUpdate } from "./assetTransactions.js";
 import { clearAssetFieldErrors, humanizeAssetError, setTransactionFieldError, validateAssetFormByMode } from "./assetValidation.js";
+import { ensureAssetMarketHistory } from "../market/marketService.js";
 
 let ctx = {};
 let assetMatchCandidates = [];
@@ -110,13 +111,19 @@ export function submitAssetForm() {
   hideAssetFormPanel();
   ctx.persistAndRender();
   ctx.activateTab("assets");
+  const shouldEnsureHistory = !activeAssetId || Boolean(editingId && (
+    existingAsset?.symbol !== asset.symbol || existingAsset?.purchaseDate !== asset.purchaseDate
+  ));
+  if (shouldEnsureHistory) void ensureAssetMarketHistory(asset);
   if (closeReviewAsset) ctx.showCloseReviewPrompt(closeReviewAsset, reviewPromptType);
 }
 
 export function setDefaultAssetFormValues() {
   delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftCurrentPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   resetDraftPriceStatus();
+  if (ctx.elements.assetForm.elements.quantity) ctx.elements.assetForm.elements.quantity.value = "";
   if (ctx.elements.assetForm.elements.currentPrice) ctx.elements.assetForm.elements.currentPrice.value = "";
   if (ctx.elements.assetForm.elements.previousPrice) ctx.elements.assetForm.elements.previousPrice.value = "";
   if (ctx.elements.assetForm.elements.previousFxRate) ctx.elements.assetForm.elements.previousFxRate.value = "1";
@@ -133,7 +140,7 @@ export function setDefaultAssetFormValues() {
   if (ctx.elements.assetForm.elements.assetRegistryId) ctx.elements.assetForm.elements.assetRegistryId.value = "";
   if (ctx.elements.assetForm.elements.assetMatchStatus) ctx.elements.assetForm.elements.assetMatchStatus.value = "unmatched";
   if (ctx.elements.assetForm.elements.marketDataSupported) ctx.elements.assetForm.elements.marketDataSupported.value = "false";
-  if (ctx.elements.assetForm.elements.purchaseDate) ctx.elements.assetForm.elements.purchaseDate.value = "";
+  if (ctx.elements.assetForm.elements.purchaseDate) ctx.elements.assetForm.elements.purchaseDate.value = todayIsoDate();
 }
 
 export function updateAssetLiveSummary() {
@@ -413,7 +420,8 @@ async function lookupDraftMarketPrice(query) {
   draftMarketLookupQuery = query;
   setDraftPriceStatus("loading", "正在查询行情...");
   try {
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}`);
+    const purchaseDate = form.elements.purchaseDate?.value || todayIsoDate();
+    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}&purchaseDate=${encodeURIComponent(purchaseDate)}`);
     if (!response.ok) throw new Error(await readDraftLookupError(response));
     const payload = await response.json();
     if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== query) return;
@@ -440,32 +448,51 @@ function applyDraftLookupPayload(payload, query) {
   if (instrument) {
     selectAssetMatch(instrument, query, { skipLookup: true });
   }
-  if (!price?.currentPrice) {
-    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用当前价格，可手动填写。");
+  if (!price?.currentPrice && !payload?.purchasePrice?.price) {
+    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用行情，请手动填写买入价格。");
     return;
   }
   const currentPriceField = form.elements.currentPrice;
   const costPriceField = form.elements.costPrice;
   const previousPriceField = form.elements.previousPrice;
   const previousAutoPrice = form.dataset.autoDraftPrice || "";
+  const previousAutoCurrentPrice = form.dataset.autoDraftCurrentPrice || "";
   const nextPrice = String(price.currentPrice || "").trim();
-  const canFillCurrentPrice = !currentPriceField?.value.trim() || currentPriceField.value.trim() === previousAutoPrice;
-  const canFillCostPrice = !costPriceField?.value.trim() || costPriceField.value.trim() === previousAutoPrice;
+  const canFillCurrentPrice = !currentPriceField?.value.trim() || currentPriceField.value.trim() === previousAutoCurrentPrice;
   const didFillCurrentPrice = canFillCurrentPrice && currentPriceField;
   if (didFillCurrentPrice) currentPriceField.value = nextPrice;
-  if (canFillCostPrice && costPriceField) costPriceField.value = nextPrice;
   if (previousPriceField && !previousPriceField.value.trim() && price.previousPrice) previousPriceField.value = price.previousPrice;
-  form.dataset.autoDraftPrice = nextPrice;
+  form.dataset.autoDraftCurrentPrice = nextPrice;
   form.dataset.autoDraftPriceQuery = query;
   if (didFillCurrentPrice) {
     if (form.elements.priceSource) form.elements.priceSource.value = price.priceSource || "";
     if (form.elements.pricedAt) form.elements.pricedAt.value = price.pricedAt || "";
     if (form.elements.priceStatus) form.elements.priceStatus.value = "synced";
-    setDraftPriceStatus("synced", `已带入 ${price.pricedAt || "最新"} 当前价格，可直接修改。`);
-  } else {
-    setDraftPriceStatus("synced", `已查到 ${price.pricedAt || "最新"} 当前价格，已保留你手动填写的价格。`);
   }
+  applyPurchaseDatePrice(payload.purchasePrice, payload.priceLookup, previousAutoPrice);
   updateAssetLiveSummary();
+}
+
+function applyPurchaseDatePrice(purchasePrice, priceLookup, previousAutoPrice) {
+  const form = ctx.elements.assetForm;
+  const purchaseDate = form.elements.purchaseDate?.value || todayIsoDate();
+  const costPriceField = form.elements.costPrice;
+  const canFillCostPrice = !costPriceField?.value.trim() || costPriceField.value.trim() === previousAutoPrice;
+  if (!purchasePrice?.price) {
+    if (costPriceField?.value.trim() === previousAutoPrice) costPriceField.value = "";
+    delete form.dataset.autoDraftPrice;
+    setDraftPriceStatus("warning", `${purchaseDate} 暂无可用历史价格，请手动填写买入价格。`);
+    return;
+  }
+  if (canFillCostPrice && costPriceField) {
+    costPriceField.value = purchasePrice.price;
+    form.dataset.autoDraftPrice = purchasePrice.price;
+    const dateLabel = purchasePrice.priceDate === purchaseDate ? purchasePrice.priceDate : `${purchasePrice.priceDate}（最近交易日）`;
+    const sourceLabel = priceLookup?.source === "cache" ? "缓存" : "现场抓取";
+    setDraftPriceStatus("synced", `已从${sourceLabel}带入 ${dateLabel} 的买入价格，可直接修改。`);
+  } else {
+    setDraftPriceStatus("synced", `已查到 ${purchasePrice.priceDate} 的历史价格，已保留你手动填写的买入价格。`);
+  }
 }
 
 function setDraftPriceStatus(status, message) {
@@ -542,8 +569,8 @@ export function applyCashAssetFormMode() {
   const accountTypeField = form.elements.accountType;
   const transactionTypeField = form.elements.transactionType;
 
-  setFieldLabel(quantityField, isCash ? "现金金额" : "持有数量/份额");
-  if (quantityField) quantityField.placeholder = isCash ? "例如：50000" : "10.5";
+  setFieldLabel(quantityField, isCash ? "现金金额" : "股数");
+  if (quantityField) quantityField.placeholder = isCash ? "例如：50000" : "请输入股数";
   if (costPriceField) {
     costPriceField.value = isCash ? "1" : costPriceField.value;
     costPriceField.readOnly = isCash;
@@ -618,14 +645,14 @@ export function renderAccountPicker() {
     .map((account) => {
       const label = account.accountType === type
         ? accountTypeLabel(account.accountType)
-        : `${accountTypeLabel(account.accountType)} · 历史账户`;
+        : `${accountTypeLabel(account.accountType)} · 已录入账户`;
       return `<option value="${escapeHtml(account.name)}">${escapeHtml(label)}</option>`;
     })
     .join("");
 }
 
 export function buildAccountOptions() {
-  return mergeAccountOptions(ctx.getState().assets);
+  return savedAccountOptionsFromAssets(ctx.getState().assets);
 }
 
 export function handleAccountTypeChange() {
@@ -823,6 +850,7 @@ export function resetAssetFormMode(mode = "create") {
   clearTimeout(draftMarketLookupTimer);
   draftMarketLookupQuery = "";
   delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftCurrentPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   delete ctx.elements.assetForm.dataset.editingId;
   delete ctx.elements.assetForm.dataset.closingId;

@@ -6,7 +6,8 @@ import { todayIsoDate } from "../utils/date.js";
 
 let state = loadState();
 let portfolioFilter = { account: "all", type: "all", status: "all" };
-let analysisFilter = { account: "all", assetId: "all", startDate: "", endDate: "" };
+const initialAnalysisEnd = todayIsoDate();
+let analysisFilter = { account: "all", assetId: "all", range: "ytd", startDate: `${initialAnalysisEnd.slice(0, 4)}-01-01`, endDate: initialAnalysisEnd };
 let analysisReturnMetric = "mwr";
 let selectedBenchmarkKeys = ["csi300", "sp500", "qqq"];
 let marketSyncState = { status: "idle", message: "", results: [], syncedAt: "" };

@@ -27,8 +27,7 @@ export function savedAccountOptionsFromAssets(assets = []) {
     const name = String(asset?.account || "").trim();
     if (!name) continue;
     const accountType = asset.accountType || inferAccountType(asset);
-    const key = `${accountType}:${name}`;
-    if (!accounts.has(key)) accounts.set(key, { name, accountType, saved: true });
+    if (!accounts.has(name)) accounts.set(name, { name, accountType, saved: true });
   }
   return [...accounts.values()].sort((left, right) => left.name.localeCompare(right.name));
 }

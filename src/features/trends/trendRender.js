@@ -13,6 +13,7 @@ import { escapeHtml } from "../../utils/dom.js";
 import {
   buildReturnTrendPoints,
   buildTrendSeries,
+  calculateMaxDrawdownAsset,
   calculateMaxDrawdownBps
 } from "./trendModel.js";
 
@@ -61,7 +62,7 @@ export function renderTrendChart() {
   const areaPath = buildSmoothAreaPath(chartPoints, height - pad, leftPad, width - rightPad);
   const xAxisLabels = buildEvenlySpacedXAxisLabels(chartPoints);
   const latest = points.at(-1);
-  const chartSummary = buildTrendChartSummary(rawPoints);
+  const chartSummary = buildTrendChartSummary(rawPoints, ctx.overviewAssets());
   const trendPrimaryValue = isReturnMode ? formatTrendReturn(latest.valueCents) : formatDisplayCurrency(latest.valueCents);
   elements.trendChart.innerHTML = `
     <div class="trend-chart-shell">
@@ -113,6 +114,7 @@ export function renderTrendChart() {
             <span>
               <small>${escapeHtml(item.label)}</small>
               <b class="${escapeHtml(item.className || "")}">${escapeHtml(item.value)}</b>
+              ${item.detail ? `<small class="trend-summary-detail">${escapeHtml(item.detail)}</small>` : ""}
             </span>
           `)
           .join("")}
@@ -144,7 +146,7 @@ function buildTrendPointTooltip(point, previousPoint, firstPoint) {
   ].join("\n");
 }
 
-function buildTrendChartSummary(points) {
+function buildTrendChartSummary(points, assets) {
   if (!points.length) {
     return [
       { label: "当前总资产", value: ctx.dataUnavailable },
@@ -158,11 +160,17 @@ function buildTrendChartSummary(points) {
   const high = values.reduce((current, value) => (value > current ? value : current), values[0]);
   const low = values.reduce((current, value) => (value < current ? value : current), values[0]);
   const drawdownBps = calculateMaxDrawdownBps(points);
+  const drawdownAsset = drawdownBps < 0n ? calculateMaxDrawdownAsset(points, assets) : null;
   return [
     { label: "当前总资产", value: formatDisplayCurrency(latest) },
     { label: "今年最高", value: formatDisplayCurrency(high) },
     { label: "今年最低", value: formatDisplayCurrency(low) },
-    { label: "最大回撤", value: drawdownBps === null ? ctx.dataUnavailable : formatPercent(drawdownBps), className: drawdownBps < 0n ? "negative" : "" }
+    {
+      label: "最大回撤",
+      value: drawdownBps === null ? ctx.dataUnavailable : formatPercent(drawdownBps),
+      className: drawdownBps < 0n ? "negative" : "",
+      detail: drawdownAsset ? `主要回撤资产：${drawdownAsset.name || drawdownAsset.symbol || "未命名资产"}` : ""
+    }
   ];
 }
 

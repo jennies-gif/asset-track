@@ -1,3 +1,5 @@
+import { analysisPresetBounds } from "./analysisFilters.js";
+
 export function initAnalysisEvents({
   elements,
   getAnalysisFilter,
@@ -27,13 +29,24 @@ export function initAnalysisEvents({
     renderAttribution();
   });
 
+  document.querySelectorAll("[data-analysis-range-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const range = button.dataset.analysisRangeValue || "ytd";
+      const current = getAnalysisFilter();
+      setAnalysisFilter(range === "custom"
+        ? { ...current, range }
+        : { ...current, range, ...analysisPresetBounds(range, current.endDate) });
+      renderAttribution();
+    });
+  });
+
   elements.analysisStart?.addEventListener("change", () => {
-    setAnalysisFilter({ ...getAnalysisFilter(), startDate: elements.analysisStart.value });
+    setAnalysisFilter({ ...getAnalysisFilter(), range: "custom", startDate: elements.analysisStart.value });
     renderAttribution();
   });
 
   elements.analysisEnd?.addEventListener("change", () => {
-    setAnalysisFilter({ ...getAnalysisFilter(), endDate: elements.analysisEnd.value });
+    setAnalysisFilter({ ...getAnalysisFilter(), range: "custom", endDate: elements.analysisEnd.value });
     renderAttribution();
   });
 

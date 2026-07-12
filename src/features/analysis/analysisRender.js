@@ -31,6 +31,7 @@ import {
 } from "./analysisModel.js";
 import {
   buildAnalysisReturnRows,
+  calculateRiskAdjustedMetrics,
   configureAnalysisReturns,
   formatAnalysisReturnValue,
   syncAnalysisReturnMetricButtons
@@ -168,6 +169,7 @@ function renderEmptyAnalysis() {
     analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "")}</td></tr>`;
   }
   if (analysisElements.analysisMonthlyReturnChart) analysisElements.analysisMonthlyReturnChart.innerHTML = "";
+  if (analysisElements.analysisRiskAdjustedMetrics) analysisElements.analysisRiskAdjustedMetrics.innerHTML = "";
   if (analysisElements.analysisBenchmarkTrendChart) analysisElements.analysisBenchmarkTrendChart.innerHTML = "";
   if (analysisElements.analysisConcentrationMetrics) analysisElements.analysisConcentrationMetrics.innerHTML = "";
   if (analysisElements.analysisTopHoldings) analysisElements.analysisTopHoldings.innerHTML = "";
@@ -232,52 +234,63 @@ function renderAnalysisHealthMetrics(analysis, dataIssues, topConcentration) {
   const cryptoBps = analysis.exposure.digitalBps;
   const metrics = [
     {
+      icon: "wallet",
       label: "当前资产",
       value: formatDisplayCurrency(analysis.endValueCents),
       status: analysis.endValueCents > 0n ? "low" : "medium",
       description: "当前筛选范围内所有持仓折算后的总市值。"
     },
     {
+      icon: "trend",
       label: "剔除投入收益率",
       value: formatPercent(analysis.realReturnBps),
       status: analysis.realReturnBps >= 0n ? "low" : "medium",
       description: "剔除净投入/提现后，用于观察资产本身表现。"
     },
     {
+      icon: "shield",
       label: "最大回撤",
       value: formatPercent(analysis.drawdown.maxDrawdownBps),
       status: analysis.drawdown.maxDrawdownBps <= -1500n ? "high" : analysis.drawdown.maxDrawdownBps <= -800n ? "medium" : "low",
       description: "历史高点到低点的最大跌幅，衡量组合波动压力。"
     },
     {
+      icon: "allocation",
       label: "数字资产占比",
       value: formatShare(cryptoBps),
       status: cryptoBps >= 3000n ? "high" : cryptoBps >= 1000n ? "medium" : "low",
       description: "数字资产通常波动更高，占比越高组合弹性和回撤都更大。"
     },
     {
+      icon: "users",
       label: "Top 5 集中度",
       value: formatShare(analysis.concentration.top5WeightBps || topConcentration.top5WeightBps),
       status: analysis.concentration.status,
       description: "前五大持仓合计占比，反映组合是否依赖少数资产。"
     },
-    {
-      label: "数据质量",
-      value: dataIssues.length ? `${dataIssues.length} 项待核对` : "关键数据完整",
-      status: dataIssues.length ? "medium" : "low",
-      description: dataIssues.length ? "部分价格、费用或历史记录会影响计算复算。" : "关键价格、成本、汇率和交易字段可支持当前分析。"
-    }
   ];
   return metrics.map((metric) => `
-    <article class="analysis-health-item ${analysisStatusClass(metric.status)}">
+    <article class="analysis-health-item ${analysisStatusClass(metric.status)} metric-${escapeHtml(metric.icon)}">
       <div>
-        <span>${escapeHtml(metric.label)}</span>
+        <span class="analysis-health-label">${analysisHealthIcon(metric.icon)}<span>${escapeHtml(metric.label)}</span></span>
         <b class="status-tag ${analysisStatusClass(metric.status)}">${escapeHtml(analysisStatusLabel(metric.status))}</b>
       </div>
       <strong class="${toneClassForValue(metric.value)}">${escapeHtml(metric.value)}</strong>
       <small>${escapeHtml(metric.description)}</small>
     </article>
   `).join("");
+}
+
+function analysisHealthIcon(icon) {
+  const paths = {
+    wallet: '<path d="M4 7.5h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3v-10a3 3 0 0 1 3-3h12v4"/><path d="M16 12h5v4h-5a2 2 0 0 1 0-4Z"/>',
+    trend: '<path d="M3 20V10m6 10V4m6 16v-7m6 7V7"/><path d="m3 8 5-4 6 6 7-7"/>',
+    shield: '<path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
+    allocation: '<path d="M12 2v10h10A10 10 0 1 1 12 2Z"/><path d="M15 2.5A10 10 0 0 1 21.5 9H15V2.5Z"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/>'
+  };
+  return `<span class="analysis-health-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[icon] || paths.wallet}</svg></span>`;
 }
 
 function renderAttributionWaterfall(analysis, startValueCents, endValueCents) {
@@ -403,6 +416,7 @@ function renderAnalysisQuality(analysis) {
 function renderAnalysisReturnRows(analysis) {
   ensureAnalysisBenchmarkDataLoaded();
   syncAnalysisReturnMetricButtons();
+  renderRiskAdjustedMetrics(analysis);
   const rows = buildAnalysisReturnRows(analysis, analysisScopeLabel);
   const tableWrap = analysisElements.analysisMonthlyReturnChart?.closest(".table-wrap");
   tableWrap?.classList.toggle("is-hidden", !rows.length);
@@ -413,7 +427,7 @@ function renderAnalysisReturnRows(analysis) {
   }
   analysisElements.analysisMonthlyReturnChart.innerHTML = rows
     .map((row) => `
-      <tr>
+      <tr class="${row.kind === "portfolio" ? "is-portfolio-row" : ""}">
         <td>
           <strong>${escapeHtml(row.label)}</strong>
           <span>${escapeHtml(row.meta)}</span>
@@ -425,6 +439,25 @@ function renderAnalysisReturnRows(analysis) {
     `)
     .join("");
   renderAnalysisBenchmarkTrendChart(analysis);
+}
+
+function renderRiskAdjustedMetrics(analysis) {
+  if (!analysisElements.analysisRiskAdjustedMetrics) return;
+  const metrics = calculateRiskAdjustedMetrics(buildAnalysisTrendPoints(analysis.assets));
+  const volatility = hasDisplayValue(metrics.annualizedVolatilityBps)
+    ? formatPercent(metrics.annualizedVolatilityBps)
+    : DATA_UNAVAILABLE;
+  const sharpe = hasDisplayValue(metrics.sharpeRatioBps)
+    ? `${Number(metrics.sharpeRatioBps) >= 0 ? "+" : ""}${(Number(metrics.sharpeRatioBps) / 10000).toFixed(2)}`
+    : DATA_UNAVAILABLE;
+  const coverage = metrics.observationCount >= 3
+    ? `${metrics.observationCount} 个有效收益观测 · 典型间隔 ${metrics.intervalDays} 天`
+    : `仅 ${metrics.observationCount} 个有效收益观测，至少需要 3 个`;
+  analysisElements.analysisRiskAdjustedMetrics.innerHTML = `
+    <article><span>年化波动率</span><strong>${escapeHtml(volatility)}</strong><small>按当前收益序列频率年化</small></article>
+    <article><span>夏普比率（估算）</span><strong>${escapeHtml(sharpe)}</strong><small>暂按无风险利率 0% 计算</small></article>
+    <p><b>计算覆盖</b><span>${escapeHtml(coverage)}。趋势包含估算值时，本结果仅供组合复盘。</span></p>
+  `;
 }
 
 function ensureAnalysisBenchmarkDataLoaded() {
@@ -511,7 +544,7 @@ function renderAnalysisRisk(analysis) {
   analysisElements.analysisRiskMetrics.innerHTML = [
     analysisMiniMetric("最大回撤", formatPercent(analysis.drawdown.maxDrawdownBps), `${analysis.drawdown.maxStartDate} 至 ${analysis.drawdown.maxEndDate}`),
     analysisMiniMetric("当前回撤", formatPercent(analysis.drawdown.currentDrawdownBps), analysis.drawdown.currentDrawdownDays ? `已持续约 ${analysis.drawdown.currentDrawdownDays} 天` : "当前接近阶段高点"),
-    analysisMiniMetric("最差单期收益", formatPercent(analysis.drawdown.worstMonthBps), analysis.drawdown.worstMonthLabel),
+    analysisMiniMetric("最差月份", formatPercent(analysis.drawdown.worstMonthBps), analysis.drawdown.worstMonthLabel),
     analysisMiniMetric("回撤持续天数", `${analysis.drawdown.maxDrawdownDays} 天`, "历史最大回撤区间")
   ].join("");
   analysisElements.analysisDrawdownChart.innerHTML = `${chartSourceLine("估算回撤", "基于持仓成本、当前价格和日期推导的趋势点计算，不等同于真实每日回撤。补齐历史价格后可替换为真实回撤。", "warning")}${renderDrawdownChart(analysis.drawdown.points, buildEvenlySpacedXAxisLabels)}`;

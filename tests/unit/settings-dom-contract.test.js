@@ -29,6 +29,20 @@ test("core static app modules have unique DOM targets in index.html", async () =
   }
 });
 
+test("asset entry keeps the requested date, buy price and share order without a visible current price field", async () => {
+  const indexSource = await readFile(resolve(projectRoot, "index.html"), "utf8");
+  const currencyIndex = indexSource.indexOf('name="currency"');
+  const purchaseDateIndex = indexSource.indexOf('name="purchaseDate"');
+  const costPriceIndex = indexSource.indexOf('name="costPrice"');
+  const quantityIndex = indexSource.indexOf('name="quantity"');
+
+  assert.ok(currencyIndex < purchaseDateIndex);
+  assert.ok(purchaseDateIndex < costPriceIndex);
+  assert.ok(costPriceIndex < quantityIndex);
+  assert.match(indexSource, /<input name="currentPrice" type="hidden">/u);
+  assert.doesNotMatch(indexSource, /<label>当前价格/u);
+});
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

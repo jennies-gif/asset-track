@@ -253,7 +253,7 @@ npm run data:backfill
 npm run data:daily
 ```
 
-`data:sync-registry` 维护资产名称/代码/市场主库，用于录入搜索和自动补全；它不会抓取价格。该脚本按市场设置覆盖闸门，默认要求 A 股、港股和美股分别达到最小数量，避免单一市场数量过大掩盖中国市场缺口。价格和净值仍只通过后续行情脚本、API 手动同步或用户录入资产触发。当前脚本默认使用公开数据源；A 股主库优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底，分页源缓存会按来源整理到 `storage/market-data/source-cache/`；国内公募基金主库使用东方财富 `fundcode_search.js`，基金代码统一存为 `{code}.OF` 并保留裸代码别名；港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量清单，并用东方财富港股股票列表补充中文简称或兜底；美股使用 Nasdaq 公开接口，基金净值使用东方财富公开脚本，虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比可在分析页选择，默认展示沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY` 和 QQQ ETF `QQQ`；也支持中证500 `000905`、上证50 `000016`、纳斯达克100指数 `NDX`、罗素2000的 IWM ETF 代理基准 `IWM`、全球股票 VT ETF `VT` 和黄金 GLD ETF `GLD`。前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
+`data:sync-registry` 维护资产名称/代码/市场主库，用于录入搜索和自动补全；它不会抓取价格。该脚本按市场设置覆盖闸门，默认要求 A 股、港股和美股分别达到最小数量，避免单一市场数量过大掩盖中国市场缺口。价格和净值仍只通过后续行情脚本、API 手动同步或用户录入资产触发。当前脚本默认使用公开数据源；A 股主库优先使用上交所官方股票列表和深交所官方 A 股列表，东方财富市场列表仅作为兜底，分页源缓存会按来源整理到 `storage/market-data/source-cache/`；国内公募基金主库使用东方财富 `fundcode_search.js`，基金代码统一存为 `{code}.OF` 并保留裸代码别名；港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量清单，并用东方财富港股股票列表补充中文简称或兜底；美股使用 Nasdaq 公开接口，基金净值使用东方财富公开脚本，虚拟货币、贵金属和汇率的默认源都不需要 token，`METALS_DEV_API_KEY` 仅作为贵金属备用源配置。基准对比可在分析页选择，默认展示沪深300指数 `000300`、标普500的 SPY ETF 代理基准 `SPY` 和 QQQ ETF `QQQ`；也支持中证500 `000905`、上证50 `000016`、纳斯达克100指数 `NDX`、罗素2000的 IWM ETF 代理基准 `IWM`、道琼斯的 DIA ETF 代理基准 `DIA` 和黄金 GLD ETF `GLD`。前端会展示数据口径和来源。详见 [行情和基金净值获取运行手册](docs/data/market-data-runbook.md)。
 
 完整资产主库不打进前端首屏包：设置 `DATABASE_URL` 后，`npm run data:sync-registry` 会把资源库写入 PostgreSQL 的 `market_data_instruments`、`market_data_instrument_aliases` 和 `market_data_instrument_sources`；资产录入通过 `/api/instruments/search` 查询 PostgreSQL。`storage/market-data/instrument-registry.json` 仍作为导入缓存和无数据库时的回退源；前端源码只保留 `src/domain/instrumentRegistry.seed.js` 常用资产兜底，用于无 API 或离线原型场景。
 
@@ -285,7 +285,8 @@ curl -X POST http://localhost:4180/api/market-data/sync-daily \
 
 前端价格同步有两条路径：
 
-- 手动点击“同步价格”会立即调用 `/api/market-data/sync-daily`，按所有录入过且有代码资产的首次持有日期回补历史价格，包含当前持仓和历史持仓；再把最新价格和用户资产每日价格快照写回浏览器本地资产。
+- 新增资产成功后会立即调用 `/api/market-data/sync-daily` 确保该代码从首次持有日到今天的公共历史行情已覆盖；已缓存区间会复用，只增量抓取未覆盖的首尾区间。请求不上传数量、成本、账户或备注；返回的公共历史价格会在浏览器本地生成该资产的每日价格并刷新总资产趋势。
+- 手动点击“同步价格”会调用同一接口更新所有已录入代码的最新价格；已存在的历史缓存继续复用。
 - 页面启动后会检查当天是否已经自动同步；若未同步，会按所有录入过且有代码的资产自动触发一次同一接口，并以最新抓取到的价格为准。本地 MVP 需要先运行 API 服务：`npm run api:start`。
 
 行情触发边界：完整资产资源库只用于搜索和识别，不会默认抓取价格。价格抓取只由四类事件触发：用户搜索/lookup 单个代码、所有用户录入资产的每日定时同步、少量系统基准的每日定时同步、用户点击“同步价格”时同步其录入资产。

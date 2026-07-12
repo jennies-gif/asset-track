@@ -53,6 +53,9 @@ export function initAssetEvents(ctx) {
   elements.assetForm.elements.costPrice?.addEventListener("input", () => {
     delete elements.assetForm.dataset.autoDraftPrice;
   });
+  elements.assetForm.elements.purchaseDate?.addEventListener("change", () => {
+    queueDraftMarketLookup();
+  });
   elements.assetForm.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
     toggle.addEventListener("change", () => {
       syncOptionalEntryPanels();
