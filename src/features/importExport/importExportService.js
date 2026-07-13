@@ -49,7 +49,11 @@ export function exportCsvBackup() {
     "manualAdjustment",
     "purchaseDate",
     "pricedAt",
-    "priceSource"
+    "priceSource",
+    "priceKind",
+    "priceAt",
+    "marketTimezone",
+    "sourceFetchedAt"
   ];
   const rows = [headers.join(",")].concat(
     state.assets.map((asset) => headers.map((field) => csvCell(asset[field] ?? "")).join(","))

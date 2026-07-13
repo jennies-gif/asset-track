@@ -189,6 +189,15 @@
 }
 ```
 
+历史接口只返回可复算的日频记录，不返回数字资产 ticker 最新价。公共行情同步和 lookup 的当前价格响应补充：
+
+- `priceKind`：价格口径；
+- `priceAt`：最新价或参考价的具体时点；
+- `marketTimezone`：价格时间口径；
+- `sourceFetchedAt`：系统抓取时间。
+
+股票和场内 ETF 返回最近真实交易日 `close`；数字资产当前估值可返回 `latest`，历史仍使用已结束的 Binance UTC 日线。
+
 ### `GET /api/market-data/fx-rates`
 
 查询参数：

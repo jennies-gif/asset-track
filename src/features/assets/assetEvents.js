@@ -49,6 +49,9 @@ export function initAssetEvents(ctx) {
       elements.assetForm.elements.priceSource.value = "用户录入";
     }
     if (elements.assetForm.elements.pricedAt) elements.assetForm.elements.pricedAt.value = "";
+    for (const field of ["priceKind", "priceAt", "marketTimezone", "sourceFetchedAt"]) {
+      if (elements.assetForm.elements[field]) elements.assetForm.elements[field].value = "";
+    }
   });
   elements.assetForm.elements.costPrice?.addEventListener("input", () => {
     delete elements.assetForm.dataset.autoDraftPrice;

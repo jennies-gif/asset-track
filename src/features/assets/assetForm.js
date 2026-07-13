@@ -465,6 +465,10 @@ function applyDraftLookupPayload(payload, query) {
     if (form.elements.priceSource) form.elements.priceSource.value = price.priceSource || "";
     if (form.elements.pricedAt) form.elements.pricedAt.value = price.pricedAt || "";
     if (form.elements.priceStatus) form.elements.priceStatus.value = "synced";
+    if (form.elements.priceKind) form.elements.priceKind.value = price.priceKind || "";
+    if (form.elements.priceAt) form.elements.priceAt.value = price.priceAt || "";
+    if (form.elements.marketTimezone) form.elements.marketTimezone.value = price.marketTimezone || "";
+    if (form.elements.sourceFetchedAt) form.elements.sourceFetchedAt.value = price.sourceFetchedAt || "";
   }
   setDraftPriceStatus("synced", "已带入最新公共行情；买入日期和买入价格仅保存在当前浏览器，请手动填写买入价格。");
   updateAssetLiveSummary();
@@ -807,6 +811,10 @@ function fillAssetForm(asset) {
     "priceSource",
     "pricedAt",
     "priceStatus",
+    "priceKind",
+    "priceAt",
+    "marketTimezone",
+    "sourceFetchedAt",
     "attachmentName",
     "buyReason",
     "upsideReasons",

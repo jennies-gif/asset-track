@@ -28,6 +28,7 @@ import {
 } from "../../src/domain/marketData.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
+import { isDailyHistoryPoint, isMarketCloseAvailable, selectCurrentValuationPoint } from "../../src/domain/marketPriceSemantics.js";
 import { isCnExchangeListedFundSymbol, normalizeCnListedFundInstrument, removeOtcDuplicatesOfListedCnInstruments } from "../../src/domain/cnInstrumentClassification.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
 import { priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
@@ -834,6 +835,8 @@ test("normalizes Binance and Gold API market payloads", () => {
   assert.equal(klines[0].tradeDate, "2026-06-02");
   assert.equal(klines[0].closePrice, "66628.00000000");
   assert.equal(klines[0].source, "Binance daily kline public API");
+  assert.equal(klines[0].priceKind, "close");
+  assert.equal(klines[0].marketTimezone, "UTC");
 
   const ticker = normalizeBinanceTickerPrice(
     { symbol: "BTCUSDT", price: "66630.12000000" },
@@ -842,6 +845,7 @@ test("normalizes Binance and Gold API market payloads", () => {
   );
   assert.equal(ticker[0].tradeDate, "2026-06-03");
   assert.equal(ticker[0].closePrice, "66630.12000000");
+  assert.equal(ticker[0].priceKind, "latest");
 
   const xau = preciousMetalInstruments.find((item) => item.symbol === "XAU");
   const gold = normalizeGoldApiPrice(
@@ -851,6 +855,67 @@ test("normalizes Binance and Gold API market payloads", () => {
   );
   assert.equal(gold[0].instrumentSymbol, "XAU");
   assert.equal(gold[0].source, "Gold API metals price");
+  assert.equal(gold[0].priceKind, "reference");
+});
+
+test("keeps crypto latest valuation separate from completed UTC daily history", () => {
+  const asset = { symbol: "BTC", type: "数字资产", market: "WEB3" };
+  const points = [
+    {
+      date: "2026-07-11",
+      close: 62000,
+      priceKind: "close",
+      priceAt: "2026-07-11T23:59:59.999Z",
+      source: "Binance daily kline public API",
+      qualityStatus: "ok"
+    },
+    {
+      date: "2026-07-12",
+      close: 62500,
+      priceKind: "latest",
+      priceAt: "2026-07-12T06:00:00.000Z",
+      source: "Binance ticker price public API",
+      qualityStatus: "ok"
+    }
+  ];
+  assert.equal(selectCurrentValuationPoint(asset, points).close, 62500);
+  assert.deepEqual(points.filter(isDailyHistoryPoint).map((point) => point.date), ["2026-07-11"]);
+});
+
+test("rejects legacy Binance daily rows fetched before the UTC candle completed", () => {
+  const partial = {
+    date: "2026-07-13",
+    close: 62500,
+    source: "Binance daily kline public API",
+    sourceFetchedAt: "2026-07-13T13:00:00.000Z",
+    qualityStatus: "ok"
+  };
+  const completed = {
+    ...partial,
+    sourceFetchedAt: "2026-07-14T00:00:01.000Z"
+  };
+  assert.equal(isDailyHistoryPoint(partial), false);
+  assert.equal(isDailyHistoryPoint(completed), true);
+});
+
+test("does not use realtime quote rows as listed-stock closes", () => {
+  const asset = { symbol: "SPY", type: "ETF", market: "US" };
+  const points = [
+    { date: "2026-07-10", close: 620, source: "Nasdaq historical public API", qualityStatus: "ok" },
+    { date: "2026-07-12", close: 625, source: "Nasdaq quote public API", qualityStatus: "ok" }
+  ];
+  const selected = selectCurrentValuationPoint(asset, points);
+  assert.equal(selected.date, "2026-07-10");
+  assert.equal(selected.close, 620);
+});
+
+test("accepts listed-market daily prices only after the local close", () => {
+  assert.equal(isMarketCloseAvailable("CN", "2026-07-13", new Date("2026-07-13T06:59:00.000Z")), false);
+  assert.equal(isMarketCloseAvailable("CN", "2026-07-13", new Date("2026-07-13T07:00:00.000Z")), true);
+  assert.equal(isMarketCloseAvailable("HK", "2026-07-13", new Date("2026-07-13T07:59:00.000Z")), false);
+  assert.equal(isMarketCloseAvailable("HK", "2026-07-13", new Date("2026-07-13T08:00:00.000Z")), true);
+  assert.equal(isMarketCloseAvailable("US", "2026-07-13", new Date("2026-07-13T19:59:00.000Z")), false);
+  assert.equal(isMarketCloseAvailable("US", "2026-07-13", new Date("2026-07-13T20:00:00.000Z")), true);
 });
 
 test("groups current market value by asset category", () => {

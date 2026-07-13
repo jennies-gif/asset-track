@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { benchmarkInstruments, securityWhitelist } from "../../src/domain/marketData.js";
 import { normalizeCnListedFundInstrument } from "../../src/domain/cnInstrumentClassification.js";
+import { isMarketCloseAvailable } from "../../src/domain/marketPriceSemantics.js";
 import {
   cryptoInstruments,
   defaultFxPairs,
@@ -335,10 +336,13 @@ async function fetchBinanceCrypto(instrument, range) {
   const sourceInstrument = cryptoInstruments.find((item) => item.symbol === instrument.symbol) || instrument;
   if (!sourceInstrument.binanceSymbol) return fetchCoinGeckoLatest(instrument, range);
   const rows = [];
+  // Include the preceding UTC day so a daytime sync can persist the latest
+  // fully completed daily candle while the current UTC candle is still open.
+  const klineDateFrom = addDays(range.dateFrom, -1);
   const klineUrl = new URL("https://data-api.binance.vision/api/v3/klines");
   klineUrl.searchParams.set("symbol", sourceInstrument.binanceSymbol);
   klineUrl.searchParams.set("interval", "1d");
-  klineUrl.searchParams.set("startTime", String(Date.parse(`${range.dateFrom}T00:00:00.000Z`)));
+  klineUrl.searchParams.set("startTime", String(Date.parse(`${klineDateFrom}T00:00:00.000Z`)));
   klineUrl.searchParams.set("endTime", String(Date.parse(`${range.dateTo}T23:59:59.999Z`)));
   klineUrl.searchParams.set("limit", String(historyRequestLimit(range, 1000)));
   const klinePayload = await fetchJson(klineUrl, { referer: "https://www.binance.com/" });
@@ -348,7 +352,10 @@ async function fetchBinanceCrypto(instrument, range) {
   tickerUrl.searchParams.set("symbol", sourceInstrument.binanceSymbol);
   const tickerPayload = await fetchJson(tickerUrl, { referer: "https://www.binance.com/" });
   rows.push(...normalizeBinanceTickerPrice(tickerPayload, sourceInstrument, { tradeDate: range.dateTo }));
-  const filteredRows = upsertRowsByDateAndSource(rows, []).filter((row) => row.tradeDate >= range.dateFrom && row.tradeDate <= range.dateTo);
+  const filteredRows = upsertRowsByDateAndSource(rows, []).filter((row) => {
+    const minimumDate = row.priceKind === "close" ? klineDateFrom : range.dateFrom;
+    return row.tradeDate >= minimumDate && row.tradeDate <= range.dateTo;
+  });
   if (!filteredRows.length) return { status: "skipped", reason: `Binance 暂无 ${instrument.symbol} 可用价格` };
   return { status: "ok", kind: "price", rows: filteredRows };
 }
@@ -390,33 +397,12 @@ async function fetchTencentKline(instrument, range) {
   if (!Array.isArray(rows)) throw new Error(`腾讯证券 K 线返回缺少 day: ${instrument.symbol}`);
   const normalizedRows = rows
     .map((row) => normalizeTencentKlineRow(instrument, row))
+    .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
     .filter((row) => row.tradeDate >= range.dateFrom && row.tradeDate <= range.dateTo);
-  const quoteRow = await fetchTencentRealtimeQuote(instrument, range);
   return {
     status: "ok",
     kind: "price",
-    rows: quoteRow ? upsertRowsByDateAndSource(normalizedRows, [quoteRow]) : normalizedRows
-  };
-}
-
-async function fetchTencentRealtimeQuote(instrument, range) {
-  const symbol = toTencentSimpleQuoteSymbol(instrument);
-  const text = await fetchText(new URL(`https://qt.gtimg.cn/q=${symbol}`), { referer: "https://gu.qq.com/" });
-  const match = text.match(/="([^"]*)"/u);
-  const fields = match ? match[1].split("~") : [];
-  const closePrice = fields[3];
-  if (Number(closePrice) <= 0) return null;
-  return {
-    instrumentSymbol: instrument.symbol,
-    instrumentName: instrument.name,
-    market: instrument.market,
-    currency: instrument.currency,
-    tradeDate: range.dateTo,
-    closePrice: decimalString(closePrice),
-    adjustedClosePrice: decimalString(closePrice),
-    source: "Tencent finance realtime quote",
-    sourceFetchedAt: new Date().toISOString(),
-    qualityStatus: "ok"
+    rows: normalizedRows
   };
 }
 
@@ -504,50 +490,14 @@ async function fetchNasdaqDaily(instrument, range) {
   }
   let normalizedRows = rows
     .map((row) => normalizeNasdaqRow(instrument, row))
+    .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
     .filter((row) => row.tradeDate >= requestFrom && row.tradeDate <= range.dateTo)
     .sort((left, right) => left.tradeDate.localeCompare(right.tradeDate));
   if (command === "daily") normalizedRows = normalizedRows.slice(-1);
-  const quoteRow = await safeFetchNasdaqLatestQuote(instrument, range, assetClass);
-  if (quoteRow && quoteRow.tradeDate >= range.dateFrom && quoteRow.tradeDate <= range.dateTo) {
-    normalizedRows = upsertRowsByDateAndSource(normalizedRows, [quoteRow]);
-  }
   return {
     status: "ok",
     kind: "price",
     rows: normalizedRows
-  };
-}
-
-async function safeFetchNasdaqLatestQuote(instrument, range, assetClass) {
-  try {
-    return await fetchNasdaqLatestQuote(instrument, range, assetClass);
-  } catch {
-    return null;
-  }
-}
-
-async function fetchNasdaqLatestQuote(instrument, range, assetClass) {
-  const url = new URL(`https://api.nasdaq.com/api/quote/${instrument.symbol}/info`);
-  url.searchParams.set("assetclass", assetClass);
-  const payload = await fetchJson(url, {
-    referer: `https://www.nasdaq.com/market-activity/${assetClass}/${instrument.symbol.toLowerCase()}`,
-    origin: "https://www.nasdaq.com"
-  });
-  const primaryData = payload.data?.primaryData;
-  const closePrice = stripMarketNumber(primaryData?.lastSalePrice);
-  if (Number(closePrice) <= 0) return null;
-  return {
-    instrumentSymbol: instrument.symbol,
-    instrumentName: instrument.name,
-    market: instrument.market,
-    currency: instrument.currency,
-    tradeDate: range.dateTo,
-    closePrice: decimalString(closePrice),
-    adjustedClosePrice: decimalString(closePrice),
-    source: primaryData?.isRealTime ? "Nasdaq real-time quote public API" : "Nasdaq quote public API",
-    sourceFetchedAt: new Date().toISOString(),
-    sourceTimestamp: primaryData?.lastTradeTimestamp || "",
-    qualityStatus: "ok"
   };
 }
 
@@ -579,6 +529,8 @@ function normalizeTencentKlineRow(instrument, row) {
     adjustedClosePrice: decimalString(close),
     source: "Tencent finance kline",
     sourceFetchedAt: new Date().toISOString(),
+    priceKind: "close",
+    marketTimezone: instrument.market === "HK" ? "Asia/Hong_Kong" : "Asia/Shanghai",
     qualityStatus: Number(close) > 0 ? "ok" : "invalid"
   };
 }
@@ -594,6 +546,8 @@ function normalizeNasdaqRow(instrument, row) {
     adjustedClosePrice: decimalString(stripMarketNumber(row.close)),
     source: "Nasdaq historical public API",
     sourceFetchedAt: new Date().toISOString(),
+    priceKind: "close",
+    marketTimezone: "America/New_York",
     qualityStatus: Number(stripMarketNumber(row.close)) > 0 ? "ok" : "invalid"
   };
 }
@@ -612,10 +566,6 @@ function historyRequestLimit(range, maxLimit) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return maxLimit;
   const calendarDays = Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 10;
   return Math.max(10, Math.min(maxLimit, calendarDays));
-}
-
-function toTencentSimpleQuoteSymbol(instrument) {
-  return `s_${toTencentSymbol(instrument)}`;
 }
 
 function toEastmoneySecid(instrument) {

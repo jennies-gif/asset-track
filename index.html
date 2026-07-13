@@ -26,7 +26,7 @@
       </form>
       <div class="header-actions">
         <div class="market-sync-header">
-          <button class="settings-button sync-price-button" id="sync-market-data-button" type="button">同步价格</button>
+          <button class="settings-button sync-price-button" id="sync-market-data-button" type="button">检查价格更新</button>
           <div class="market-sync-result market-sync-popover" id="market-sync-result" aria-live="polite"></div>
         </div>
         <button class="primary-button header-add-button" data-tab="assets" type="button">新增记录</button>
@@ -325,6 +325,10 @@
               <input name="priceSource" type="hidden">
               <input name="pricedAt" type="hidden">
               <input name="priceStatus" type="hidden">
+              <input name="priceKind" type="hidden">
+              <input name="priceAt" type="hidden">
+              <input name="marketTimezone" type="hidden">
+              <input name="sourceFetchedAt" type="hidden">
               <p class="form-help" data-price-fallback>选择资产后会查询首次持有日期当日或之前最近一个交易日的价格；缺失时请手动填写。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>

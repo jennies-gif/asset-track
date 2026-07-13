@@ -234,6 +234,16 @@
 
 唯一约束：`instrumentId + tradeDate + source`。
 
+当前公共行情 runtime 记录还需要保存价格时间语义：
+
+- `priceKind`：`close`、`latest`、`reference` 或 `snapshot`；
+- `priceAt`：连续市场价格对应的带时区时点；
+- `marketTimezone`：交易日或快照采用的市场时区；
+- `sourceTimestamp`：外部来源声明的行情时间；
+- `sourceFetchedAt`：系统抓取时间，不得代替交易日或价格时点。
+
+股票和场内 ETF 只能使用 `close` 参与当前估值和历史日线。数字资产当前估值可以使用 `latest`，但日频历史只使用已经结束的 UTC 日 K `close`。贵金属 latest 来源使用 `reference`，不能表达为官方收盘。
+
 ### FundNavSnapshot
 
 场外基金使用基金公司公告净值。

@@ -77,11 +77,29 @@ test("api skeleton serves health, positions and attribution", async () => {
           instrumentName: "Bitcoin",
           market: "WEB3",
           currency: "USD",
+          tradeDate: "2026-06-01",
+          closePrice: "67000.00",
+          adjustedClosePrice: "67000.00",
+          source: "Binance daily kline public API",
+          sourceFetchedAt: "2026-06-02T10:00:00.000Z",
+          priceKind: "close",
+          priceAt: "2026-06-01T23:59:59.999Z",
+          marketTimezone: "UTC",
+          qualityStatus: "ok"
+        },
+        {
+          instrumentSymbol: "BTC",
+          instrumentName: "Bitcoin",
+          market: "WEB3",
+          currency: "USD",
           tradeDate: "2026-06-02",
           closePrice: "68000.55",
           adjustedClosePrice: "68000.55",
-          source: "CoinGecko simple price",
+          source: "Binance ticker price public API",
           sourceFetchedAt: "2026-06-02T10:00:00.000Z",
+          priceKind: "latest",
+          priceAt: "2026-06-02T10:00:00.000Z",
+          marketTimezone: "UTC",
           qualityStatus: "ok"
         }
       ],
@@ -121,7 +139,8 @@ test("api skeleton serves health, positions and attribution", async () => {
         tradeDate: "2026-06-02",
         closePrice: "1.038",
         adjustedClosePrice: "1.038",
-        source: "Tencent finance realtime quote",
+        source: "Tencent finance kline",
+        priceKind: "close",
         sourceFetchedAt: "2026-06-02T10:00:00.000Z",
         qualityStatus: "ok"
       }
@@ -329,11 +348,12 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(privateAssetUpload.body.code, "private_asset_api_disabled");
 
     const cryptoHistory = await getJson("/api/market-data/history?symbol=BTC");
-    assert.equal(cryptoHistory.points[0].close, 68000.55);
-    assert.equal(cryptoHistory.points[0].source, "CoinGecko simple price");
+    assert.equal(cryptoHistory.points[0].close, 67000);
+    assert.equal(cryptoHistory.points[0].source, "Binance daily kline public API");
 
     const latestLookup = await getJson("/api/instruments/lookup?query=BTC");
     assert.equal(latestLookup.price.currentPrice, "68000.55");
+    assert.equal(latestLookup.price.priceKind, "latest");
     const privateLookupField = await rawGetJson("/api/instruments/lookup?query=BTC&purchaseDate=2026-06-02");
     assert.equal(privateLookupField.status, 400);
     assert.equal(privateLookupField.body.code, "request_field_not_allowed");

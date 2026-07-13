@@ -36,6 +36,12 @@ import {
 } from "../../src/server/marketDataDatabase.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
+import {
+  inferMarketPriceKind,
+  isDailyHistoryPoint,
+  selectCurrentValuationPoint,
+  selectPreviousDailyPoint
+} from "../../src/domain/marketPriceSemantics.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
 const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
@@ -291,10 +297,11 @@ async function lookupInstrumentWithLatestPrice(url, response) {
   const requestedPurchaseDate = normalizeDateParam(url.searchParams.get("purchaseDate")) || todayIsoDate();
   const cachedHistory = await readStoredMarketHistory(syncAsset);
   const cachedPurchasePrice = cachedPurchasePriceForDate(cachedHistory, requestedPurchaseDate);
-  if (cachedPurchasePrice) {
+  const cachedMarketPrice = marketPriceFromHistory(syncAsset, cachedHistory);
+  if (cachedMarketPrice) {
     return sendJson(response, {
       instrument,
-      price: marketPriceFromHistory(cachedHistory),
+      price: cachedMarketPrice,
       purchasePrice: cachedPurchasePrice,
       priceLookup: { source: "cache", requestedDate: requestedPurchaseDate },
       addedToRegistry,
@@ -337,10 +344,11 @@ async function lookupInstrumentWithLatestPrice(url, response) {
 }
 
 function cachedPurchasePriceForDate(history, requestedDate) {
-  const exact = history.find((point) => point.date === requestedDate);
+  const dailyHistory = history.filter(isDailyHistoryPoint);
+  const exact = dailyHistory.find((point) => point.date === requestedDate);
   if (exact) return purchasePriceFromPoint(exact, requestedDate);
   const weekday = new Date(`${requestedDate}T00:00:00.000Z`).getUTCDay();
-  return weekday === 0 || weekday === 6 ? purchasePriceAtOrBefore(history, requestedDate) : null;
+  return weekday === 0 || weekday === 6 ? purchasePriceAtOrBefore(dailyHistory, requestedDate) : null;
 }
 
 function purchasePriceAtOrBefore(history, requestedDate) {
@@ -360,17 +368,20 @@ function purchasePriceFromPoint(matched, requestedDate) {
   };
 }
 
-function marketPriceFromHistory(history) {
-  const latest = latestUsableHistoryPoint(history);
+function marketPriceFromHistory(asset, history) {
+  const latest = selectCurrentValuationPoint(asset, history);
   if (!latest) return null;
-  const previous = previousUsableHistoryPoint(history, latest.date);
+  const previous = selectPreviousDailyPoint(history, latest.date);
   return {
     currentPrice: decimalString(latest.close),
     previousPrice: previous ? decimalString(previous.close) : decimalString(latest.close),
     pricedAt: latest.date,
     priceSource: latest.source || "",
     priceStatus: "synced",
-    sourceFetchedAt: latest.sourceFetchedAt || ""
+    sourceFetchedAt: latest.sourceFetchedAt || "",
+    priceKind: latest.priceKind,
+    priceAt: latest.priceAt || "",
+    marketTimezone: latest.marketTimezone || ""
   };
 }
 
@@ -388,7 +399,7 @@ async function getMarketHistory(url, response) {
   const symbol = String(url.searchParams.get("symbol") || "");
   const asset = state.assets.find((item) => item.symbol === symbol) || await assetFromSymbol(symbol);
   if (!asset) return sendError(response, 404, "instrument_not_found", "未找到资产代码");
-  const stored = await readStoredMarketHistory(asset);
+  const stored = (await readStoredMarketHistory(asset)).filter(isDailyHistoryPoint);
   if (stored.length) {
     return sendJson(response, {
       instrument: {
@@ -516,7 +527,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       const requestedTo = historyDateTo || todayIsoDate();
       const groupedMissingRanges = new Map();
       for (const asset of candidates) {
-        const history = await readStoredMarketHistory(asset);
+        const history = (await readStoredMarketHistory(asset)).filter(isDailyHistoryPoint);
         const requestedFrom = normalizeDateParam(body.dateFrom) || assetHistoryStartDate(asset, "") || historyDateFrom;
         for (const range of missingMarketHistoryRanges(history, requestedFrom, requestedTo)) {
           const key = `${range.dateFrom}:${range.dateTo}`;
@@ -556,7 +567,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
 
   for (const asset of candidates) {
     const history = await readStoredMarketHistory(asset);
-    const latest = latestUsableHistoryPoint(history);
+    const latest = selectCurrentValuationPoint(asset, history);
     if (!latest) {
       asset.priceStatus = "pending";
       results.push({
@@ -568,7 +579,8 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       continue;
     }
 
-    const previous = previousUsableHistoryPoint(history, latest.date);
+    const previous = selectPreviousDailyPoint(history, latest.date);
+    const dailyHistory = history.filter(isDailyHistoryPoint);
     const before = {
       currentPrice: asset.currentPrice,
       previousPrice: asset.previousPrice,
@@ -580,12 +592,15 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       asset.currentPrice = decimalString(latest.close);
       asset.pricedAt = latest.date;
       asset.priceSource = latest.source;
+      asset.priceKind = latest.priceKind;
+      asset.priceAt = latest.priceAt || "";
+      asset.marketTimezone = latest.marketTimezone || "";
       asset.priceStatus = "synced";
       asset.updatedAt = syncedAt;
       const dailyPrices = buildUserAssetDailyPriceSnapshots({
         userId: demoUser.id,
         asset,
-        history,
+        history: dailyHistory,
         dateFrom: userAssetDailySyncStartDate(asset, body.dateFrom, historyDateTo, body.autoFetch),
         dateTo: historyDateTo
       });
@@ -606,11 +621,14 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
         pricedAt: latest.date,
         priceSource: latest.source,
         priceStatus: "synced",
-        sourceFetchedAt: latest.sourceFetchedAt
+        sourceFetchedAt: latest.sourceFetchedAt,
+        priceKind: latest.priceKind,
+        priceAt: latest.priceAt || "",
+        marketTimezone: latest.marketTimezone || ""
       },
       dailyPrices: asset.externalOnly ? [] : asset.dailyPrices || [],
       history: body.includeHistory
-        ? history
+        ? dailyHistory
             .filter((point) => !normalizeDateParam(body.dateFrom) || point.date >= normalizeDateParam(body.dateFrom))
             .filter((point) => !historyDateTo || point.date <= historyDateTo)
         : undefined,
@@ -997,6 +1015,10 @@ async function readStoredMarketHistory(asset) {
       closeDecimal: String(row.closePrice || row.unitNav || ""),
       source: row.source,
       sourceFetchedAt: row.sourceFetchedAt,
+      priceKind: inferMarketPriceKind(row),
+      priceAt: row.priceAt || "",
+      sourceTimestamp: row.sourceTimestamp || "",
+      marketTimezone: row.marketTimezone || "",
       type: row.navDate ? "单位净值" : "日收盘价",
       qualityStatus: row.qualityStatus
     }))
@@ -1058,33 +1080,6 @@ function userAssetDailyPricePath(userId, assetId) {
     sanitizePathSegment(userId),
     `${sanitizePathSegment(assetId)}.json`
   );
-}
-
-function latestUsableHistoryPoint(points) {
-  return [...points]
-    .filter((point) => point.qualityStatus !== "invalid" && Number.isFinite(point.close) && point.close > 0)
-    .sort(compareHistoryPointFreshness)[0] || null;
-}
-
-function previousUsableHistoryPoint(points, latestDate) {
-  return [...points]
-    .filter((point) => point.date < latestDate && point.qualityStatus !== "invalid" && Number.isFinite(point.close) && point.close > 0)
-    .sort(compareHistoryPointFreshness)[0] || null;
-}
-
-function compareHistoryPointFreshness(left, right) {
-  const dateOrder = right.date.localeCompare(left.date);
-  if (dateOrder !== 0) return dateOrder;
-  const sourceOrder = sourceFreshnessRank(right.source) - sourceFreshnessRank(left.source);
-  if (sourceOrder !== 0) return sourceOrder;
-  return String(right.sourceFetchedAt || "").localeCompare(String(left.sourceFetchedAt || ""));
-}
-
-function sourceFreshnessRank(source) {
-  const value = String(source || "").toLowerCase();
-  if (value.includes("ticker") || value.includes("quote") || value.includes("real-time") || value.includes("realtime")) return 3;
-  if (value.includes("kline") || value.includes("historical")) return 2;
-  return 1;
 }
 
 async function readStoredRowsForSymbol(asset, kind) {

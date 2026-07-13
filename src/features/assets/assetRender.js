@@ -1,5 +1,6 @@
 import { formatPercent, roundDivide } from "../../domain/calculations.js";
 import { priceUsesCostFallback, resolvePriceStatus } from "../../domain/priceStatus.js";
+import { marketPriceDisplayKind } from "../../domain/marketPriceSemantics.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { formatShortDate } from "../../utils/date.js";
 import { emptyStateInner } from "../../ui/emptyState.js";
@@ -204,8 +205,12 @@ function renderDisplayCurrencyAmount(cents) {
 }
 
 function shortPriceMeta(asset, status) {
-  const date = asset.pricedAt ? formatShortDate(asset.pricedAt) : "";
-  const label = shortPriceStatusLabel(asset, status);
+  const date = asset.priceKind === "latest" && asset.priceAt
+    ? formatMonthDayTimeMinute(asset.priceAt)
+    : asset.pricedAt
+      ? formatShortDate(asset.pricedAt)
+      : "";
+  const label = status.key === "synced" ? marketPriceDisplayKind(asset) : shortPriceStatusLabel(asset, status);
   return [date, label].filter(Boolean).join(" · ") || label;
 }
 
@@ -226,8 +231,10 @@ function priceDetailTitle(asset, status) {
   return [
     `状态：${status.label}`,
     asset.pricedAt ? `价格日期：${asset.pricedAt}` : "",
+    asset.priceAt ? `价格时点：${formatMonthDayTimeMinute(asset.priceAt)}${asset.marketTimezone ? `（${asset.marketTimezone}）` : ""}` : "",
     source ? `来源：${source}` : "",
-    asset.updatedAt ? `更新时间：${formatMonthDayTimeMinute(asset.updatedAt)}` : "",
+    asset.sourceFetchedAt ? `抓取时间：${formatMonthDayTimeMinute(asset.sourceFetchedAt)}` : "",
+    asset.updatedAt ? `检查时间：${formatMonthDayTimeMinute(asset.updatedAt)}` : "",
     asset.priceError ? `原因：${asset.priceError}` : ""
   ].filter(Boolean).join("\n");
 }

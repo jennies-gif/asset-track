@@ -17,7 +17,7 @@ export function renderMarketSyncResult() {
   if (!elements.marketSyncResult || !elements.syncMarketDataButton) return;
   const isLoading = marketSyncState.status === "loading";
   elements.syncMarketDataButton.disabled = isLoading;
-  elements.syncMarketDataButton.textContent = isLoading ? "同步中..." : "同步价格";
+  elements.syncMarketDataButton.textContent = isLoading ? "检查中..." : "检查价格更新";
   if (marketSyncState.status === "idle") {
     elements.marketSyncResult.innerHTML = "";
     return;
@@ -145,7 +145,13 @@ function renderMarketSyncRow(result) {
   const after = result.after || {};
   const status = result.status === "synced" ? "已更新" : "缺缓存";
   const fetchedAt = after.sourceFetchedAt || after.syncedAt || result.sourceFetchedAt || result.syncedAt || "";
-  const timeLabel = fetchedAt ? formatMonthDayTimeMinute(fetchedAt) : after.pricedAt || "-";
+  const timeLabel = after.priceKind === "latest" && after.priceAt
+    ? `${formatMonthDayTimeMinute(after.priceAt)} 最新价`
+    : after.pricedAt
+      ? `${after.pricedAt.slice(5)} ${after.priceKind === "unit_nav" ? "净值" : after.priceKind === "reference" ? "参考价" : "收盘"}`
+      : fetchedAt
+        ? formatMonthDayTimeMinute(fetchedAt)
+        : "-";
   const detail = result.status === "synced"
     ? `${after.currentPrice || "-"} · ${timeLabel} · ${after.priceSource || "-"}`
     : result.message || "未找到可用价格缓存";

@@ -24,6 +24,7 @@ export const defaultFxPairs = [
 
 export function normalizeMetalsDevLatest(payload, instruments, options = {}) {
   const fetchedAt = options.sourceFetchedAt || new Date().toISOString();
+  const sourceTimestamp = normalizeTimestamp(payload?.timestamp);
   const tradeDate = normalizeSnapshotDate(options.tradeDate || payload?.timestamp || fetchedAt);
   return instruments
     .map((instrument) => {
@@ -40,7 +41,11 @@ export function normalizeMetalsDevLatest(payload, instruments, options = {}) {
         tradeDate,
         closePrice,
         source: "Metals.Dev latest",
-        sourceFetchedAt: fetchedAt
+        sourceFetchedAt: fetchedAt,
+        priceKind: "reference",
+        priceAt: sourceTimestamp || fetchedAt,
+        sourceTimestamp,
+        marketTimezone: "UTC"
       });
     })
     .filter(Boolean);
@@ -61,7 +66,10 @@ export function normalizeCoinGeckoSimplePrice(payload, instruments, options = {}
         tradeDate,
         closePrice: bucket[vsCurrency],
         source: "CoinGecko simple price",
-        sourceFetchedAt: lastUpdated
+        sourceFetchedAt: lastUpdated,
+        priceKind: "latest",
+        priceAt: lastUpdated,
+        marketTimezone: "UTC"
       });
     })
     .filter(Boolean);
@@ -73,12 +81,20 @@ export function normalizeBinanceKlines(payload, instrument, options = {}) {
     .map((row) => {
       const openTime = Number(row?.[0]);
       const closePrice = row?.[4];
+      const closeTime = Number(row?.[6]);
+      const inferredCloseTime = Number.isFinite(openTime) ? openTime + 24 * 60 * 60 * 1000 - 1 : NaN;
+      const completedAt = Number.isFinite(closeTime) ? closeTime : inferredCloseTime;
+      if (Number.isFinite(completedAt) && completedAt > Date.parse(fetchedAt)) return null;
       return priceSnapshotRow({
         instrument,
         tradeDate: normalizeSnapshotDate(Number.isFinite(openTime) ? new Date(openTime).toISOString() : fetchedAt),
         closePrice,
         source: "Binance daily kline public API",
-        sourceFetchedAt: fetchedAt
+        sourceFetchedAt: fetchedAt,
+        priceKind: "close",
+        priceAt: Number.isFinite(completedAt) ? new Date(completedAt).toISOString() : "",
+        sourceTimestamp: Number.isFinite(completedAt) ? new Date(completedAt).toISOString() : "",
+        marketTimezone: "UTC"
       });
     })
     .filter(Boolean);
@@ -93,13 +109,18 @@ export function normalizeBinanceTickerPrice(payload, instrument, options = {}) {
       tradeDate,
       closePrice: payload?.price,
       source: "Binance ticker price public API",
-      sourceFetchedAt: fetchedAt
+      sourceFetchedAt: fetchedAt,
+      priceKind: "latest",
+      priceAt: fetchedAt,
+      sourceTimestamp: fetchedAt,
+      marketTimezone: "UTC"
     })
   ].filter(Boolean);
 }
 
 export function normalizeGoldApiPrice(payload, instrument, options = {}) {
   const fetchedAt = options.sourceFetchedAt || new Date().toISOString();
+  const sourceTimestamp = normalizeTimestamp(payload?.timestamp);
   const tradeDate = normalizeSnapshotDate(options.tradeDate || payload?.timestamp || fetchedAt);
   const closePrice = payload?.price || payload?.ask || payload?.bid;
   return [
@@ -108,7 +129,11 @@ export function normalizeGoldApiPrice(payload, instrument, options = {}) {
       tradeDate,
       closePrice,
       source: "Gold API metals price",
-      sourceFetchedAt: fetchedAt
+      sourceFetchedAt: fetchedAt,
+      priceKind: "reference",
+      priceAt: sourceTimestamp || fetchedAt,
+      sourceTimestamp,
+      marketTimezone: "UTC"
     })
   ].filter(Boolean);
 }
@@ -149,7 +174,17 @@ export function groupFxPairsByBase(pairs) {
   return grouped;
 }
 
-function priceSnapshotRow({ instrument, tradeDate, closePrice, source, sourceFetchedAt }) {
+function priceSnapshotRow({
+  instrument,
+  tradeDate,
+  closePrice,
+  source,
+  sourceFetchedAt,
+  priceKind = "close",
+  priceAt = "",
+  sourceTimestamp = "",
+  marketTimezone = ""
+}) {
   if (!isPositiveNumber(closePrice)) return null;
   return {
     instrumentSymbol: instrument.symbol,
@@ -161,6 +196,10 @@ function priceSnapshotRow({ instrument, tradeDate, closePrice, source, sourceFet
     adjustedClosePrice: decimalString(closePrice),
     source,
     sourceFetchedAt,
+    priceKind,
+    priceAt,
+    sourceTimestamp,
+    marketTimezone,
     qualityStatus: "ok"
   };
 }
@@ -189,4 +228,13 @@ function normalizeSnapshotDate(value) {
   const raw = String(value || "").slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeTimestamp(value) {
+  if (value === undefined || value === null || value === "") return "";
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }

@@ -131,13 +131,13 @@ curl -X POST http://127.0.0.1:4180/api/market-data/sync-daily \
 
 当前脚本默认使用公开数据源，不需要 token：
 
-- A 股股票、A 股 ETF 和港股：当前代码主路径使用腾讯证券公开 K 线接口，并补充腾讯实时 quote 作为同日最新参考价。
+- A 股股票、A 股 ETF 和港股：当前代码主路径使用腾讯证券公开 K 线接口。当前估值只采用真实交易日 K 线收盘，不使用实时 quote 冒充收盘价。
 - 东方财富 K 线适配函数仍保留在脚本中，但当前 `fetchInstrument()` 主流程没有调用；不要在产品文案中写成当前默认源。
 - 国内公募基金：东方财富 `fundcode_search.js` 用于基金名称/代码主库，东方财富基金净值公开脚本用于单位净值。
 - 贵金属：Gold API 公开价格接口，默认按 `USD / troy ounce` 存储黄金、白银、铂金和钯金；如配置 `METALS_DEV_API_KEY`，可作为备用源。
 - 货币汇率：Frankfurter 参考汇率，默认抓取 `USD/CNY`、`HKD/CNY`、`USD/HKD` 和 `EUR/CNY`。
-- 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产，按 USD/USDT 近似存储价格；CoinGecko 保留为部分稳定币兜底。
-- 美股和美股 ETF：Nasdaq historical 公开接口。
+- 虚拟货币：Binance public market data，默认覆盖 BTC、ETH、SOL、BNB、USDC 等可映射到 USDT 交易对的资产。ticker 最新价只参与当前估值，已完成的 UTC 日 K 收盘只参与历史和日频计算；按 USD/USDT 近似存储价格。CoinGecko latest 只能作为最新参考价兜底，不能回填历史日线。
+- 美股和美股 ETF：Nasdaq historical 公开接口；当前估值使用最近真实交易日收盘，不使用 quote 请求日期作为交易日。
 - 资产主库：A 股股票优先使用上交所和深交所官方股票列表；场内基金优先使用上交所官方 `FUND_LIST` 和深交所官方 ETF 目录；东方财富市场列表仅作为股票兜底，`fundcode_search.js` 只用于补充国内公募基金。官方场内记录使用交易代码和交易所类型；场外基金统一存为 `{code}.OF` 并保留裸代码别名。同一裸代码同时出现官方场内记录和东方财富 `.OF` 记录时，主库必须保留官方场内记录并剔除冲突的 `.OF` 记录。港股优先使用 HKEX 官方 `ListOfSecurities.xlsx` 全量证券清单，纳入普通股票、REIT 和非杠杆/反向 ETF，并排除债券、权证、牛熊证和 RMB counter 重复柜台；港股还会尝试用东方财富港股股票列表补充中文简称，失败时不影响 HKEX 官方清单入库；美股普通股票和 ETF 使用 Nasdaq Trader symbol directory。脚本会优先读取 `storage/market-data/source-cache/**/page-*.json`、`storage/market-data/source-cache/eastmoney/fund-code-search/fundcode_search.js`、`storage/market-data/source-cache/hkex/list-of-securities/ListOfSecurities.xlsx`、`nasdaqlisted.txt` 和 `otherlisted.txt` 本地缓存，缓存缺失时再访问公开源；为兼容旧缓存，也会回退读取根目录下旧版 `*stock-list*.json`、`*clist*.json`、`hkex-list-of-securities.csv` 和 `hkex-list-of-securities.txt` 文件。
 - 沪深 300 成分股：东方财富 datacenter 公开接口。
 - 恒生科技成分股：Goldman Sachs Warrants 公开 AJAX。
@@ -196,6 +196,8 @@ storage/market-data/hkex-list-of-securities.txt
 - `error`：同步请求失败，不能覆盖旧价格，但要保留失败原因。
 
 缺价格时可以继续保存资产，但持仓、总览和分析必须显式提示“待获取价格 / 成本价兜底 / 缺缓存”，不得把兜底估值伪装为真实市场价格。
+
+价格时间字段必须区分：`tradeDate/navDate` 表示交易或净值日期，`priceAt` 表示连续市场最新价或参考价时点，`sourceFetchedAt` 表示系统抓取时间。股票 quote、数字资产 ticker 和贵金属 latest 不得无标识地进入日收盘历史。
 
 ## 贵金属、汇率和虚拟货币
 
@@ -389,11 +391,11 @@ npm run data:daily -- --universes=csi300,hstech,nasdaq100
 
 ## 数据源映射
 
-- A 股股票：东方财富 `push2his.eastmoney.com/api/qt/stock/kline/get`
-- A 股 ETF：东方财富 `push2his.eastmoney.com/api/qt/stock/kline/get`
-- 港股恒生科技：东方财富 `push2his.eastmoney.com/api/qt/stock/kline/get`
+- A 股股票：腾讯证券 `web.ifzq.gtimg.cn/appstock/app/fqkline/get`
+- A 股 ETF：腾讯证券 `web.ifzq.gtimg.cn/appstock/app/fqkline/get`
+- 港股及港股 ETF：腾讯证券 `web.ifzq.gtimg.cn/appstock/app/fqkline/get`
 - 国内公募基金：东方财富 `fund.eastmoney.com/pingzhongdata/{code}.js`
-- 美股和美股 ETF：Nasdaq `api.nasdaq.com/api/quote/{symbol}/historical` 和 `api.nasdaq.com/api/quote/{symbol}/info`
+- 美股和美股 ETF：Nasdaq `api.nasdaq.com/api/quote/{symbol}/historical`
 - 虚拟货币：Binance `data-api.binance.vision/api/v3/klines` 和 `data-api.binance.vision/api/v3/ticker/price`
 - 贵金属：Gold API `api.gold-api.com/price/{symbol}`，Metals.Dev `api.metals.dev/v1/latest` 可作为备用源
 - 沪深 300 成分股：东方财富 `datacenter-web.eastmoney.com/api/data/v1/get`
@@ -405,7 +407,7 @@ npm run data:daily -- --universes=csi300,hstech,nasdaq100
 - 当前脚本只负责拉取和缓存，不提供投资建议。
 - 公开接口可能变更、限频或临时不可用；脚本会把失败写入 `market-data-runs.json`。
 - 公开数据源的授权、限频和商业使用范围需要上线前单独确认。
-- 美股会同时抓日线历史和 Nasdaq quote 当前价；公开接口可能存在延迟、限频或盘前盘后口径差异。
+- 美股只使用 Nasdaq historical 返回的已完成交易日日线；公开接口可能存在延迟、限频或临时不可用。
 - 贵金属按金衡盎司报价，实物克重估值需要在业务层明确换算口径：`1 troy ounce = 31.1034768 g`。
 - Binance 默认使用 USDT 交易对近似 USD 估值，不代表所有交易所的实际成交价；如用户需要按 OKX、Coinbase 等口径估值，后续应作为可选来源单独记录。
 - 后续接 PostgreSQL 时，应将 JSON 缓存迁移到 `index_universes`、`index_constituents`、`price_snapshots`、`fund_nav_snapshots` 和 `market_data_tasks` 表。

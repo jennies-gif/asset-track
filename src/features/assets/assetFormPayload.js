@@ -61,7 +61,11 @@ export function buildAssetFormPayload(existingAsset) {
     taxes: form.taxes || existingAsset?.taxes || "0",
     manualAdjustment: form.manualAdjustment || existingAsset?.manualAdjustment || "0",
     pricedAt: hasSyncedDraftPrice ? form.pricedAt : form.pricedAt || (hasManualPrice ? todayIsoDate() : existingAsset?.pricedAt || ""),
-    priceSource: hasSyncedDraftPrice ? form.priceSource : form.priceSource || (hasManualPrice ? "用户录入" : existingAsset?.priceSource || "")
+    priceSource: hasSyncedDraftPrice ? form.priceSource : form.priceSource || (hasManualPrice ? "用户录入" : existingAsset?.priceSource || ""),
+    priceKind: hasSyncedDraftPrice ? form.priceKind : form.priceKind || existingAsset?.priceKind || "",
+    priceAt: hasSyncedDraftPrice ? form.priceAt : form.priceAt || existingAsset?.priceAt || "",
+    marketTimezone: hasSyncedDraftPrice ? form.marketTimezone : form.marketTimezone || existingAsset?.marketTimezone || "",
+    sourceFetchedAt: hasSyncedDraftPrice ? form.sourceFetchedAt : form.sourceFetchedAt || existingAsset?.sourceFetchedAt || ""
   };
 }
 

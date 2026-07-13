@@ -139,7 +139,7 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
       : "抓取完成";
     const nextState = {
       status: applied.appliedCount || applied.benchmarkSyncedCount ? "success" : "warning",
-      message: `${fetchStatus}，更新 ${applied.appliedCount} 个资产、${applied.benchmarkSyncedCount} 个分析基准，${applied.missingCount} 个缺少缓存。`,
+      message: `${fetchStatus}，更新 ${applied.updatedCount} 个资产、${applied.unchangedCount} 个已是最新可用价格、${applied.benchmarkSyncedCount} 个分析基准，${applied.missingCount} 个缺少缓存。`,
       results: payload.results || [],
       syncedAt
     };
@@ -184,6 +184,8 @@ async function readErrorPayload(response) {
 function applyMarketSyncResults(results, syncedAt) {
   const state = ctx.getState();
   let appliedCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
   let missingCount = 0;
   let benchmarkSyncedCount = 0;
   const benchmarkSymbols = new Set(benchmarkSymbolsForAnalysis().map(canonicalSyncSymbol));
@@ -209,6 +211,11 @@ function applyMarketSyncResults(results, syncedAt) {
       };
     }
     appliedCount += 1;
+    const changed = String(asset.currentPrice || "") !== String(result.after.currentPrice || "") ||
+      String(asset.pricedAt || "") !== String(result.after.pricedAt || "") ||
+      String(asset.priceAt || "") !== String(result.after.priceAt || "");
+    if (changed) updatedCount += 1;
+    else unchangedCount += 1;
     const matched = findAssetQuickMatch(symbol);
     return {
       ...asset,
@@ -220,6 +227,10 @@ function applyMarketSyncResults(results, syncedAt) {
       currentPrice: result.after.currentPrice,
       pricedAt: result.after.pricedAt || asset.pricedAt,
       priceSource: result.after.priceSource || asset.priceSource,
+      priceKind: result.after.priceKind || asset.priceKind || "",
+      priceAt: result.after.priceAt || "",
+      marketTimezone: result.after.marketTimezone || asset.marketTimezone || "",
+      sourceFetchedAt: result.after.sourceFetchedAt || asset.sourceFetchedAt || "",
       priceStatus: "synced",
       priceError: "",
       dailyPrices: normalizeDailyPriceRows(result.dailyPrices || asset.dailyPrices),
@@ -233,7 +244,7 @@ function applyMarketSyncResults(results, syncedAt) {
       benchmarkSyncedCount += 1;
     }
   }
-  return { appliedCount, missingCount, benchmarkSyncedCount };
+  return { appliedCount, updatedCount, unchangedCount, missingCount, benchmarkSyncedCount };
 }
 
 function normalizeDailyPriceRows(rows) {
