@@ -34,16 +34,18 @@ test("trend chart includes a screen-reader summary and tabular alternative", asy
   assert.match(source, /<caption>当前筛选范围内的总资产趋势明细<\/caption>/u);
 });
 
-test("overview keeps the benchmark comparison module and renders its data", async () => {
-  const [indexSource, renderSource] = await Promise.all([
+test("analysis keeps benchmark comparison and its trend chart permanently visible", async () => {
+  const [indexSource, analysisRenderSource] = await Promise.all([
     readFile(resolve(projectRoot, "index.html"), "utf8"),
-    readFile(resolve(projectRoot, "src/core/render.js"), "utf8")
+    readFile(resolve(projectRoot, "src/features/analysis/analysisRender.js"), "utf8")
   ]);
 
-  assert.match(indexSource, /<section class="home-section benchmark-section"[^>]+aria-labelledby="benchmark-title"/u);
-  assert.match(indexSource, /id="benchmark-rows"/u);
-  assert.match(indexSource, /id="benchmark-empty"/u);
-  assert.match(renderSource, /ctx\.renderBenchmarkPerformance\(\);/u);
+  assert.equal(indexSource.includes('class="home-section benchmark-section"'), false);
+  assert.match(indexSource, /<section class="analysis-card analysis-card-wide"[^>]+aria-labelledby="analysis-benchmark-title"/u);
+  assert.equal(indexSource.includes("<summary><span>收益表现对比</span>"), false);
+  assert.match(indexSource, /id="analysis-benchmark-selector"/u);
+  assert.match(indexSource, /id="analysis-benchmark-trend-chart"/u);
+  assert.match(analysisRenderSource, /renderAnalysisBenchmarkTrendChart\(analysis\);/u);
 });
 
 test("mobile interaction rules preserve 44px touch targets", async () => {

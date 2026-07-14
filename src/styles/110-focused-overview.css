@@ -11,20 +11,16 @@
   order: 2;
 }
 
-.home-panel .benchmark-section {
+.home-panel .home-data-status-section {
   order: 3;
 }
 
-.home-panel .home-data-status-section {
+.home-panel .allocation-section {
   order: 4;
 }
 
-.home-panel .allocation-section {
-  order: 5;
-}
-
 .home-panel .home-dashboard-grid {
-  order: 6;
+  order: 5;
 }
 
 .portfolio-snapshot {

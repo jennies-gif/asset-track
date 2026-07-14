@@ -7,7 +7,6 @@ export function configureRender(context = {}) {
 export function renderApp() {
   ctx.syncRangePills();
   ctx.renderMetricsView(ctx.homeElements, ctx.homeRenderContext());
-  ctx.renderBenchmarkPerformance();
   ctx.renderCategoryBreakdown();
   ctx.renderHomeDashboardView(ctx.homeElements, ctx.homeRenderContext());
   ctx.renderTrendChart();
