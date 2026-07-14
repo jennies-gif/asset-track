@@ -31,11 +31,29 @@ const validState = {
 
 test("loadState distinguishes empty and ready storage", () => {
   globalThis.localStorage = memoryStorage();
-  assert.equal(loadState().status, "empty");
+  const empty = loadState();
+  assert.equal(empty.status, "empty");
+  assert.equal(empty.state.session.signedIn, false);
+  assert.deepEqual(empty.state.assets, []);
+  assert.deepEqual(empty.state.snapshots, []);
+  assert.deepEqual(empty.state.notes, []);
+  assert.deepEqual(empty.state.posts, []);
   localStorage.setItem(storageKey, JSON.stringify(validState));
   const result = loadState();
   assert.equal(result.status, "ready");
   assert.equal(result.state.schemaVersion, 1);
+});
+
+test("loadState does not fill missing optional collections with demo content", () => {
+  globalThis.localStorage = memoryStorage({
+    [storageKey]: JSON.stringify({ assets: [] })
+  });
+  const result = loadState();
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.state.assets, []);
+  assert.deepEqual(result.state.snapshots, []);
+  assert.deepEqual(result.state.notes, []);
+  assert.deepEqual(result.state.posts, []);
 });
 
 test("loadState protects invalid JSON, roots and asset structures", () => {

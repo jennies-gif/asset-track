@@ -339,6 +339,16 @@ HTTP 请求字段采用白名单，只允许：
 }
 ```
 
+`fetch.status` 用于区分本轮公共行情抓取结果：
+
+- `covered`：现有公共缓存已覆盖请求区间，没有重复抓取；
+- `completed`：抓取完成且没有失败或跳过；
+- `completed_with_warnings`：抓取完成，但至少一个代码暂无新日线；响应可以继续返回该代码已有缓存，前端必须表达为“使用缓存”，不能表达为本轮已取得新价格；
+- `completed_with_errors`：至少一个外部源抓取失败；
+- `failed`：本轮抓取流程整体失败，API 尝试回退读取已有公共缓存。
+
+股票、ETF、指数和基金的日频当前价必须先按 `tradeDate` 或 `navDate` 选择最新日期；`sourceFetchedAt` 只用于同一价格日期内的版本比较，不能让较晚抓取的旧交易日覆盖较新的交易日。
+
 ### `POST /api/market-data/fetch-recent`
 
 用途：按传入资产代码抓取最近若干天价格缓存。默认抓取 7 天，只写入 `storage/market-data`，不直接修改用户资产。

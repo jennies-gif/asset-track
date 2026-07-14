@@ -182,9 +182,14 @@ textarea {
 .note-write-button,
 .auth-submit-button,
 .backup-import-button {
-  border-color: var(--primary);
-  background: var(--primary);
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid var(--primary-action);
+  background: var(--primary-action);
   color: var(--on-primary);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
   box-shadow: none;
 }
 
@@ -194,25 +199,60 @@ textarea {
 .note-write-button:hover,
 .auth-submit-button:hover,
 .backup-import-button:hover {
-  border-color: var(--primary-hover);
-  background: var(--primary-hover);
+  border-color: var(--primary-action-hover);
+  background: var(--primary-action-hover);
 }
 
 .secondary-button,
 .settings-button,
 .sync-price-button,
 .market-sync-header .settings-button,
-.text-button,
 .sub-tab,
 .allocation-tab,
 .row-action-button,
 .row-more-menu summary,
 .backup-action-button,
 .backup-menu summary {
-  border-color: var(--line);
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-control);
   background: var(--surface);
-  color: var(--ink);
+  color: var(--text-control);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
   box-shadow: none;
+}
+
+.text-button {
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
+}
+
+.text-button:hover {
+  background: var(--primary-soft);
+}
+
+.danger-button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, var(--border-control));
+  background: var(--surface);
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
+}
+
+.danger-button:hover {
+  border-color: var(--danger);
+  background: var(--negative-soft);
 }
 
 .tab.is-active,
@@ -273,9 +313,16 @@ textarea {
 }
 
 .avatar-button {
-  border: 1px solid var(--line);
-  background: var(--primary);
-  color: var(--on-primary);
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-control);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
   box-shadow: none;
 }
 

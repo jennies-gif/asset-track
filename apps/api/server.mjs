@@ -669,15 +669,21 @@ function summarizeCoverageFetchRuns(fetchRuns, candidates) {
   }
   const runs = fetchRuns.map((item) => item.run).filter(Boolean);
   const failureCount = runs.reduce((total, run) => total + Number(run.failureCount || 0), 0);
+  const skippedCount = runs.reduce((total, run) => total + Number(run.skippedCount || 0), 0);
+  const status = failureCount
+    ? "completed_with_errors"
+    : skippedCount
+      ? "completed_with_warnings"
+      : "completed";
   return {
-    status: failureCount ? "completed_with_errors" : "completed",
+    status,
     message: `已按 ${runs.length} 个缺失区间增量抓取公共历史行情`,
     runs,
     run: {
       id: `run-fetch-coverage-${Date.now()}`,
-      status: failureCount ? "completed_with_errors" : "completed",
+      status,
       successCount: runs.reduce((total, run) => total + Number(run.successCount || 0), 0),
-      skippedCount: runs.reduce((total, run) => total + Number(run.skippedCount || 0), 0),
+      skippedCount,
       failureCount,
       messages: runs.flatMap((run) => run.messages || [])
     }

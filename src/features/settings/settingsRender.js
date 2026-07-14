@@ -69,8 +69,8 @@ function applyLanguage() {
   setTabLabel("notes", isEnglish ? "Journal" : "复盘");
   document.querySelectorAll(".privacy-note").forEach((note) => {
     note.textContent = isEnglish
-      ? "Local data reminder: this version stores data in your browser local storage and does not actively upload it to a server. Export JSON backups regularly."
-      : "本地数据提醒：当前版本的数据保存在你的浏览器本地存储中，不会主动上传到服务器。请定期导出 JSON 备份。";
+      ? "Private asset details stay in this browser. Public query fields such as symbols, markets and date ranges may be sent to the market-data service. Export JSON backups regularly."
+      : "私人资产明细保存在当前浏览器；证券代码、市场和日期范围等公共查询字段可能发送给行情服务。请定期导出 JSON 备份。";
   });
   document.querySelectorAll(".risk-note").forEach((note) => {
     note.textContent = isEnglish
@@ -89,8 +89,8 @@ function applyLanguage() {
   });
   document.querySelectorAll(".site-status-note").forEach((note) => {
     note.textContent = isEnglish
-      ? "Local save · Data not uploaded · Prices may be delayed · For records and reviews only"
-      : "本地保存 · 数据未上传 · 价格可能延迟 · 仅供记录与复盘";
+      ? "Private data saved locally · Market queries send public fields only · Prices may be delayed · For records and reviews only"
+      : "私人数据本地保存 · 行情仅发送公共查询字段 · 价格可能延迟 · 仅供记录与复盘";
   });
 }
 

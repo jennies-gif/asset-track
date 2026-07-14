@@ -109,6 +109,27 @@ small,
   color: var(--text-primary);
 }
 
+.inline-icon,
+.tab-icon svg,
+.analysis-sparkle svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.inline-icon-small {
+  width: 14px;
+  height: 14px;
+}
+
+.note-write-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .avatar-button {
   width: 40px;
   min-width: 40px;

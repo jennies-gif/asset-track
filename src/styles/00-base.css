@@ -5,7 +5,7 @@
   --font-body: Inter, "Avenir Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-display: var(--font-body);
   --font-number: "DIN Alternate", "Roboto Mono", "SFMono-Regular", ui-monospace, Consolas, monospace;
-  --bg-page: #F4F7FC;
+  --bg-page: #F8FAFC;
   --bg-card: #FFFFFF;
   --bg-muted: #EAF0FA;
   --text-primary: #27272A;
@@ -14,11 +14,17 @@
   --brand: #2E5AA7;
   --brand-dark: #244A8C;
   --brand-soft: #EAF0FA;
+  --primary-action: #0052FF;
+  --primary-action-hover: #0047DD;
+  --text-strong: #0F172A;
+  --text-control: #475569;
+  --border-control: #E2E8F0;
+  --surface-subtle: #F8FAFC;
   --positive: #1AA083;
   --negative: #DC3545;
   --warning: #F59F00;
   --danger: #DC3545;
-  --border: #E5E7EB;
+  --border: #F1F5F9;
   --border-strong: #CBD5E1;
   --radius-control: 6px;
   --radius-card: 6px;
@@ -115,6 +121,12 @@
   --primary: #86C5FF;
   --primary-hover: #B8DDFF;
   --primary-soft: #162B4A;
+  --primary-action: #86C5FF;
+  --primary-action-hover: #B8DDFF;
+  --text-strong: #FAFAFA;
+  --text-control: #D4D4D8;
+  --border-control: #3F3F46;
+  --surface-subtle: #18181B;
   --on-primary: #08111F;
   --accent: #86C5FF;
   --accent-dark: #B8DDFF;
@@ -164,6 +176,30 @@ body {
   font-family: var(--font-body);
   line-height: 1.58;
   font-variant-numeric: tabular-nums;
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  transform: translateY(calc(-100% - 24px));
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  outline-offset: 2px;
 }
 
 button,
@@ -433,7 +469,7 @@ small {
   margin: 0;
   color: var(--ink);
   font-size: 34px;
-  font-weight: 520;
+  font-weight: 500;
   line-height: 1.2;
   text-align: center;
 }
@@ -3720,7 +3756,7 @@ textarea {
 }
 
 .writing-form textarea[data-font-weight="medium"] {
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .writing-form textarea[data-font-weight="bold"] {

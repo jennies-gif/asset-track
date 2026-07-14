@@ -77,7 +77,9 @@ export function applyTrendPreset(range) {
 export function syncRangePills() {
   const { elements } = ctx;
   document.querySelectorAll("[data-range-value]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.rangeValue === elements.trendRange.value);
+    const active = button.dataset.rangeValue === elements.trendRange.value;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
   document.querySelectorAll(".custom-date").forEach((field) => {
     field.classList.toggle("is-visible", elements.trendRange.value === "custom");

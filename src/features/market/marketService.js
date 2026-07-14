@@ -131,16 +131,11 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
     const payload = await response.json();
     const syncedAt = payload.syncedAt || new Date().toISOString();
     const applied = applyMarketSyncResults(payload.results || [], syncedAt);
-    const fetchRun = payload.fetch?.run;
-    const fetchStatus = payload.fetch?.status === "failed"
-      ? `抓取失败，已尝试使用缓存：${payload.fetch.message || "请查看 API 日志"}`
-      : fetchRun?.failureCount
-      ? `抓取完成但 ${fetchRun.failureCount} 个源失败`
-      : "抓取完成";
+    const fetchPresentation = marketFetchPresentation(payload.fetch);
     const nextState = {
-      status: applied.appliedCount || applied.benchmarkSyncedCount ? "success" : "warning",
-      message: `${fetchStatus}，更新 ${applied.updatedCount} 个资产、${applied.unchangedCount} 个已是最新可用价格、${applied.benchmarkSyncedCount} 个分析基准，${applied.missingCount} 个缺少缓存。`,
-      results: payload.results || [],
+      status: fetchPresentation.hasWarning || !(applied.appliedCount || applied.benchmarkSyncedCount) ? "warning" : "success",
+      message: `${fetchPresentation.message}，${applied.updatedCount} 个资产价格发生变化、${applied.unchangedCount} 个资产价格未变化、${applied.benchmarkSyncedCount} 个分析基准已同步，${applied.missingCount} 个缺少缓存。`,
+      results: decorateMarketSyncResults(payload.results || [], payload.fetch),
       syncedAt
     };
     ctx.setMarketSyncState(nextState);
@@ -161,6 +156,42 @@ async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
   } finally {
     renderMarketSyncResult();
   }
+}
+
+export function marketFetchPresentation(fetchResult) {
+  const fetchRun = fetchResult?.run;
+  const failureCount = Number(fetchRun?.failureCount || 0);
+  const skippedCount = Number(fetchRun?.skippedCount || 0);
+  if (fetchResult?.status === "failed") {
+    return {
+      hasWarning: true,
+      message: `抓取失败，已尝试使用缓存：${fetchResult.message || "请查看 API 日志"}`
+    };
+  }
+  if (fetchResult?.status === "covered") return { hasWarning: false, message: "行情缓存已覆盖当前请求区间" };
+  if (failureCount && skippedCount) {
+    return { hasWarning: true, message: `抓取完成，${failureCount} 个源失败、${skippedCount} 个代码暂无新日线` };
+  }
+  if (failureCount) return { hasWarning: true, message: `抓取完成但 ${failureCount} 个源失败` };
+  if (skippedCount) return { hasWarning: true, message: `抓取完成，${skippedCount} 个代码暂无新日线` };
+  if (!fetchResult) return { hasWarning: false, message: "已读取行情缓存" };
+  return { hasWarning: false, message: "抓取完成" };
+}
+
+export function decorateMarketSyncResults(results, fetchResult) {
+  const useCacheForAll = !fetchResult || ["covered", "failed"].includes(fetchResult.status);
+  const cacheSymbols = new Set(
+    (fetchResult?.run?.messages || [])
+      .filter((item) => ["warn", "error"].includes(item?.level))
+      .map((item) => canonicalSyncSymbol(item?.symbol))
+      .filter(Boolean)
+  );
+  return results.map((result) => ({
+    ...result,
+    syncDisplayStatus: result.status === "synced" && (useCacheForAll || cacheSymbols.has(canonicalSyncSymbol(result.symbol)))
+      ? "cached"
+      : result.status
+  }));
 }
 
 async function marketApiErrorMessage(response) {

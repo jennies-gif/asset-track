@@ -1,5 +1,6 @@
 import { storageKey, storageSchemaVersion } from "../constants/appConstants.js";
 import { demoState } from "./demoState.js";
+import { createEmptyState } from "./initialState.js";
 import {
   normalizeLoadedAssets,
   normalizeLoadedSnapshots,
@@ -24,7 +25,7 @@ export function loadState() {
     });
   }
   if (raw === null) {
-    return setLoadResult({ status: "empty", state: structuredClone(demoState), recovery: null });
+    return setLoadResult({ status: "empty", state: createEmptyState(), recovery: null });
   }
   let parsed;
   try {
@@ -141,8 +142,8 @@ function normalizeStoredState(parsed) {
     selectedAccount: normalizeSelectedAccount(parsed.selectedAccount, loadedAssets.assets),
     snapshots: loadedAssets.useDemoSnapshots ? demoState.snapshots : normalizeLoadedSnapshots(parsed.snapshots),
     assets: loadedAssets.assets,
-    notes: Array.isArray(parsed.notes) ? parsed.notes.filter((note) => note.id !== "note-demo") : structuredClone(demoState.notes),
-    posts: Array.isArray(parsed.posts) ? parsed.posts : structuredClone(demoState.posts)
+    notes: Array.isArray(parsed.notes) ? parsed.notes.filter((note) => note.id !== "note-demo") : [],
+    posts: Array.isArray(parsed.posts) ? parsed.posts : []
   };
 }
 

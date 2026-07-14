@@ -64,9 +64,11 @@ export function renderTrendChart() {
   const latest = points.at(-1);
   const chartSummary = buildTrendChartSummary(rawPoints, ctx.overviewAssets());
   const trendPrimaryValue = isReturnMode ? formatTrendReturn(latest.valueCents) : formatDisplayCurrency(latest.valueCents);
+  const accessibleSummary = chartSummary.map((item) => `${item.label}：${item.value}${item.detail ? `，${item.detail}` : ""}`).join("；");
   elements.trendChart.innerHTML = `
     <div class="trend-chart-shell">
       <div class="trend-plot">
+        <p class="sr-only" id="trend-chart-accessible-summary">${escapeHtml(accessibleSummary)}</p>
         <div class="trend-chart-meta">
           <div>
             <span>${escapeHtml(isReturnMode ? "收益率" : "当前总资产")}</span>
@@ -74,7 +76,7 @@ export function renderTrendChart() {
           </div>
           ${renderChartSource(series.source)}
       </div>
-      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${isReturnMode ? "收益率变化曲线" : "总资产变化曲线"}">
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${isReturnMode ? "收益率变化曲线" : "总资产变化曲线"}" aria-describedby="trend-chart-accessible-summary">
       <defs>
         <linearGradient id="trendAreaGradient" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="currentColor" stop-opacity="0.08"></stop>
@@ -119,7 +121,34 @@ export function renderTrendChart() {
           `)
           .join("")}
       </aside>
+      ${renderTrendDataTable(rawPoints)}
     </div>
+  `;
+}
+
+function renderTrendDataTable(points) {
+  if (!points.length) return "";
+  const firstPoint = points[0];
+  return `
+    <details class="chart-data-table">
+      <summary>查看趋势数据表</summary>
+      <div class="table-wrap">
+        <table>
+          <caption>当前筛选范围内的总资产趋势明细</caption>
+          <thead><tr><th scope="col">日期</th><th scope="col">总资产</th><th scope="col">当期变化</th><th scope="col">区间变化率</th></tr></thead>
+          <tbody>
+            ${points.map((point, index) => {
+              const previousPoint = points[index - 1];
+              const change = previousPoint ? point.valueCents - previousPoint.valueCents : 0n;
+              const cumulativeReturn = firstPoint.valueCents
+                ? roundDivide((point.valueCents - firstPoint.valueCents) * 10000n, firstPoint.valueCents)
+                : 0n;
+              return `<tr><td>${escapeHtml(point.date)}</td><td>${escapeHtml(formatDisplayCurrency(point.valueCents))}</td><td>${escapeHtml(formatOptionalSignedAmount(change))}</td><td>${escapeHtml(formatPercent(cumulativeReturn))}</td></tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </details>
   `;
 }
 

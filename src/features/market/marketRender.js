@@ -143,7 +143,11 @@ function loadDailyAssetPriceSeries(asset) {
 
 function renderMarketSyncRow(result) {
   const after = result.after || {};
-  const status = result.status === "synced" ? "已更新" : "缺缓存";
+  const status = result.status !== "synced"
+    ? "缺缓存"
+    : result.syncDisplayStatus === "cached"
+      ? "使用缓存"
+      : "已同步";
   const fetchedAt = after.sourceFetchedAt || after.syncedAt || result.sourceFetchedAt || result.syncedAt || "";
   const timeLabel = after.priceKind === "latest" && after.priceAt
     ? `${formatMonthDayTimeMinute(after.priceAt)} 最新价`

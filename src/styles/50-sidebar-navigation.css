@@ -172,6 +172,11 @@ body.sidebar-collapsed {
   line-height: 1;
 }
 
+.side-nav .tab-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
 .side-nav .tab-label {
   overflow: hidden;
   text-overflow: ellipsis;

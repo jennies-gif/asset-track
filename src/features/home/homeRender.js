@@ -46,8 +46,8 @@ export function renderMetrics(elements, context) {
           </div>
         `}
         <div class="snapshot-actions">
-          <button class="secondary-button snapshot-action-button" data-home-action="add-asset" type="button">➕ ${hasAssets ? "记录一笔交易" : "添加第一笔资产"}</button>
-          ${hasAssets ? `<button class="secondary-button snapshot-action-button" data-home-action="view-assets" type="button">🔍 查看全部资产</button>` : `<button class="secondary-button snapshot-action-button" data-home-action="load-demo" type="button">加载示例数据</button>`}
+          <button class="primary-button snapshot-action-button" data-home-action="add-asset" type="button">${hasAssets ? "记录一笔交易" : "添加第一笔资产"}</button>
+          ${hasAssets ? `<button class="secondary-button snapshot-action-button" data-home-action="view-assets" type="button">查看全部资产</button>` : `<button class="text-button snapshot-demo-button" data-home-action="load-demo" type="button">查看示例数据</button>`}
         </div>
       </div>
       <aside class="snapshot-status" aria-label="核心数据状态">
@@ -56,7 +56,7 @@ export function renderMetrics(elements, context) {
         </div>
         <div class="snapshot-status-list">
           ${snapshotStatusItem("本地保存", "已保存在当前浏览器", "positive")}
-          ${snapshotStatusItem("数据上传", "数据未上传", "warning")}
+          ${snapshotStatusItem("行情查询", "仅发送代码等公共字段", "warning")}
           ${snapshotStatusItem("更新时间", context.latestOverviewUpdateLabel(), "")}
           ${snapshotStatusItem("价格核对", context.priceCompletenessLabel(), context.priceCompletenessClass())}
         </div>

@@ -3,6 +3,26 @@
   gap: 18px;
 }
 
+.home-panel .overview {
+  order: 1;
+}
+
+.home-panel .home-data-status-section {
+  order: 2;
+}
+
+.home-panel .allocation-section {
+  order: 3;
+}
+
+.home-panel .home-dashboard-grid {
+  order: 4;
+}
+
+.home-panel .analysis-trend-section {
+  order: 5;
+}
+
 .portfolio-snapshot {
   grid-template-columns: minmax(0, 1.75fr) minmax(250px, 0.75fr);
 }
@@ -139,6 +159,26 @@
   grid-column: 1 / -1;
 }
 
+.home-holdings-section {
+  order: 1;
+}
+
+.home-readiness-section {
+  order: 2;
+}
+
+.home-transactions-section {
+  order: 3;
+}
+
+.home-notes-section {
+  order: 4;
+}
+
+.home-dashboard-grid .home-readiness-section {
+  grid-column: 1 / -1;
+}
+
 .home-list,
 .home-checklist {
   display: grid;
@@ -270,6 +310,34 @@
 
 .analysis-trend-section .trend-chart {
   margin-top: 14px;
+}
+
+.chart-data-table {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.chart-data-table summary {
+  width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: var(--type-label-weight);
+  cursor: pointer;
+}
+
+.chart-data-table .table-wrap {
+  margin-top: 8px;
+}
+
+.chart-data-table caption {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
 }
 
 @media (max-width: 1100px) {

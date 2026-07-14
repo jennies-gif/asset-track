@@ -34,13 +34,16 @@ export function selectCurrentValuationPoint(asset = {}, points = []) {
   } else {
     preferred = usable.filter((point) => inferMarketPriceKind(point) === "close");
   }
-  return [...preferred].sort(compareValuationFreshness)[0] || null;
+  const compareFreshness = preferred.every(isDailyHistoryPoint)
+    ? compareDailyPriceFreshness
+    : compareInstantPriceFreshness;
+  return [...preferred].sort(compareFreshness)[0] || null;
 }
 
 export function selectPreviousDailyPoint(points = [], latestDate = "") {
   return points
     .filter((point) => isUsablePoint(point) && isDailyHistoryPoint(point) && point.date < latestDate)
-    .sort(compareValuationFreshness)[0] || null;
+    .sort(compareDailyPriceFreshness)[0] || null;
 }
 
 export function marketPriceDisplayKind(asset = {}) {
@@ -83,12 +86,22 @@ function isUsablePoint(point) {
     (inferMarketPriceKind(point) !== "close" || isCompletedDailyClose(point));
 }
 
-function compareValuationFreshness(left, right) {
+function compareDailyPriceFreshness(left, right) {
+  const dateOrder = String(right.date || "").localeCompare(String(left.date || ""));
+  if (dateOrder !== 0) return dateOrder;
+  return compareObservedFreshness(left, right);
+}
+
+function compareInstantPriceFreshness(left, right) {
+  const observedOrder = compareObservedFreshness(left, right);
+  if (observedOrder !== 0) return observedOrder;
+  return String(right.date || "").localeCompare(String(left.date || ""));
+}
+
+function compareObservedFreshness(left, right) {
   const leftTime = Date.parse(left.priceAt || left.sourceTimestamp || left.sourceFetchedAt || "");
   const rightTime = Date.parse(right.priceAt || right.sourceTimestamp || right.sourceFetchedAt || "");
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return rightTime - leftTime;
-  const dateOrder = String(right.date || "").localeCompare(String(left.date || ""));
-  if (dateOrder !== 0) return dateOrder;
   return String(right.sourceFetchedAt || "").localeCompare(String(left.sourceFetchedAt || ""));
 }
 

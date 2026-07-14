@@ -4,7 +4,7 @@
 
 ## 状态
 
-Draft
+Accepted
 
 ## 背景
 

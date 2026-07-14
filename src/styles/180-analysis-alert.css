@@ -204,6 +204,11 @@
   line-height: 1;
 }
 
+#analysis-panel .analysis-diagnosis-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
 #analysis-panel .analysis-diagnosis-item span:last-child {
   min-width: 0;
 }

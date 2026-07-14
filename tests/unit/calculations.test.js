@@ -51,6 +51,7 @@ import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from
 import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
 import { buildWorstMonth } from "../../src/features/analysis/analysisModel.js";
 import { calculateRiskAdjustedMetrics } from "../../src/features/analysis/analysisReturns.js";
+import { decorateMarketSyncResults, marketFetchPresentation } from "../../src/features/market/marketService.js";
 import { configureFormatters, formatDisplayCurrency, formatSignedCurrency, formatUnitPrice } from "../../src/ui/formatters.js";
 
 test("parses decimal values with deterministic rounding", () => {
@@ -907,6 +908,74 @@ test("does not use realtime quote rows as listed-stock closes", () => {
   const selected = selectCurrentValuationPoint(asset, points);
   assert.equal(selected.date, "2026-07-10");
   assert.equal(selected.close, 620);
+});
+
+test("selects the latest trade date before considering when daily prices were fetched", () => {
+  const asset = { symbol: "NVDA", type: "股票", market: "US" };
+  const points = [
+    {
+      date: "2026-07-13",
+      close: 203.53,
+      source: "Nasdaq historical public API",
+      sourceFetchedAt: "2026-07-14T01:00:00.000Z",
+      qualityStatus: "ok"
+    },
+    {
+      date: "2026-07-06",
+      close: 195.55,
+      source: "Nasdaq historical public API",
+      sourceFetchedAt: "2026-07-14T01:00:00.500Z",
+      qualityStatus: "ok"
+    }
+  ];
+  const selected = selectCurrentValuationPoint(asset, points);
+  assert.equal(selected.date, "2026-07-13");
+  assert.equal(selected.close, 203.53);
+});
+
+test("reports skipped market fetches as cache usage instead of successful updates", () => {
+  const fetchResult = {
+    status: "completed_with_warnings",
+    run: {
+      failureCount: 0,
+      skippedCount: 1,
+      messages: [{ symbol: "NVDA", level: "warn", message: "Nasdaq 暂无可用日线" }]
+    }
+  };
+  assert.deepEqual(marketFetchPresentation(fetchResult), {
+    hasWarning: true,
+    message: "抓取完成，1 个代码暂无新日线"
+  });
+  assert.equal(
+    decorateMarketSyncResults([{ symbol: "NVDA", status: "synced" }], fetchResult)[0].syncDisplayStatus,
+    "cached"
+  );
+});
+
+test("does not treat an already-covered market cache as a skipped fetch warning", () => {
+  const fetchResult = {
+    status: "covered",
+    run: { failureCount: 0, skippedCount: 2, messages: [] }
+  };
+  assert.deepEqual(
+    marketFetchPresentation(fetchResult),
+    { hasWarning: false, message: "行情缓存已覆盖当前请求区间" }
+  );
+  assert.equal(
+    decorateMarketSyncResults([{ symbol: "NVDA", status: "synced" }], fetchResult)[0].syncDisplayStatus,
+    "cached"
+  );
+});
+
+test("labels an explicit cache-only market response as cache usage", () => {
+  assert.deepEqual(
+    marketFetchPresentation(null),
+    { hasWarning: false, message: "已读取行情缓存" }
+  );
+  assert.equal(
+    decorateMarketSyncResults([{ symbol: "NVDA", status: "synced" }], null)[0].syncDisplayStatus,
+    "cached"
+  );
 });
 
 test("accepts listed-market daily prices only after the local close", () => {

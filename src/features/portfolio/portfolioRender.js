@@ -30,7 +30,9 @@ export function renderCategoryBreakdown() {
   const { elements } = ctx;
   if (!elements.categoryList || !elements.marketDistributionList) return;
   document.querySelectorAll(".allocation-tab").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.allocationView === selectedAllocationView);
+    const active = button.dataset.allocationView === selectedAllocationView;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
   const groups = allocationGroupsForView(selectedAllocationView);
   if (!groups.length) {

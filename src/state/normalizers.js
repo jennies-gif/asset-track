@@ -17,7 +17,7 @@ export function normalizeSession(session = {}) {
 }
 
 export function normalizeLoadedAssets(assets) {
-  if (!Array.isArray(assets)) return { assets: structuredClone(demoState.assets), useDemoSnapshots: true };
+  if (!Array.isArray(assets)) return { assets: [], useDemoSnapshots: false };
   const isLegacyDemo =
     assets.length > 0 &&
     assets.every((asset) => String(asset.id || "").startsWith("demo-")) &&
@@ -36,7 +36,7 @@ export function normalizeLoadedAssets(assets) {
 }
 
 export function normalizeLoadedSnapshots(snapshots) {
-  return Array.isArray(snapshots) ? normalizeSnapshots(snapshots) : demoState.snapshots;
+  return Array.isArray(snapshots) ? normalizeSnapshots(snapshots) : [];
 }
 
 export function normalizeSelectedAccount(account, assets = []) {

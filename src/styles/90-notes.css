@@ -40,7 +40,7 @@
   color: color-mix(in srgb, var(--primary) 86%, var(--ink));
   font-size: 13px;
   line-height: 1;
-  font-weight: 450;
+  font-weight: 500;
 }
 
 #notes-panel .note-reader-meta-grid {
@@ -261,7 +261,7 @@
 #notes-panel .note-reader-card h2,
 #notes-panel #note-reader-title,
 #notes-panel .note-input-shell input {
-  font-weight: 520;
+  font-weight: 500;
 }
 
 #notes-panel .note-card h3,
@@ -292,7 +292,7 @@
 #notes-panel .linked-change-button,
 #notes-panel .note-card-menu summary,
 #notes-panel .note-card-menu button {
-  font-weight: 450;
+  font-weight: 500;
 }
 
 #notes-panel .note-reader-content,

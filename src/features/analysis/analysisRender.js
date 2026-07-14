@@ -163,7 +163,7 @@ function renderEmptyAnalysis() {
   }
   if (analysisElements.analysisContributionSummary) analysisElements.analysisContributionSummary.textContent = "";
   if (analysisElements.analysisRiskNote) {
-    analysisElements.analysisRiskNote.innerHTML = `${trustBadge("本地保存")} ${trustBadge("数据未上传")} ${trustBadge("仅供记录与复盘")}`;
+    analysisElements.analysisRiskNote.innerHTML = `${trustBadge("私人数据本地保存")} ${trustBadge("行情仅发送公共查询字段")} ${trustBadge("仅供记录与复盘")}`;
   }
   if (analysisElements.analysisContributionRows) {
     analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "")}</td></tr>`;
@@ -216,10 +216,19 @@ function renderAnalysisJudgement(analysis, dataIssues) {
   }
   analysisElements.analysisJudgementList.innerHTML = items.map((item) => `
     <li class="analysis-diagnosis-item is-${escapeHtml(item.tone)}">
-      <span class="analysis-diagnosis-icon" aria-hidden="true">${item.tone === "ok" ? "✅" : item.tone === "danger" ? "🔴" : "⚠️"}</span>
+      ${analysisDiagnosisIcon(item.tone)}
       <span>${escapeHtml(item.text)}</span>
     </li>
   `).join("");
+}
+
+function analysisDiagnosisIcon(tone) {
+  const path = tone === "ok"
+    ? '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>'
+    : tone === "danger"
+      ? '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>'
+      : '<path d="M10.3 4.2 2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>';
+  return `<span class="analysis-diagnosis-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
 function topVolatileDriver(analysis) {

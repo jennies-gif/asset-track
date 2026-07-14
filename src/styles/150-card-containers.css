@@ -1,20 +1,4 @@
-/* Final card container normalization: flat 6px white surfaces with a light audit-friendly outline. */
-:root {
-  --border: #F1F5F9;
-  --line: #F1F5F9;
-  --radius-card: 6px;
-  --radius-panel: 6px;
-  --radius-md: 6px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
-  --shadow-card: none;
-  --shadow: none;
-}
-
-:root[data-theme="dark"] {
-  --shadow-card: none;
-  --shadow: none;
-}
+/* Canonical card container normalization: flat token-driven surfaces with a light audit-friendly outline. */
 
 .surface-card,
 .overview,
@@ -64,10 +48,11 @@
 .auth-card,
 .list-item,
 .asset-match-panel,
-.asset-match-option {
-  border: 1px solid #F1F5F9;
-  border-radius: 6px;
-  background: #FFFFFF;
+.asset-match-option,
+.import-preview-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
   box-shadow: none;
 }
 

@@ -45,7 +45,9 @@ export function renderAnalysisFilters() {
   if (analysisElements.analysisStart) analysisElements.analysisStart.value = analysisFilter.startDate || "";
   if (analysisElements.analysisEnd) analysisElements.analysisEnd.value = analysisFilter.endDate || "";
   document.querySelectorAll("[data-analysis-range-value]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.analysisRangeValue === (analysisFilter.range || "ytd"));
+    const active = button.dataset.analysisRangeValue === (analysisFilter.range || "ytd");
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
   if (analysisElements.analysisRangeSummary) {
     const rangeLabel = analysisDateRangeLabel();

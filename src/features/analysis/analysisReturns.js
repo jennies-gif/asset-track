@@ -21,7 +21,9 @@ export function formatAnalysisReturnValue(valueBps) {
 
 export function syncAnalysisReturnMetricButtons() {
   document.querySelectorAll("[data-analysis-return-metric]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.analysisReturnMetric === analysisReturnMetric());
+    const active = button.dataset.analysisReturnMetric === analysisReturnMetric();
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 }
 

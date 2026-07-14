@@ -137,7 +137,11 @@ async function main() {
     }
   }
 
-  run.status = run.failureCount > 0 ? "completed_with_errors" : "completed";
+  run.status = run.failureCount > 0
+    ? "completed_with_errors"
+    : run.skippedCount > 0
+      ? "completed_with_warnings"
+      : "completed";
   run.finishedAt = new Date().toISOString();
 
   if (options["persist-run"] !== "false") {
@@ -494,6 +498,9 @@ async function fetchNasdaqDaily(instrument, range) {
     .filter((row) => row.tradeDate >= requestFrom && row.tradeDate <= range.dateTo)
     .sort((left, right) => left.tradeDate.localeCompare(right.tradeDate));
   if (command === "daily") normalizedRows = normalizedRows.slice(-1);
+  if (!normalizedRows.length) {
+    return { status: "skipped", reason: `Nasdaq 暂无 ${instrument.symbol} 在 ${requestFrom} 至 ${range.dateTo} 的可用日线` };
+  }
   return {
     status: "ok",
     kind: "price",

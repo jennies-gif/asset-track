@@ -1,11 +1,12 @@
 import { calculatePortfolio } from "../domain/calculations.js";
 import { demoState } from "../state/demoState.js";
+import { createEmptyState } from "../state/initialState.js";
 import { normalizeSnapshots } from "../state/normalizers.js";
 import { getStorageLoadResult, isStorageWriteLocked, loadState, saveState } from "../state/storage.js";
 import { todayIsoDate } from "../utils/date.js";
 
 const initialStorageLoad = loadState();
-let state = initialStorageLoad.state || createRecoverySafeState();
+let state = initialStorageLoad.state || createEmptyState();
 let portfolioFilter = { account: "all", type: "all", status: "all" };
 const initialAnalysisEnd = todayIsoDate();
 let analysisFilter = { account: "all", assetId: "all", range: "ytd", startDate: `${initialAnalysisEnd.slice(0, 4)}-01-01`, endDate: initialAnalysisEnd };
@@ -108,18 +109,6 @@ export function persistAndRender() {
 export function saveCurrentState() {
   if (isStorageWriteLocked()) return { ok: false, reason: "write_locked", message: "本地数据处于恢复保护状态。" };
   return saveState(state);
-}
-
-function createRecoverySafeState() {
-  return {
-    session: { signedIn: false, email: "", name: "", signedInAt: "" },
-    settings: structuredClone(demoState.settings),
-    selectedAccount: "all",
-    snapshots: [],
-    assets: [],
-    notes: [],
-    posts: []
-  };
 }
 
 function upsertCurrentSnapshot(snapshots, valueCents) {

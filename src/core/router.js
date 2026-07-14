@@ -7,10 +7,15 @@ const TAB_TITLES = {
 
 export function activateTab(name) {
   document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.tab === name);
+    const active = button.dataset.tab === name;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll(".panel").forEach((panel) => {
-    panel.classList.toggle("is-active", panel.id === `${name}-panel`);
+    const active = panel.id === `${name}-panel`;
+    panel.classList.toggle("is-active", active);
+    panel.hidden = !active;
   });
   const pageTitle = document.querySelector("#navbar-page-title");
   if (pageTitle) pageTitle.textContent = TAB_TITLES[name] || "资产总览";
@@ -18,10 +23,15 @@ export function activateTab(name) {
 
 export function activatePortfolioView(name) {
   document.querySelectorAll(".sub-tab").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.portfolioView === name);
+    const active = button.dataset.portfolioView === name;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll(".portfolio-view").forEach((view) => {
-    view.classList.toggle("is-active", view.id === `${name}-portfolio-view`);
+    const active = view.id === `${name}-portfolio-view`;
+    view.classList.toggle("is-active", active);
+    view.hidden = !active;
   });
   document.querySelector(".portfolio-filter")?.classList.toggle("is-hidden", name !== "open");
 }
@@ -29,6 +39,7 @@ export function activatePortfolioView(name) {
 export function initRouterEvents({ startQuickAsset } = {}) {
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", () => activateTab(button.dataset.tab));
+    button.addEventListener("keydown", (event) => moveTabFocus(event, ".tab", "tab"));
   });
 
   const savedSidebarCollapsed = localStorage.getItem("assetTrailSidebarCollapsed") === "true";
@@ -48,6 +59,7 @@ export function initRouterEvents({ startQuickAsset } = {}) {
 
   document.querySelectorAll(".sub-tab").forEach((button) => {
     button.addEventListener("click", () => activatePortfolioView(button.dataset.portfolioView));
+    button.addEventListener("keydown", (event) => moveTabFocus(event, ".sub-tab", "portfolioView"));
   });
 
   document.querySelectorAll(".brand, .side-brand").forEach((link) => {
@@ -63,4 +75,21 @@ export function initRouterEvents({ startQuickAsset } = {}) {
       if (target instanceof HTMLDetailsElement) target.open = true;
     });
   });
+}
+
+function moveTabFocus(event, selector, dataKey) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = [...document.querySelectorAll(selector)];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) return;
+  event.preventDefault();
+  const nextIndex = event.key === "Home"
+    ? 0
+    : event.key === "End"
+      ? tabs.length - 1
+      : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  const nextTab = tabs[nextIndex];
+  nextTab.focus();
+  if (dataKey === "tab") activateTab(nextTab.dataset.tab);
+  if (dataKey === "portfolioView") activatePortfolioView(nextTab.dataset.portfolioView);
 }
