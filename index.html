@@ -162,6 +162,31 @@
           </div>
           <div class="trend-chart" id="trend-chart"></div>
         </section>
+        <section class="home-section benchmark-section" aria-labelledby="benchmark-title">
+          <div class="panel-heading">
+            <div>
+              <h2 id="benchmark-title">收益表现对比</h2>
+              <p class="section-description">对比我的组合与已选市场基准在不同周期下的收益表现。</p>
+            </div>
+          </div>
+          <div class="benchmark-table-wrap">
+            <table class="benchmark-table">
+              <caption class="sr-only">我的组合与已选市场基准收益表现对比</caption>
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th>近1月</th>
+                  <th>近3月</th>
+                  <th>今年</th>
+                  <th>累计</th>
+                  <th>年化</th>
+                </tr>
+              </thead>
+              <tbody id="benchmark-rows"></tbody>
+            </table>
+          </div>
+          <p class="empty-state benchmark-empty-state is-hidden" id="benchmark-empty">暂无基准数据。启动行情 API 后会自动读取已选基准，也可进入“分析”页查看基准状态。</p>
+        </section>
         <section class="home-section allocation-section home-dashboard-section" aria-labelledby="allocation-title">
           <div class="panel-heading">
             <div>

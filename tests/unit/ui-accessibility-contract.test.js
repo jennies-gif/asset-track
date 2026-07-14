@@ -34,6 +34,18 @@ test("trend chart includes a screen-reader summary and tabular alternative", asy
   assert.match(source, /<caption>当前筛选范围内的总资产趋势明细<\/caption>/u);
 });
 
+test("overview keeps the benchmark comparison module and renders its data", async () => {
+  const [indexSource, renderSource] = await Promise.all([
+    readFile(resolve(projectRoot, "index.html"), "utf8"),
+    readFile(resolve(projectRoot, "src/core/render.js"), "utf8")
+  ]);
+
+  assert.match(indexSource, /<section class="home-section benchmark-section"[^>]+aria-labelledby="benchmark-title"/u);
+  assert.match(indexSource, /id="benchmark-rows"/u);
+  assert.match(indexSource, /id="benchmark-empty"/u);
+  assert.match(renderSource, /ctx\.renderBenchmarkPerformance\(\);/u);
+});
+
 test("mobile interaction rules preserve 44px touch targets", async () => {
   const source = await readFile(resolve(projectRoot, "src/styles/210-spacing-breathing.css"), "utf8");
 

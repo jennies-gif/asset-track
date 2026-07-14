@@ -242,7 +242,8 @@
 }
 
 #assets-panel .table-wrap {
-  overflow-x: visible;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
 }
 
 #assets-panel table {
@@ -258,47 +259,74 @@
 }
 
 #open-portfolio-view table {
-  min-width: 0;
+  min-width: 1280px;
 }
 
 #open-portfolio-view th:nth-child(1),
 #open-portfolio-view td:nth-child(1) {
-  width: 15%;
+  width: 13%;
 }
 
 #open-portfolio-view th:nth-child(2),
 #open-portfolio-view td:nth-child(2),
 #open-portfolio-view th:nth-child(3),
 #open-portfolio-view td:nth-child(3) {
-  width: 8%;
+  width: 6%;
 }
 
 #open-portfolio-view th:nth-child(4),
-#open-portfolio-view td:nth-child(4),
+#open-portfolio-view td:nth-child(4) {
+  width: 8%;
+}
+
 #open-portfolio-view th:nth-child(5),
-#open-portfolio-view td:nth-child(5),
+#open-portfolio-view td:nth-child(5) {
+  width: 12%;
+}
+
 #open-portfolio-view th:nth-child(7),
 #open-portfolio-view td:nth-child(7) {
-  width: 10%;
+  width: 13%;
 }
 
 #open-portfolio-view th:nth-child(6),
-#open-portfolio-view td:nth-child(6),
+#open-portfolio-view td:nth-child(6) {
+  width: 7%;
+}
+
 #open-portfolio-view th:nth-child(9),
 #open-portfolio-view td:nth-child(9) {
   width: 6%;
 }
 
 #open-portfolio-view th:nth-child(8),
-#open-portfolio-view td:nth-child(8),
+#open-portfolio-view td:nth-child(8) {
+  width: 9%;
+}
+
 #open-portfolio-view th:nth-child(10),
 #open-portfolio-view td:nth-child(10) {
-  width: 9%;
+  width: 6%;
 }
 
 #open-portfolio-view th:nth-child(11),
 #open-portfolio-view td:nth-child(11) {
-  width: 9%;
+  width: 14%;
+}
+
+#open-portfolio-view th:nth-child(n + 4):nth-child(-n + 9),
+#open-portfolio-view td:nth-child(n + 4):nth-child(-n + 9) {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view td:nth-child(5),
+#open-portfolio-view td:nth-child(6),
+#open-portfolio-view td:nth-child(7),
+#open-portfolio-view td:nth-child(8),
+#open-portfolio-view td:nth-child(9) {
+  vertical-align: middle;
 }
 
 @media (max-width: 900px) {
@@ -311,7 +339,7 @@
   }
 
   #open-portfolio-view table {
-    min-width: 960px;
+    min-width: 1280px;
   }
 }
 

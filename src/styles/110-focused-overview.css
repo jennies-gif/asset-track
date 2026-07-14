@@ -7,20 +7,24 @@
   order: 1;
 }
 
-.home-panel .home-data-status-section {
+.home-panel .analysis-trend-section {
   order: 2;
 }
 
-.home-panel .allocation-section {
+.home-panel .benchmark-section {
   order: 3;
 }
 
-.home-panel .home-dashboard-grid {
+.home-panel .home-data-status-section {
   order: 4;
 }
 
-.home-panel .analysis-trend-section {
+.home-panel .allocation-section {
   order: 5;
+}
+
+.home-panel .home-dashboard-grid {
+  order: 6;
 }
 
 .portfolio-snapshot {
@@ -164,15 +168,15 @@
 }
 
 .home-readiness-section {
-  order: 2;
+  order: 4;
 }
 
 .home-transactions-section {
-  order: 3;
+  order: 2;
 }
 
 .home-notes-section {
-  order: 4;
+  order: 3;
 }
 
 .home-dashboard-grid .home-readiness-section {
