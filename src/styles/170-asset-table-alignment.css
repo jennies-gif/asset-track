@@ -105,6 +105,15 @@
   text-align: right;
 }
 
+#open-portfolio-view .price-cell {
+  min-width: 118px;
+}
+
+#open-portfolio-view .price-cell span,
+#open-portfolio-view .price-cell small {
+  white-space: nowrap;
+}
+
 #assets-panel .price-cell span,
 #assets-panel .return-cell strong,
 #assets-panel .return-cell span {

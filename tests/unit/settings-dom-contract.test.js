@@ -43,6 +43,15 @@ test("asset entry keeps the requested date, buy price and share order without a 
   assert.doesNotMatch(indexSource, /<label>当前价格/u);
 });
 
+test("cash ledger hides internal face-value prices and price returns", async () => {
+  const renderSource = await readFile(resolve(projectRoot, "src/features/assets/assetRender.js"), "utf8");
+
+  assert.match(renderSource, /isCash \? "—" : escapeHtml\(formatUnitPrice\(asset\.costPrice/u);
+  assert.match(renderSource, /现金按余额/u);
+  assert.match(renderSource, /现金无价格收益/u);
+  assert.match(renderSource, /asset-fx-rate.*折算/u);
+});
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

@@ -2,9 +2,12 @@ import { todayIsoDate } from "../utils/date.js";
 
 const staleAfterDays = 7;
 
-export const priceStatusOrder = ["synced", "manual", "pending", "stale", "missing", "error"];
+export const priceStatusOrder = ["cash", "synced", "manual", "pending", "stale", "missing", "error"];
 
 export function resolvePriceStatus(asset = {}, options = {}) {
+  if (String(asset.type || "").trim() === "现金") {
+    return status("cash", "现金按余额", "data-ok", false);
+  }
   const explicit = String(asset.priceStatus || "").trim().toLowerCase();
   const currentPrice = String(asset.currentPrice || "").trim();
   const costPrice = String(asset.costPrice || "").trim();

@@ -2,7 +2,8 @@ import {
   calculateMoneyFromQuantity,
   calculatePortfolio,
   parseDecimalToScaledInt,
-  roundDivide
+  roundDivide,
+  scaledIntToDecimal
 } from "./calculations.js";
 import { RATE_FACTOR, RATE_SCALE } from "../constants/appConstants.js";
 import { normalizeSelectedAccount } from "../state/normalizers.js";
@@ -72,6 +73,16 @@ export function displayAssetValue(asset, priceField) {
   return convertUsdToDisplay(usdCents);
 }
 
+export function displayFxRateSummary(asset = {}) {
+  const sourceCurrency = String(asset.currency || "").trim().toUpperCase();
+  const targetCurrency = displayCurrency();
+  if (!sourceCurrency || sourceCurrency === targetCurrency) return "";
+
+  const rateUnits = displayFxRateUnits(sourceCurrency, targetCurrency, asset.fxRate);
+  if (!rateUnits || rateUnits <= 0n) return "";
+  return `${sourceCurrency}/${targetCurrency} ${scaledIntToDecimal(rateUnits, RATE_SCALE)}`;
+}
+
 export function convertUsdToDisplay(cents) {
   if (displayCurrency() === "CNY") return multiplyByUsdCnyRate(cents);
   if (displayCurrency() === "HKD") return multiplyByUsdHkdRate(cents);
@@ -110,6 +121,32 @@ function usdHkdRateUnits() {
   } catch {
     return parseDecimalToScaledInt("7.82", RATE_SCALE);
   }
+}
+
+function displayFxRateUnits(sourceCurrency, targetCurrency, assetFxRate) {
+  const usdCny = usdCnyRateUnits();
+  const usdHkd = usdHkdRateUnits();
+  if (sourceCurrency === "USD" && targetCurrency === "CNY") return usdCny;
+  if (sourceCurrency === "CNY" && targetCurrency === "USD") return inverseRateUnits(usdCny);
+  if (sourceCurrency === "USD" && targetCurrency === "HKD") return usdHkd;
+  if (sourceCurrency === "HKD" && targetCurrency === "USD") return inverseRateUnits(usdHkd);
+  if (sourceCurrency === "CNY" && targetCurrency === "HKD") return roundDivide(usdHkd * RATE_FACTOR, usdCny);
+  if (sourceCurrency === "HKD" && targetCurrency === "CNY") return roundDivide(usdCny * RATE_FACTOR, usdHkd);
+
+  try {
+    const sourceToUsd = parseDecimalToScaledInt(assetFxRate || "1", RATE_SCALE);
+    if (sourceToUsd <= 0n) return null;
+    if (targetCurrency === "USD") return sourceToUsd;
+    if (targetCurrency === "CNY") return roundDivide(sourceToUsd * usdCny, RATE_FACTOR);
+    if (targetCurrency === "HKD") return roundDivide(sourceToUsd * usdHkd, RATE_FACTOR);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function inverseRateUnits(rateUnits) {
+  return roundDivide(RATE_FACTOR * RATE_FACTOR, rateUnits);
 }
 
 function btcUsdCents() {

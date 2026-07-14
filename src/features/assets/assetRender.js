@@ -107,6 +107,7 @@ export function renderPortfolio() {
     ? visiblePositions
     .map((position) => {
       const asset = openAssets.find((item) => item.id === position.id) || position;
+      const isCash = resolvePriceStatus(asset).key === "cash";
       const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
       const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
       return `
@@ -117,15 +118,17 @@ export function renderPortfolio() {
           </td>
           <td>${escapeHtml(position.account)}</td>
           <td>${escapeHtml([position.type, marketLabel(position.market)].filter(Boolean).join(" / "))}</td>
-          <td>${escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</td>
+          <td>${isCash ? "—" : escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</td>
           <td>${renderPriceCell(asset)}</td>
           <td>${escapeHtml(formatHoldingDays(asset))}</td>
-          <td class="asset-market-value-cell">${renderDisplayCurrencyAmount(position.marketValueCents)}</td>
+          <td class="asset-market-value-cell">${renderDisplayCurrencyAmount(position.marketValueCents, asset)}</td>
           <td>
-            <div class="return-cell">
-              <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
-              <span class="${pnlClass}">${position.hasCostBasis ? formatSignedAmountOnly(position.unrealizedPnlCents) : "暂无法计算"}</span>
-            </div>
+            ${isCash
+              ? `<div class="return-cell"><strong>—</strong><span>现金无价格收益</span></div>`
+              : `<div class="return-cell">
+                  <strong class="${pnlClass}">${position.hasCostBasis ? formatPercent(position.returnBps) : "成本缺失"}</strong>
+                  <span class="${pnlClass}">${position.hasCostBasis ? formatSignedAmountOnly(position.unrealizedPnlCents) : "暂无法计算"}</span>
+                </div>`}
           </td>
           <td>${formatShare(weightBps)}</td>
           <td>${renderDataStatus(asset)}</td>
@@ -184,6 +187,14 @@ export function renderAssetChangeRows() {
 
 function renderPriceCell(asset) {
   const status = resolvePriceStatus(asset);
+  if (status.key === "cash") {
+    return `
+      <div class="price-cell is-cash" title="现金按原币余额估值；折算汇率见市值列。">
+        <span>—</span>
+        <small class="data-ok">现金按余额</small>
+      </div>
+    `;
+  }
   const shortMeta = shortPriceMeta(asset, status);
   const detail = priceDetailTitle(asset, status);
   return `
@@ -194,12 +205,16 @@ function renderPriceCell(asset) {
   `;
 }
 
-function renderDisplayCurrencyAmount(cents) {
+function renderDisplayCurrencyAmount(cents, asset) {
   const { currency, amount } = formatDisplayCurrencyParts(cents);
+  const fxSummary = ctx.displayFxRateSummary?.(asset) || "";
   return `
-    <span class="asset-money">
-      <span class="asset-money-currency">${escapeHtml(currency)}</span>
-      <span class="asset-money-amount">${escapeHtml(amount)}</span>
+    <span class="asset-value-stack">
+      <span class="asset-money">
+        <span class="asset-money-currency">${escapeHtml(currency)}</span>
+        <span class="asset-money-amount">${escapeHtml(amount)}</span>
+      </span>
+      ${fxSummary ? `<small class="asset-fx-rate">折算 ${escapeHtml(fxSummary)} · 设置汇率</small>` : ""}
     </span>
   `;
 }
