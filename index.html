@@ -434,9 +434,9 @@
             <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
             <div class="benchmark-comparison-chart" id="analysis-benchmark-trend-chart"></div>
           </section>
-          <section class="analysis-card" data-analysis-requires-assets><h3>集中度</h3><div id="analysis-concentration-metrics"></div><div id="analysis-top-holdings"></div><p id="analysis-concentration-note"></p></section>
+          <section class="analysis-card" data-analysis-requires-assets aria-labelledby="analysis-concentration-title"><h3 id="analysis-concentration-title">集中度</h3><div id="analysis-concentration-metrics"></div><div id="analysis-top-holdings"></div><p id="analysis-concentration-note"></p></section>
+          <section class="analysis-card" data-analysis-requires-assets aria-labelledby="analysis-contribution-title"><h3 id="analysis-contribution-title">收益贡献</h3><p class="section-description">查看主要正负贡献来源及其对组合结果的影响。</p><div class="attribution-list" id="analysis-top-return-assets"></div><p class="analysis-auto-summary" id="analysis-contribution-summary"></p></section>
           <details class="analysis-card analysis-card-wide analysis-disclosure"><summary><span>资产变动归因</span><small>拆解投入、价格、汇率、分红与费用影响</small></summary><div class="analysis-disclosure-content"><div class="analysis-mini-metrics" id="stage-comparison-grid"></div><div class="waterfall-chart" id="analysis-cashflow-chart"></div></div></details>
-          <details class="analysis-card analysis-disclosure"><summary><span>资产贡献排行</span><small>查看主要正负贡献来源</small></summary><div class="analysis-disclosure-content"><div class="attribution-list" id="analysis-top-return-assets"></div><p class="analysis-auto-summary" id="analysis-contribution-summary"></p></div></details>
           <details class="analysis-card analysis-disclosure" data-analysis-requires-assets><summary><span>风险明细</span><small>查看波动、回撤与高风险暴露</small></summary><div class="analysis-disclosure-content"><div id="analysis-risk-metrics"></div><div id="analysis-drawdown-chart"></div></div></details>
           <div id="attribution-metrics" class="is-hidden"></div>
           <div id="attribution-list" class="is-hidden"></div>

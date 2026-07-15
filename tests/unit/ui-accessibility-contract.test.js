@@ -48,6 +48,20 @@ test("analysis keeps benchmark comparison and its trend chart permanently visibl
   assert.match(analysisRenderSource, /renderAnalysisBenchmarkTrendChart\(analysis\);/u);
 });
 
+test("analysis keeps concentration and return contribution as adjacent persistent cards", async () => {
+  const source = await readFile(resolve(projectRoot, "index.html"), "utf8");
+  const concentrationIndex = source.indexOf('id="analysis-concentration-title"');
+  const contributionIndex = source.indexOf('id="analysis-contribution-title"');
+  const attributionIndex = source.indexOf("<summary><span>资产变动归因</span>");
+
+  assert.notEqual(concentrationIndex, -1);
+  assert.notEqual(contributionIndex, -1);
+  assert.ok(concentrationIndex < contributionIndex);
+  assert.ok(contributionIndex < attributionIndex);
+  assert.equal(source.includes("<summary><span>资产贡献排行</span>"), false);
+  assert.match(source, /<section class="analysis-card"[^>]+aria-labelledby="analysis-contribution-title"/u);
+});
+
 test("mobile interaction rules preserve 44px touch targets", async () => {
   const source = await readFile(resolve(projectRoot, "src/styles/210-spacing-breathing.css"), "utf8");
 
