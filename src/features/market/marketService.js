@@ -9,6 +9,8 @@ import { renderMarketSyncResult } from "./marketRender.js";
 let ctx = {};
 const marketAutoSyncKey = "asset-trail-market-auto-sync-v1";
 const marketSyncBatchSize = 50;
+const marketAutoSyncRetryCooldownMs = 15 * 60 * 1000;
+let marketSyncInFlight = null;
 
 export function configureMarketService(context) {
   ctx = context;
@@ -23,44 +25,49 @@ export function hideMarketSyncResult() {
 }
 
 export async function syncLatestMarketPrices() {
-  await runMarketPriceSync({
+  await runSingleMarketSync(() => runMarketPriceSync({
     trigger: "manual",
     includeBenchmarks: true,
     loadingMessage: () => "正在同步已录入资产与全部分析基准的价格..."
-  });
+  }));
 }
 
 export async function syncDailyMarketPricesIfDue() {
   const today = todayIsoDate();
   const autoSync = readAutoSyncState();
-  if (autoSync.lastCompletedDate === today || autoSync.lastAttemptedDate === today) return;
+  if (!isAutomaticMarketSyncDue(autoSync, today)) return;
 
   const symbols = symbolsForMarketSync();
   if (!symbols.length) return;
 
-  writeAutoSyncState({ ...autoSync, lastAttemptedDate: today, lastAttemptedAt: new Date().toISOString() });
-  await runMarketPriceSync({
-    trigger: "auto",
-    includeBenchmarks: true,
-    loadingMessage: () => "正在自动同步已录入资产与全部分析基准的价格...",
-    onSettled: (state) => {
-      const latest = readAutoSyncState();
-      if (state.status === "success" || state.status === "warning") {
-        writeAutoSyncState({
-          ...latest,
-          lastCompletedDate: today,
-          lastCompletedAt: state.syncedAt || new Date().toISOString(),
-          lastStatus: state.status
-        });
-      } else if (state.status === "error") {
-        writeAutoSyncState({
-          ...latest,
-          lastStatus: "error",
-          lastErrorAt: new Date().toISOString(),
-          lastError: state.message
-        });
-      }
-    }
+  const attemptedAt = new Date().toISOString();
+  writeAutoSyncState({
+    ...autoSync,
+    lastAttemptedDate: today,
+    lastAttemptedAt: attemptedAt,
+    attemptStatus: "running"
+  });
+  const outcome = await runSingleMarketSync(runAutomaticMarketPriceSync);
+  const latest = readAutoSyncState();
+  const completed = outcome?.attemptStatus === "completed" ||
+    (!outcome?.attemptStatus && ["success", "warning"].includes(outcome?.state?.status));
+  if (completed) {
+    writeAutoSyncState({
+      ...latest,
+      lastCompletedDate: today,
+      lastCompletedAt: outcome.state?.syncedAt || new Date().toISOString(),
+      lastStatus: outcome.state?.status || "success",
+      attemptStatus: "completed",
+      lastError: ""
+    });
+    return;
+  }
+  writeAutoSyncState({
+    ...latest,
+    lastStatus: "error",
+    attemptStatus: "error",
+    lastErrorAt: new Date().toISOString(),
+    lastError: outcome?.state?.message || "自动价格检查失败"
   });
 }
 
@@ -116,12 +123,63 @@ export async function ensureAssetMarketHistory(asset) {
   }
 }
 
-async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingMessage, onSettled } = {}) {
+async function runAutomaticMarketPriceSync() {
+  const cacheRun = await runMarketPriceSync({
+    trigger: "auto",
+    includeBenchmarks: true,
+    autoFetch: false,
+    includeHistory: true,
+    loadingMessage: () => "正在读取已缓存的历史价格..."
+  });
+  if (cacheRun.state.status === "error") {
+    return { state: cacheRun.state, attemptStatus: "error" };
+  }
+
+  const refreshRun = await runMarketPriceSync({
+    trigger: "auto",
+    includeBenchmarks: true,
+    autoFetch: true,
+    includeHistory: false,
+    preserveExistingOnFailure: true,
+    loadingMessage: () => "缓存已更新，正在后台检查最新价格..."
+  });
+  if (refreshRun.refreshFailed) {
+    const state = preserveCacheAfterRefreshFailure(cacheRun.state, refreshRun.state);
+    return { state, attemptStatus: "error" };
+  }
+  if (!refreshRun.hasFetchedChanges) {
+    return { state: refreshRun.state, attemptStatus: "completed" };
+  }
+
+  const refreshedCacheRun = await runMarketPriceSync({
+    trigger: "auto",
+    includeBenchmarks: false,
+    autoFetch: false,
+    includeHistory: true,
+    preserveExistingOnFailure: true,
+    loadingMessage: () => "发现新价格，正在更新本地历史..."
+  });
+  if (refreshedCacheRun.state.status === "error") {
+    const state = preserveCacheAfterRefreshFailure(refreshRun.state, refreshedCacheRun.state);
+    return { state, attemptStatus: "error" };
+  }
+  return { state: refreshedCacheRun.state, attemptStatus: "completed" };
+}
+
+async function runMarketPriceSync({
+  trigger,
+  includeBenchmarks = false,
+  autoFetch = true,
+  includeHistory = true,
+  preserveExistingOnFailure = false,
+  loadingMessage
+} = {}) {
   const symbols = symbolsForMarketSync();
   if (!symbols.length && !includeBenchmarks) {
-    ctx.setMarketSyncState({ status: "empty", message: "当前没有可同步代码。请先填写资产代码，或在分析页选择收益对比基准。", results: [], syncedAt: "" });
+    const state = { status: "empty", message: "当前没有可同步代码。请先填写资产代码，或在分析页选择收益对比基准。", results: [], syncedAt: "" };
+    ctx.setMarketSyncState(state);
     renderMarketSyncResult();
-    return;
+    return emptyMarketSyncRun(state);
   }
   const requestedCount = symbols.length + (includeBenchmarks ? 9 : 0);
   ctx.setMarketSyncState({ status: "loading", message: loadingMessage?.(requestedCount) || `正在同步 ${requestedCount} 个代码价格...`, results: [], syncedAt: "" });
@@ -131,6 +189,7 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
   const results = [];
   const failedBatches = [];
   const fetchPresentations = [];
+  const fetchResults = [];
   let syncedAt = "";
 
   for (const [index, batch] of batches.entries()) {
@@ -143,7 +202,8 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
           trigger,
           days: historyDays,
           includeBenchmarks: batch.includeBenchmarks,
-          includeHistory: true
+          includeHistory,
+          autoFetch
         })
       });
       if (!response.ok) throw new Error(await marketApiErrorMessage(response));
@@ -151,6 +211,7 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
       syncedAt = payload.syncedAt || syncedAt || new Date().toISOString();
       results.push(...decorateMarketSyncResults(payload.results || [], payload.fetch));
       fetchPresentations.push(marketFetchPresentation(payload.fetch));
+      fetchResults.push(payload.fetch);
     } catch (error) {
       const message = error instanceof Error ? error.message : "无法连接行情 API";
       failedBatches.push({ index, symbols: batch.symbols, message });
@@ -160,8 +221,10 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
 
   if (results.length && failedBatches.length < batches.length) {
     syncedAt ||= new Date().toISOString();
-    const applied = applyMarketSyncResults(results, syncedAt);
-    for (const failed of failedBatches) markOpenAssetsPriceError(failed.symbols, failed.message);
+    const applied = applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure });
+    if (!preserveExistingOnFailure) {
+      for (const failed of failedBatches) markOpenAssetsPriceError(failed.symbols, failed.message);
+    }
     const sourceWarning = fetchPresentations.some((item) => item.hasWarning);
     const nextState = {
       status: failedBatches.length || sourceWarning || !(applied.appliedCount || applied.benchmarkSyncedCount) ? "warning" : "success",
@@ -172,10 +235,17 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
     ctx.setMarketSyncState(nextState);
     ctx.persistAndRender();
     ctx.loadBenchmarkPerformance?.({ force: true });
-    onSettled?.(nextState);
+    renderMarketSyncResult();
+    return {
+      state: nextState,
+      fetchResults,
+      failedBatches,
+      hasFetchedChanges: fetchResults.some(marketFetchHasChanges),
+      refreshFailed: failedBatches.length > 0 || fetchResults.some((fetchResult) => fetchResult?.status === "failed")
+    };
   } else {
     const failureMessage = failedBatches.map((item) => `第 ${item.index + 1} 批：${item.message}`).join("；") || "无法连接行情 API";
-    markOpenAssetsPriceError(symbols, failureMessage);
+    if (!preserveExistingOnFailure) markOpenAssetsPriceError(symbols, failureMessage);
     const nextState = {
       status: "error",
       message: `同步失败：${failureMessage}`,
@@ -184,9 +254,15 @@ async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingM
     };
     ctx.setMarketSyncState(nextState);
     ctx.persistAndRender?.();
-    onSettled?.(nextState);
+    renderMarketSyncResult();
+    return {
+      state: nextState,
+      fetchResults,
+      failedBatches,
+      hasFetchedChanges: false,
+      refreshFailed: true
+    };
   }
-  renderMarketSyncResult();
 }
 
 export function buildMarketSyncBatches(symbols, includeBenchmarks = false, batchSize = marketSyncBatchSize) {
@@ -257,7 +333,7 @@ async function readErrorPayload(response) {
   }
 }
 
-function applyMarketSyncResults(results, syncedAt) {
+function applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure = false } = {}) {
   const state = ctx.getState();
   let appliedCount = 0;
   let updatedCount = 0;
@@ -278,7 +354,7 @@ function applyMarketSyncResults(results, syncedAt) {
     const result = bySymbol.get(symbol);
     if (!result) {
       const missing = results.find((item) => canonicalSyncSymbol(item.symbol) === symbol && item.status !== "synced");
-      if (!missing) return asset;
+      if (!missing || preserveExistingOnFailure) return asset;
       return {
         ...asset,
         priceStatus: "missing",
@@ -330,6 +406,56 @@ function applyMarketSyncResults(results, syncedAt) {
     }
   }
   return { appliedCount, updatedCount, unchangedCount, missingCount, benchmarkSyncedCount };
+}
+
+function runSingleMarketSync(work) {
+  if (marketSyncInFlight) return marketSyncInFlight;
+  const current = Promise.resolve().then(work);
+  let wrapped;
+  wrapped = current.finally(() => {
+    if (marketSyncInFlight === wrapped) marketSyncInFlight = null;
+  });
+  marketSyncInFlight = wrapped;
+  return wrapped;
+}
+
+function isAutomaticMarketSyncDue(autoSync, today, now = Date.now()) {
+  if (autoSync.lastCompletedDate === today) return false;
+  if (autoSync.lastAttemptedDate !== today) return true;
+  const referenceAt = autoSync.attemptStatus === "error"
+    ? autoSync.lastErrorAt || autoSync.lastAttemptedAt
+    : autoSync.lastAttemptedAt;
+  const referenceTime = Date.parse(referenceAt || "");
+  if (!Number.isFinite(referenceTime)) return false;
+  return now - referenceTime >= marketAutoSyncRetryCooldownMs;
+}
+
+function marketFetchHasChanges(fetchResult) {
+  if (!fetchResult || ["covered", "failed"].includes(fetchResult.status)) return false;
+  return Number(fetchResult.run?.successCount || 0) > 0 ||
+    (fetchResult.runs || []).some((run) => Number(run?.successCount || 0) > 0);
+}
+
+function preserveCacheAfterRefreshFailure(cacheState, refreshState) {
+  const state = {
+    ...cacheState,
+    status: "warning",
+    message: `已应用行情缓存；最新价格检查失败，可稍后自动重试或手动检查。${refreshState?.message ? ` ${refreshState.message}` : ""}`
+  };
+  ctx.setMarketSyncState(state);
+  ctx.persistAndRender?.();
+  renderMarketSyncResult();
+  return state;
+}
+
+function emptyMarketSyncRun(state) {
+  return {
+    state,
+    fetchResults: [],
+    failedBatches: [],
+    hasFetchedChanges: false,
+    refreshFailed: false
+  };
 }
 
 function normalizeDailyPriceRows(rows) {

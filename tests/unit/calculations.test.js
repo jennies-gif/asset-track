@@ -760,12 +760,15 @@ test("does not use the full instrument registry as the default market data sync 
 
 test("keeps seed-version private asset data out of default API payloads", async () => {
   const assetFormSource = await fs.readFile(path.resolve("src/features/assets/assetForm.js"), "utf8");
+  const assetLookupSource = await fs.readFile(path.resolve("src/features/assets/assetLookupService.js"), "utf8");
   const marketServiceSource = await fs.readFile(path.resolve("src/features/market/marketService.js"), "utf8");
   const marketRenderSource = await fs.readFile(path.resolve("src/features/market/marketRender.js"), "utf8");
   const apiSource = await fs.readFile(path.resolve("apps/api/server.mjs"), "utf8");
   const fetchScriptSource = await fs.readFile(path.resolve("scripts/market-data/fetch-market-data.mjs"), "utf8");
   assert.equal(assetFormSource.includes("/api/assets"), false);
   assert.equal(assetFormSource.includes("&purchaseDate="), false);
+  assert.equal(assetLookupSource.includes("purchaseDate,\n      includeHistory"), false);
+  assert.equal(assetLookupSource.includes("days: marketHistoryWindowDays(purchaseDate, currentDate)"), true);
   assert.equal(marketServiceSource.includes("assetsForMarketSyncPayload"), false);
   assert.equal(marketServiceSource.includes("JSON.stringify({ symbols, assets"), false);
   assert.equal(marketServiceSource.includes("quantity: asset.quantity"), false);

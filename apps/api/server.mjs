@@ -47,6 +47,11 @@ import {
   selectCurrentValuationPoint,
   selectPreviousDailyPoint
 } from "../../src/domain/marketPriceSemantics.js";
+import {
+  exactPublicInstrumentMatch,
+  inferPublicInstrumentCandidate,
+  isVerifiedInstrumentSyncResult
+} from "../../src/server/instrumentDiscovery.js";
 
 const port = Number(process.env.API_PORT || process.env.PORT || 4180);
 const host = process.env.API_HOST || process.env.HOST || "127.0.0.1";
@@ -56,6 +61,7 @@ const marketStorageDir = path.resolve(repoRoot, process.env.MARKET_DATA_DIR || "
 const dailySyncHour = Number(process.env.MARKET_DAILY_SYNC_HOUR || "22");
 const dailySyncMinute = Number(process.env.MARKET_DAILY_SYNC_MINUTE || "0");
 const dailySyncEnabled = process.env.MARKET_DAILY_SYNC_ENABLED !== "false";
+const draftLookupForceRefreshEnabled = process.env.MARKET_DRAFT_LOOKUP_FORCE_REFRESH_ENABLED !== "false";
 const privateAssetCloudSyncEnabled = process.env.PRIVATE_ASSET_CLOUD_SYNC_ENABLED === "true";
 const privateAssetApiPaths = new Set([
   "/api/accounts",
@@ -273,18 +279,32 @@ async function lookupInstrumentWithLatestPrice(url, response) {
   const query = normalizeQuery(rawQuery);
   if (!query) return sendError(response, 400, "validation_error", "资产代码或名称不能为空", { query: "资产代码或名称不能为空" });
 
-  let instrument = (await searchInstrumentRepository(query))[0] || null;
+  const registryMatches = await searchInstrumentRepository(query);
+  let instrument = exactPublicInstrumentMatch(registryMatches, rawQuery);
   let addedToRegistry = false;
-  if (!instrument) {
-    const inferred = inferInstrumentFromSymbol(rawQuery);
-    if (!inferred) return sendJson(response, { instrument: null, price: null, addedToRegistry: false, status: "not_found" });
-    instrument = await upsertStoredInstrumentRegistry({
-      ...inferred,
-      source: "录入时按代码搜索发现",
-      status: "active",
-      marketDataSupported: true
+  let discoveryCandidate = null;
+  if (!instrument && registryMatches.length) {
+    return sendJson(response, {
+      instrument: null,
+      instruments: registryMatches.slice(0, 5),
+      price: null,
+      addedToRegistry: false,
+      status: "multiple",
+      message: "找到多个可能资产，请先选择准确的代码或名称"
     });
-    addedToRegistry = true;
+  }
+  if (!instrument) {
+    discoveryCandidate = inferPublicInstrumentCandidate(rawQuery, benchmarkInstruments);
+    if (!discoveryCandidate) {
+      return sendJson(response, {
+        instrument: null,
+        price: null,
+        addedToRegistry: false,
+        status: "not_found",
+        message: "当前公共数据源未验证到对应资产，可继续手动填写并维护价格"
+      });
+    }
+    instrument = normalizeSearchInstrument(discoveryCandidate);
   }
 
   const syncAsset = normalizeAsset({
@@ -300,30 +320,37 @@ async function lookupInstrumentWithLatestPrice(url, response) {
     currentPrice: "0",
     fxRate: instrument.currency === "HKD" ? "0.1280" : instrument.currency === "CNY" ? "0.1460" : "1"
   });
-  const requestedPurchaseDate = normalizeDateParam(url.searchParams.get("purchaseDate")) || todayIsoDate();
-  const cachedHistory = await readStoredMarketHistory(syncAsset);
-  const cachedPurchasePrice = cachedPurchasePriceForDate(cachedHistory, requestedPurchaseDate);
-  const cachedMarketPrice = marketPriceFromHistory(syncAsset, cachedHistory);
-  if (cachedMarketPrice) {
-    return sendJson(response, {
-      instrument,
-      price: cachedMarketPrice,
-      purchasePrice: cachedPurchasePrice,
-      priceLookup: { source: "cache", requestedDate: requestedPurchaseDate },
-      addedToRegistry,
-      status: "synced",
-      message: "已读取本地行情缓存"
-    });
+  if (!draftLookupForceRefreshEnabled) {
+    const cachedPrice = marketPriceFromStoredHistory(syncAsset, await readStoredMarketHistory(syncAsset));
+    if (cachedPrice) {
+      if (discoveryCandidate) {
+        instrument = await persistVerifiedDiscoveredInstrument(discoveryCandidate);
+        addedToRegistry = true;
+        await registerMarketDataSyncTargets(marketStorageDir, [{
+          symbol: instrument.symbol,
+          market: instrument.market,
+          sourceType: "user_requested",
+          requestedAt: new Date().toISOString()
+        }]);
+      }
+      return sendJson(response, {
+        instrument,
+        price: cachedPrice,
+        addedToRegistry,
+        status: "synced",
+        message: "行情即时抓取已关闭，当前使用缓存"
+      });
+    }
   }
   let syncResult = null;
   try {
     syncResult = await runDailyMarketDataSync({
       symbols: [instrument.symbol],
       assets: [syncAsset],
-      dateFrom: requestedPurchaseDate,
-      dateTo: todayIsoDate(),
-      includeBenchmarks: false
-    }, "draft_lookup");
+      days: 7,
+      includeBenchmarks: false,
+      forceRefresh: draftLookupForceRefreshEnabled
+    }, "draft_lookup", { registerTargets: !discoveryCandidate });
   } catch (error) {
     const message = errorMessage(error, "抓取失败");
     return sendJson(response, { instrument, price: null, addedToRegistry, status: "fetch_failed", message }, 202);
@@ -331,16 +358,26 @@ async function lookupInstrumentWithLatestPrice(url, response) {
 
   const result = (syncResult.results || []).find((item) => String(item.symbol || "").toUpperCase() === String(instrument.symbol || "").toUpperCase());
   const price = result?.status === "synced" ? result.after : null;
-  const refreshedHistory = await readStoredMarketHistory(syncAsset);
-  const purchasePrice = purchasePriceAtOrBefore(refreshedHistory, requestedPurchaseDate);
+  if (discoveryCandidate && isVerifiedInstrumentSyncResult(syncResult, instrument.symbol)) {
+    instrument = await persistVerifiedDiscoveredInstrument(discoveryCandidate);
+    addedToRegistry = true;
+    await registerMarketDataSyncTargets(marketStorageDir, [{
+      symbol: instrument.symbol,
+      market: instrument.market,
+      sourceType: "user_requested",
+      requestedAt: new Date().toISOString()
+    }]);
+  }
   return sendJson(response, {
-    instrument,
+    instrument: addedToRegistry || !discoveryCandidate ? instrument : null,
     price,
-    purchasePrice,
-    priceLookup: { source: purchasePrice ? "fetched" : "missing", requestedDate: requestedPurchaseDate },
     addedToRegistry,
-    status: purchasePrice ? "synced" : price ? "partial" : "missing",
-    message: result?.message || "",
+    status: price ? "synced" : "not_found",
+    message: price
+      ? syncResult.fetch?.status === "failed"
+        ? `本轮抓取失败，已使用缓存：${syncResult.fetch.message || "公共数据源暂不可用"}`
+        : addedToRegistry ? "已验证公共资产并补充到资源库" : "已完成一次公共行情抓取"
+      : "未能从当前公共数据源验证该代码，可继续手动填写并维护价格",
     fetch: syncResult.fetch?.run ? {
       id: syncResult.fetch.run.id,
       status: syncResult.fetch.run.status,
@@ -349,32 +386,7 @@ async function lookupInstrumentWithLatestPrice(url, response) {
   }, 202);
 }
 
-function cachedPurchasePriceForDate(history, requestedDate) {
-  const dailyHistory = history.filter(isDailyHistoryPoint);
-  const exact = dailyHistory.find((point) => point.date === requestedDate);
-  if (exact) return purchasePriceFromPoint(exact, requestedDate);
-  const weekday = new Date(`${requestedDate}T00:00:00.000Z`).getUTCDay();
-  return weekday === 0 || weekday === 6 ? purchasePriceAtOrBefore(dailyHistory, requestedDate) : null;
-}
-
-function purchasePriceAtOrBefore(history, requestedDate) {
-  const matched = history.filter((point) => point.date <= requestedDate).at(-1);
-  if (!matched) return null;
-  return purchasePriceFromPoint(matched, requestedDate);
-}
-
-function purchasePriceFromPoint(matched, requestedDate) {
-  return {
-    requestedDate,
-    priceDate: matched.date,
-    price: decimalString(matched.close),
-    priceSource: matched.source || "",
-    sourceFetchedAt: matched.sourceFetchedAt || "",
-    qualityStatus: matched.qualityStatus || "ok"
-  };
-}
-
-function marketPriceFromHistory(asset, history) {
+function marketPriceFromStoredHistory(asset, history) {
   const latest = selectCurrentValuationPoint(asset, history);
   if (!latest) return null;
   const previous = selectPreviousDailyPoint(history, latest.date);
@@ -534,7 +546,9 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       sourceType: isBenchmarkSymbol(asset.symbol) ? "benchmark" : "user_requested",
       requestedAt: syncedAt
     }));
-  if (targetsToRegister.length) await registerMarketDataSyncTargets(marketStorageDir, targetsToRegister);
+  if (targetsToRegister.length && options.registerTargets !== false) {
+    await registerMarketDataSyncTargets(marketStorageDir, targetsToRegister);
+  }
   const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
   const fallbackHistoryDays = Math.max(1, Number(body.days || 7));
   const historyDateFrom = normalizeDateParam(body.dateFrom) ||
@@ -547,6 +561,13 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       const requestedTo = historyDateTo || todayIsoDate();
       const groupedMissingRanges = new Map();
       for (const asset of candidates) {
+        if (body.forceRefresh) {
+          const key = `${historyDateFrom}:${requestedTo}`;
+          const group = groupedMissingRanges.get(key) || { dateFrom: historyDateFrom, dateTo: requestedTo, symbols: [] };
+          group.symbols.push(asset.symbol);
+          groupedMissingRanges.set(key, group);
+          continue;
+        }
         const history = (await readStoredMarketHistory(asset)).filter(isDailyHistoryPoint);
         const requestedFrom = normalizeDateParam(body.dateFrom) || assetHistoryStartDate(asset, "") || historyDateFrom;
         for (const range of missingMarketHistoryRanges(history, requestedFrom, requestedTo)) {
@@ -1347,8 +1368,6 @@ function marketSearchPriority(item) {
 }
 
 async function upsertStoredInstrumentRegistry(instrument) {
-  const file = path.join(marketStorageDir, "instrument-registry.json");
-  const rows = await readJsonArray(file);
   const normalized = {
     id: instrument.id || [instrument.market, instrument.type, instrument.symbol].filter(Boolean).join(":"),
     symbol: String(instrument.symbol || "").trim().toUpperCase(),
@@ -1366,13 +1385,28 @@ async function upsertStoredInstrumentRegistry(instrument) {
     updatedAt: new Date().toISOString()
   };
   const key = `${normalized.market}:${normalized.symbol}`;
-  const nextRows = rows.filter((row) => `${String(row.market || "").toUpperCase()}:${String(row.symbol || "").toUpperCase()}` !== key);
-  nextRows.push(normalized);
-  nextRows.sort((left, right) => `${left.market}:${left.symbol}`.localeCompare(`${right.market}:${right.symbol}`));
-  await writeJson(file, nextRows);
-  if (isMarketDataDatabaseEnabled()) await upsertInstrumentRegistryRows([normalized]);
+  if (isMarketDataDatabaseEnabled()) {
+    await upsertInstrumentRegistryRows([normalized]);
+  } else {
+    const file = path.join(marketStorageDir, "instrument-registry.json");
+    const rows = await readJsonArray(file);
+    const nextRows = rows.filter((row) => `${String(row.market || "").toUpperCase()}:${String(row.symbol || "").toUpperCase()}` !== key);
+    nextRows.push(normalized);
+    nextRows.sort((left, right) => `${left.market}:${left.symbol}`.localeCompare(`${right.market}:${right.symbol}`));
+    await writeJson(file, nextRows);
+  }
   state.auditLogs.push(audit("upsert_instrument_registry", "instrument", key, normalized));
   return normalizeSearchInstrument(normalized);
+}
+
+async function persistVerifiedDiscoveredInstrument(instrument) {
+  return upsertStoredInstrumentRegistry({
+    ...instrument,
+    source: "录入时由公共行情验证发现",
+    dataSource: "录入时由公共行情验证发现",
+    status: "active",
+    marketDataSupported: true
+  });
 }
 
 function dedupeInstruments(instruments) {

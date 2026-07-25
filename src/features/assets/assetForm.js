@@ -6,7 +6,7 @@ import { accountTypeLabel, inferAccountType, normalizeAccountTypeFormValue, save
 import { assetQuickMatchOptions, findAssetQuickMatch, findAssetQuickMatches, isManualCashMatch, normalizeQuickMatchText } from "./assetQuickMatch.js";
 import { inferAssetMarket, marketLabel } from "./marketOptions.js";
 import { buildAssetFormPayload, defaultAssetFxRate } from "./assetFormPayload.js";
-import { buildAssetValuationNotices } from "./dataQuality.js";
+import { lookupPublicInstrument, lookupPurchasePrice, searchPublicInstruments } from "./assetLookupService.js";
 import { buildAddAssetUpdate, buildSellAssetUpdate } from "./assetTransactions.js";
 import { clearAssetFieldErrors, humanizeAssetError, setTransactionFieldError, validateAssetFormByMode } from "./assetValidation.js";
 import { ensureAssetMarketHistory } from "../market/marketService.js";
@@ -122,6 +122,7 @@ export function submitAssetForm() {
 export function setDefaultAssetFormValues() {
   delete ctx.elements.assetForm.dataset.autoDraftPrice;
   delete ctx.elements.assetForm.dataset.autoDraftCurrentPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftCostPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   resetDraftPriceStatus();
   if (ctx.elements.assetForm.elements.quantity) ctx.elements.assetForm.elements.quantity.value = "";
@@ -138,6 +139,9 @@ export function setDefaultAssetFormValues() {
   if (ctx.elements.assetForm.elements.transactionType) ctx.elements.assetForm.elements.transactionType.value = "买入";
   if (ctx.elements.assetForm.elements.priceSource) ctx.elements.assetForm.elements.priceSource.value = "";
   if (ctx.elements.assetForm.elements.priceStatus) ctx.elements.assetForm.elements.priceStatus.value = "";
+  for (const field of ["costPriceStatus", "costPricedAt", "costPriceSource", "costPriceKind", "costSourceFetchedAt"]) {
+    if (ctx.elements.assetForm.elements[field]) ctx.elements.assetForm.elements[field].value = "";
+  }
   if (ctx.elements.assetForm.elements.assetRegistryId) ctx.elements.assetForm.elements.assetRegistryId.value = "";
   if (ctx.elements.assetForm.elements.assetMatchStatus) ctx.elements.assetForm.elements.assetMatchStatus.value = "unmatched";
   if (ctx.elements.assetForm.elements.marketDataSupported) ctx.elements.assetForm.elements.marketDataSupported.value = "false";
@@ -311,14 +315,10 @@ function renderAssetMatchEmpty(isSearchingRemote = false) {
 function queueRemoteAssetSearch(query) {
   if (!ctx.marketApiBaseUrl || !query || query.length < 2) return;
   const requestId = ++assetMatchSearchRequest;
-  fetch(`${ctx.marketApiBaseUrl}/api/instruments/search?query=${encodeURIComponent(query)}`)
-    .then((response) => {
-      if (!response.ok) throw new Error(`资产库查询返回 ${response.status}`);
-      return response.json();
-    })
-    .then((payload) => {
+  searchPublicInstruments(ctx.marketApiBaseUrl, query)
+    .then((matches) => {
       if (requestId !== assetMatchSearchRequest || assetSearchQuery() !== query) return;
-      const remoteMatches = Array.isArray(payload?.instruments) ? payload.instruments.slice(0, 5) : [];
+      const remoteMatches = matches.slice(0, 5);
       if (!remoteMatches.length) {
         renderRemoteAssetSearchEmpty();
         return;
@@ -367,14 +367,21 @@ export function applyAssetQuickMatch() {
   selectAssetMatch(match, query);
 }
 
-export function queueDraftMarketLookup() {
+export function queueDraftMarketLookup(options = {}) {
   const form = ctx.elements.assetForm;
   if (!form || isTransactionMode()) return;
   const query = String(form.elements.symbol?.value || form.elements.name?.value || "").trim();
+  const purchaseDate = String(form.elements.purchaseDate?.value || todayIsoDate()).trim();
+  const costPriceAtRequest = String(form.elements.costPrice?.value || "").trim();
   clearTimeout(draftMarketLookupTimer);
   if (!query || query.length < 2 || form.elements.type?.value === "现金") return;
   draftMarketLookupTimer = setTimeout(() => {
-    lookupDraftMarketPrice(query);
+    lookupDraftMarketPrice({
+      query,
+      purchaseDate,
+      costPriceAtRequest,
+      forcePurchasePrice: Boolean(options.forcePurchasePrice)
+    });
   }, 700);
 }
 
@@ -414,42 +421,42 @@ function selectAssetMatch(match, query, options = {}) {
   if (!options.skipLookup) queueDraftMarketLookup();
 }
 
-async function lookupDraftMarketPrice(query) {
+async function lookupDraftMarketPrice(request) {
   const form = ctx.elements.assetForm;
   if (!ctx.marketApiBaseUrl || !form || isTransactionMode()) return;
+  const { query, purchaseDate, costPriceAtRequest, forcePurchasePrice } = request;
   const requestId = ++draftMarketLookupRequest;
-  draftMarketLookupQuery = query;
-  setDraftPriceStatus("loading", "正在查询行情...");
+  draftMarketLookupQuery = `${query}:${purchaseDate}`;
+  setDraftPriceStatus("loading", "正在查询资产与公共行情...");
   try {
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/instruments/lookup?query=${encodeURIComponent(query)}`);
-    if (!response.ok) throw new Error(await readDraftLookupError(response));
-    const payload = await response.json();
-    if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== query) return;
-    applyDraftLookupPayload(payload, query);
+    const payload = await lookupPublicInstrument(ctx.marketApiBaseUrl, query);
+    if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== `${query}:${purchaseDate}`) return;
+    await applyDraftLookupPayload(payload, {
+      query,
+      purchaseDate,
+      costPriceAtRequest,
+      forcePurchasePrice,
+      requestId
+    });
   } catch (error) {
     if (requestId !== draftMarketLookupRequest) return;
     setDraftPriceStatus("error", error instanceof Error ? error.message : "行情查询失败");
   }
 }
 
-async function readDraftLookupError(response) {
-  try {
-    const payload = await response.clone().json();
-    return payload?.message || `行情 API 返回 ${response.status}`;
-  } catch {
-    return `行情 API 返回 ${response.status}`;
-  }
-}
-
-function applyDraftLookupPayload(payload, query) {
+async function applyDraftLookupPayload(payload, request) {
   const form = ctx.elements.assetForm;
+  const { query, purchaseDate, costPriceAtRequest, forcePurchasePrice, requestId } = request;
   const instrument = payload?.instrument;
   const price = payload?.price;
   if (instrument) {
     selectAssetMatch(instrument, query, { skipLookup: true });
   }
   if (!price?.currentPrice) {
-    setDraftPriceStatus(payload?.status === "not_found" ? "missing" : "warning", payload?.message || "未找到可用行情，请手动填写当前价格和买入价格。");
+    setDraftPriceStatus(
+      payload?.status === "not_found" ? "missing" : "warning",
+      payload?.message || "未找到可用公共行情，可继续保存，但需要手动填写并维护买入价格。"
+    );
     return;
   }
   const currentPriceField = form.elements.currentPrice;
@@ -471,20 +478,92 @@ function applyDraftLookupPayload(payload, query) {
     if (form.elements.marketTimezone) form.elements.marketTimezone.value = price.marketTimezone || "";
     if (form.elements.sourceFetchedAt) form.elements.sourceFetchedAt.value = price.sourceFetchedAt || "";
   }
-  setDraftPriceStatus("synced", "已带入最新公共行情；买入日期和买入价格仅保存在当前浏览器，请手动填写买入价格。");
+  if (purchaseDate === todayIsoDate()) {
+    const filled = applyAutomaticCostPrice({
+      price: nextPrice,
+      priceDate: price.pricedAt || purchaseDate,
+      priceSource: price.priceSource || "",
+      priceKind: price.priceKind || "",
+      sourceFetchedAt: price.sourceFetchedAt || "",
+      costPriceAtRequest,
+      forcePurchasePrice
+    });
+    setDraftPriceStatus(
+      filled ? "synced" : "warning",
+      filled
+        ? `${payload?.addedToRegistry ? "已验证并补充到公共资源库；" : ""}已按当前公共行情填写买入价格，可自行修改。`
+        : "已取得当前公共行情；买入价格保留你的手动输入。"
+    );
+    updateAssetLiveSummary();
+    return;
+  }
+  setDraftPriceStatus("loading", "正在查询首次持有日期对应的公共价格...");
+  const historyLookup = await lookupPurchasePrice({
+    apiBaseUrl: ctx.marketApiBaseUrl,
+    symbol: instrument?.symbol || form.elements.symbol?.value || query,
+    purchaseDate
+  });
+  if (requestId !== draftMarketLookupRequest || draftMarketLookupQuery !== `${query}:${purchaseDate}`) return;
+  const purchasePrice = historyLookup.purchasePrice;
+  if (!purchasePrice) {
+    setDraftPriceStatus("missing", "未找到首次持有日期当日或此前的公共价格，请手动填写买入价格。");
+    updateAssetLiveSummary();
+    return;
+  }
+  const filled = applyAutomaticCostPrice({
+    price: purchasePrice.price,
+    priceDate: purchasePrice.priceDate,
+    priceSource: purchasePrice.priceSource,
+    priceKind: purchasePrice.priceKind,
+    sourceFetchedAt: purchasePrice.sourceFetchedAt,
+    costPriceAtRequest,
+    forcePurchasePrice
+  });
+  const dateNote = purchasePrice.usedPreviousTradingDate ? `（${purchasePrice.priceDate} 最近交易日）` : "";
+  setDraftPriceStatus(
+    filled ? "synced" : "warning",
+    filled
+      ? `已按首次持有日期填写买入价格${dateNote}，可自行修改。`
+      : `已查到首次持有日期价格${dateNote}；买入价格保留你的手动输入。`
+  );
   updateAssetLiveSummary();
+}
+
+function applyAutomaticCostPrice({
+  price,
+  priceDate,
+  priceSource,
+  priceKind,
+  sourceFetchedAt,
+  costPriceAtRequest,
+  forcePurchasePrice
+}) {
+  const form = ctx.elements.assetForm;
+  const field = form.elements.costPrice;
+  if (!field || !price) return false;
+  const currentValue = String(field.value || "").trim();
+  const previousAutoValue = String(form.dataset.autoDraftCostPrice || "").trim();
+  const unchangedDuringRequest = currentValue === String(costPriceAtRequest || "").trim();
+  const canFill = unchangedDuringRequest && (
+    forcePurchasePrice ||
+    !currentValue ||
+    currentValue === previousAutoValue
+  );
+  if (!canFill) return false;
+  field.value = String(price);
+  form.dataset.autoDraftCostPrice = String(price);
+  if (form.elements.costPriceStatus) form.elements.costPriceStatus.value = "synced";
+  if (form.elements.costPricedAt) form.elements.costPricedAt.value = priceDate || "";
+  if (form.elements.costPriceSource) form.elements.costPriceSource.value = priceSource || "";
+  if (form.elements.costPriceKind) form.elements.costPriceKind.value = priceKind || "";
+  if (form.elements.costSourceFetchedAt) form.elements.costSourceFetchedAt.value = sourceFetchedAt || "";
+  return true;
 }
 
 function setDraftPriceStatus(status, message) {
   const form = ctx.elements.assetForm;
   const help = form?.querySelector("[data-price-fallback]");
   if (!help) return;
-  const manualPriceField = form.querySelector(".manual-current-price-field");
-  if (["error", "missing", "warning"].includes(status)) {
-    manualPriceField?.classList.remove("is-hidden");
-  } else if (status === "synced") {
-    manualPriceField?.classList.add("is-hidden");
-  }
   help.dataset.lookupStatus = status;
   help.textContent = message || "成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。";
 }
@@ -817,6 +896,7 @@ function isAssetFormDirty() {
 
 function fillAssetForm(asset) {
   delete ctx.elements.assetForm.dataset.autoDraftPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftCostPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   resetDraftPriceStatus();
   for (const field of [
@@ -847,6 +927,11 @@ function fillAssetForm(asset) {
     "assetRegistryId",
     "assetMatchStatus",
     "marketDataSupported",
+    "costPriceStatus",
+    "costPricedAt",
+    "costPriceSource",
+    "costPriceKind",
+    "costSourceFetchedAt",
     "priceSource",
     "pricedAt",
     "priceStatus",
@@ -873,6 +958,7 @@ export function resetAssetFormMode(mode = "create") {
   draftMarketLookupQuery = "";
   delete ctx.elements.assetForm.dataset.autoDraftPrice;
   delete ctx.elements.assetForm.dataset.autoDraftCurrentPrice;
+  delete ctx.elements.assetForm.dataset.autoDraftCostPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
   delete ctx.elements.assetForm.dataset.editingId;
   delete ctx.elements.assetForm.dataset.closingId;
@@ -898,9 +984,7 @@ export function resetAssetFormMode(mode = "create") {
 }
 
 function syncManualCurrentPriceField(asset) {
-  const field = ctx.elements.assetForm?.querySelector(".manual-current-price-field");
-  const shouldShow = Boolean(asset && buildAssetValuationNotices(asset).length);
-  field?.classList.toggle("is-hidden", !shouldShow);
+  void asset;
 }
 
 function resetOptionalEntryPanels() {
