@@ -281,7 +281,13 @@ test("api skeleton serves health, positions and attribution", async () => {
 
   const server = spawn(process.execPath, ["apps/api/server.mjs"], {
     cwd: process.cwd(),
-    env: { ...process.env, API_PORT: String(port), MARKET_DATA_DIR: marketDataDir, MARKET_DAILY_SYNC_ENABLED: "false" },
+    env: {
+      ...process.env,
+      API_PORT: String(port),
+      MARKET_DATA_DIR: marketDataDir,
+      MARKET_DAILY_SYNC_ENABLED: "false",
+      MARKET_DRAFT_LOOKUP_FORCE_REFRESH_ENABLED: "false"
+    },
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -354,6 +360,7 @@ test("api skeleton serves health, positions and attribution", async () => {
     const latestLookup = await getJson("/api/instruments/lookup?query=BTC");
     assert.equal(latestLookup.price.currentPrice, "68000.55");
     assert.equal(latestLookup.price.priceKind, "latest");
+    assert.equal(Object.hasOwn(latestLookup, "purchasePrice"), false);
     const privateLookupField = await rawGetJson("/api/instruments/lookup?query=BTC&purchaseDate=2026-06-02");
     assert.equal(privateLookupField.status, 400);
     assert.equal(privateLookupField.body.code, "request_field_not_allowed");
@@ -455,7 +462,7 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(privateAssetPayloadSync.status, 400);
     assert.equal(privateAssetPayloadSync.body.code, "request_field_not_allowed");
 
-    for (const forbiddenField of ["purchaseDate", "dateFrom", "dateTo", "account", "assetId", "notes"]) {
+    for (const forbiddenField of ["purchaseDate", "dateFrom", "dateTo", "account", "assetId", "notes", "forceRefresh"]) {
       const rejected = await rawPostJson("/api/market-data/sync-daily", {
         symbols: ["00700"],
         [forbiddenField]: forbiddenField === "notes" ? "private" : "2026-06-01"

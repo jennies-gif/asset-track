@@ -309,13 +309,15 @@
                 <label>股数 <input name="quantity" required inputmode="decimal" placeholder="请输入股数"></label>
                 <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
               </div>
-              <label class="manual-current-price-field is-hidden">当前价格 / 最新净值
-                <input name="currentPrice" inputmode="decimal" placeholder="自动同步失败时可手动填写">
-                <small>保存后标记为手动价格，并记录本次更新时间。</small>
-              </label>
+              <input name="currentPrice" type="hidden">
               <input name="assetRegistryId" type="hidden">
               <input name="assetMatchStatus" type="hidden" value="unmatched">
               <input name="marketDataSupported" type="hidden" value="false">
+              <input name="costPriceStatus" type="hidden">
+              <input name="costPricedAt" type="hidden">
+              <input name="costPriceSource" type="hidden">
+              <input name="costPriceKind" type="hidden">
+              <input name="costSourceFetchedAt" type="hidden">
               <input name="contribution" type="hidden" value="0">
               <input name="dividends" type="hidden" value="0">
               <input name="interest" type="hidden" value="0">
@@ -328,7 +330,7 @@
               <input name="priceAt" type="hidden">
               <input name="marketTimezone" type="hidden">
               <input name="sourceFetchedAt" type="hidden">
-              <p class="form-help" data-price-fallback>选择资产后会查询首次持有日期当日或之前最近一个交易日的价格；缺失时请手动填写。</p>
+              <p class="form-help" data-price-fallback>选择资产后会自动填写首次持有日期当日或此前最近交易日的买入价格；价格仍可自行修改。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>
             <fieldset class="form-section optional-entry-section">

@@ -39,11 +39,9 @@ test("asset entry keeps manual current price recovery hidden from the normal flo
   assert.ok(currencyIndex < purchaseDateIndex);
   assert.ok(purchaseDateIndex < costPriceIndex);
   assert.ok(costPriceIndex < quantityIndex);
-  assert.match(
-    indexSource,
-    /<label class="manual-current-price-field is-hidden">当前价格 \/ 最新净值[\s\S]*?<input name="currentPrice"/u
-  );
-  assert.match(indexSource, /自动同步失败时可手动填写/u);
+  assert.match(indexSource, /<input name="currentPrice" type="hidden">/u);
+  assert.doesNotMatch(indexSource, /当前价格 \/ 最新净值/u);
+  assert.match(indexSource, /自动填写首次持有日期当日或此前最近交易日的买入价格/u);
 });
 
 test("valuation exceptions replace pervasive completeness fields", async () => {
@@ -61,7 +59,7 @@ test("valuation exceptions replace pervasive completeness fields", async () => {
   assert.match(homeSource, /valuationAttentionItems/u);
   assert.match(homeSource, /data-home-action="resolve-price"/u);
   assert.match(assetSource, /price-attention-dot/u);
-  assert.match(assetFormSource, /\["error", "missing", "warning"\]\.includes\(status\)[\s\S]*?manualPriceField\?\.classList\.remove\("is-hidden"\)/u);
+  assert.match(assetFormSource, /未找到首次持有日期当日或此前的公共价格，请手动填写买入价格/u);
 });
 
 test("cash ledger hides internal face-value prices, price returns and inline exchange rates", async () => {

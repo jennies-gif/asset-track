@@ -162,6 +162,7 @@ export function calculateSellPreview({
 
 export function normalizeAsset(formAsset) {
   const priceStatus = String(formAsset.priceStatus || (formAsset.currentPrice ? "manual" : "pending")).trim();
+  const hasCostPrice = Number(String(formAsset.costPrice || "0").trim()) > 0;
   const priceSource = formAsset.priceSource !== undefined
     ? String(formAsset.priceSource).trim()
     : priceStatus === "manual"
@@ -193,6 +194,11 @@ export function normalizeAsset(formAsset) {
     assetRegistryId: String(formAsset.assetRegistryId || "").trim(),
     assetMatchStatus: String(formAsset.assetMatchStatus || "unmatched").trim(),
     marketDataSupported: String(formAsset.marketDataSupported || "false").trim(),
+    costPriceStatus: String(formAsset.costPriceStatus || (hasCostPrice ? "manual" : "missing")).trim(),
+    costPricedAt: String(formAsset.costPricedAt || "").trim(),
+    costPriceSource: String(formAsset.costPriceSource || (hasCostPrice ? "用户录入" : "")).trim(),
+    costPriceKind: String(formAsset.costPriceKind || "").trim(),
+    costSourceFetchedAt: String(formAsset.costSourceFetchedAt || "").trim(),
     priceStatus,
     priceSource,
     pricedAt: String(formAsset.pricedAt || "").trim(),

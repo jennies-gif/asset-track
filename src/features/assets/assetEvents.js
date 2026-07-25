@@ -59,9 +59,20 @@ export function initAssetEvents(ctx) {
   });
   elements.assetForm.elements.costPrice?.addEventListener("input", () => {
     delete elements.assetForm.dataset.autoDraftPrice;
+    delete elements.assetForm.dataset.autoDraftCostPrice;
+    const hasCostPrice = Boolean(elements.assetForm.elements.costPrice.value.trim());
+    if (elements.assetForm.elements.costPriceStatus) {
+      elements.assetForm.elements.costPriceStatus.value = hasCostPrice ? "manual" : "";
+    }
+    if (elements.assetForm.elements.costPriceSource) {
+      elements.assetForm.elements.costPriceSource.value = hasCostPrice ? "用户录入" : "";
+    }
+    for (const field of ["costPricedAt", "costPriceKind", "costSourceFetchedAt"]) {
+      if (elements.assetForm.elements[field]) elements.assetForm.elements[field].value = "";
+    }
   });
   elements.assetForm.elements.purchaseDate?.addEventListener("change", () => {
-    queueDraftMarketLookup();
+    queueDraftMarketLookup({ forcePurchasePrice: true });
   });
   elements.assetForm.querySelectorAll("[data-optional-toggle]").forEach((toggle) => {
     toggle.addEventListener("change", () => {
