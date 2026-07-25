@@ -63,9 +63,10 @@ test("valuation exceptions replace pervasive completeness fields", async () => {
 });
 
 test("cash ledger hides internal face-value prices, price returns and inline exchange rates", async () => {
-  const [renderSource, indexSource] = await Promise.all([
+  const [renderSource, indexSource, formSource] = await Promise.all([
     readFile(resolve(projectRoot, "src/features/assets/assetRender.js"), "utf8"),
-    readFile(resolve(projectRoot, "index.html"), "utf8")
+    readFile(resolve(projectRoot, "index.html"), "utf8"),
+    readFile(resolve(projectRoot, "src/features/assets/assetForm.js"), "utf8")
   ]);
 
   assert.match(renderSource, /isCash \? "—" : escapeHtml\(formatUnitPrice\(asset\.costPrice/u);
@@ -75,6 +76,17 @@ test("cash ledger hides internal face-value prices, price returns and inline exc
   assert.match(renderSource, /外币折算汇率可在设置中调整/u);
   assert.match(indexSource, /id="setting-usd-cny-rate"/u);
   assert.match(indexSource, /id="setting-usd-hkd-rate"/u);
+  assert.match(indexSource, /<label><span>股数<\/span>\s*<input name="quantity"/u);
+  assert.match(formSource, /setFieldLabel\(quantityField, isCash \? "现金金额" : "股数"\)/u);
+});
+
+test("mobile note tags keep transparent checkboxes from widening the page", async () => {
+  const baseStyles = await readFile(resolve(projectRoot, "src/styles/00-base.css"), "utf8");
+  const checkboxRule = baseStyles.match(/\.note-tag-options input\s*\{(?<body>[^}]+)\}/u);
+
+  assert.ok(checkboxRule?.groups?.body, "expected a dedicated note tag checkbox rule");
+  assert.match(checkboxRule.groups.body, /width:\s*1px/u);
+  assert.match(checkboxRule.groups.body, /height:\s*1px/u);
 });
 
 function escapeRegExp(value) {
