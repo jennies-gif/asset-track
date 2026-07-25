@@ -36,7 +36,8 @@ export function renderMetrics(elements, context) {
           </span>
           <span>
             <small>${escapeHtml(context.dailyPnlMetricLabel(dailyPnl))}</small>
-            <b class="${toneClassForValue(dailyPnl.amountCents)}"${dailyPnl.reason ? ` title="${escapeHtml(dailyPnl.reason)}"` : ""}>${escapeHtml(dailyPnl.amountCents === null ? "暂无法计算" : formatOptionalSignedAmount(dailyPnl.amountCents))}</b>
+            <b class="${toneClassForValue(dailyPnl.amountCents)}"${dailyPnl.reason ? " aria-describedby=\"home-daily-pnl-reason\"" : ""}>${escapeHtml(dailyPnl.amountCents === null ? "暂无法计算" : formatOptionalSignedAmount(dailyPnl.amountCents))}</b>
+            ${dailyPnl.reason ? `<small class="snapshot-metric-reason" id="home-daily-pnl-reason">${escapeHtml(dailyPnl.reason)}</small>` : ""}
           </span>
         </div>
         ${hasAssets ? "" : `

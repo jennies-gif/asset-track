@@ -97,6 +97,29 @@ npm run data:process-backfill-tasks -- --limit=5 --dry-run=true
 - `user_asset_daily_price_snapshots`、`market_data_backfill_tasks`、`market_data_runs`：启用 RLS 但默认不创建公开读写 policy，避免用户资产维度价格、任务和运行日志被 PostgREST 直接暴露。
 - 服务端 API 使用受控的 PostgreSQL 连接写入数据；前端不应直接持有数据库连接串。
 
+### `market_data_sync_targets` 生产迁移
+
+生产部署前先创建 Supabase 恢复点或数据库备份，再单独执行：
+
+```text
+db/migrations/20260725_market_data_sync_targets.sql
+```
+
+不要对已有生产实例直接执行完整 `db/schema.sql`。迁移完成后，使用 Render API 实际 `DATABASE_URL` 对应的数据库角色运行只读检查：
+
+```text
+db/verification/20260725_market_data_sync_targets.sql
+```
+
+必须确认：
+
+- 表和 `market_data_sync_targets_status_idx` 已存在；
+- RLS 已启用且没有向浏览器端开放写入 policy；
+- API 数据库角色具备 `SELECT`、`INSERT` 和 `UPDATE` 权限；
+- 表中不包含用户 ID、资产 ID、数量、成本、账户、交易、备注或持有日期。
+
+首选回滚方式是先回滚 API 到不读取同步目标表的上一个稳定版本，并保留该附加表和已有公共代码。只有确认没有运行中的每日任务依赖该表、已备份同步目标且需要彻底撤销 schema 时，才另行审批删除表；不得在应用回滚时自动删除公共行情数据。
+
 ## 用户资产每日价格表
 
 全局行情缓存只表示“某个标的某天的市场价格”，不直接等同于用户的持仓收益曲线。用户录入资产后，API 会维护一层用户资产维度的每日价格快照：

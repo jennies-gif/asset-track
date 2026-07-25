@@ -39,17 +39,38 @@ export function latestDailyPnlSnapshot() {
   if (!assets.length) return { amountCents: null, valuationDate: "", reason: "暂无资产" };
 
   const pricedAssets = assets.filter((asset) => !isCashAsset(asset));
-  if (!pricedAssets.length) return { amountCents: 0n, valuationDate: "", reason: "" };
+  if (!pricedAssets.length) {
+    return {
+      amountCents: null,
+      valuationDate: "",
+      reason: "纯现金组合没有可核对的交易日价格变化"
+    };
+  }
 
-  const hasUnusablePrice = pricedAssets.some((asset) => {
-    const status = String(asset.priceStatus || "").trim();
-    return !isPositiveDecimal(asset.currentPrice) ||
+  const hasUnverifiedPrice = pricedAssets.some((asset) =>
+    String(asset.priceStatus || "").trim() !== "synced"
+  );
+  if (hasUnverifiedPrice) {
+    return {
+      amountCents: null,
+      valuationDate: "",
+      reason: "含手动、缺失或同步失败价格，无法计算统一交易日收益"
+    };
+  }
+
+  const hasUnusablePrice = pricedAssets.some((asset) =>
+    !isPositiveDecimal(asset.currentPrice) ||
       !isPositiveDecimal(asset.previousPrice) ||
-      !normalizePriceDate(asset.pricedAt) ||
-      ["pending", "missing", "error"].includes(status);
-  });
+      !isPositiveDecimal(asset.fxRate) ||
+      !isPositiveDecimal(asset.previousFxRate) ||
+      !normalizePriceDate(asset.pricedAt)
+  );
   if (hasUnusablePrice) {
-    return { amountCents: null, valuationDate: "", reason: "缺少可核对的当前价或上一交易日价格" };
+    return {
+      amountCents: null,
+      valuationDate: "",
+      reason: "缺少可核对的当前价、上一交易日价格或对应汇率"
+    };
   }
 
   const priceDates = [...new Set(pricedAssets.map((asset) => normalizePriceDate(asset.pricedAt)))];
@@ -67,7 +88,7 @@ export function latestDailyPnlSnapshot() {
 
 export function dailyPnlMetricLabel(snapshot) {
   const valuationDate = normalizePriceDate(snapshot?.valuationDate);
-  if (!valuationDate) return "昨日收益";
+  if (!valuationDate) return "最近交易日收益";
   const dateLabel = valuationDate.slice(5);
   return valuationDate === addDays(todayIsoDate(), -1)
     ? `昨日收益（${dateLabel}）`
