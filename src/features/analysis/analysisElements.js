@@ -6,7 +6,7 @@ export function getAnalysisElements() {
     analysisJudgementList: document.querySelector("#analysis-judgement-list"),
     analysisHealthList: document.querySelector("#analysis-health-list"),
     stageComparisonGrid: document.querySelector("#stage-comparison-grid"),
-    analysisContributionRows: document.querySelector("#analysis-contribution-rows"),
+    analysisDataNoticeSection: document.querySelector("#analysis-data-notice-section"),
     analysisQualityMetrics: document.querySelector("#analysis-quality-metrics"),
     analysisMonthlyReturnChart: document.querySelector("#analysis-monthly-return-chart"),
     analysisRiskAdjustedMetrics: document.querySelector("#analysis-risk-adjusted-metrics"),

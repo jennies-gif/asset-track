@@ -25,6 +25,14 @@
   justify-self: start;
 }
 
+.price-attention-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .trust-badge.data-error,
 .price-cell small.data-error,
 .asset-status-badge.is-danger,

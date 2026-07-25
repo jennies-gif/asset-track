@@ -364,6 +364,79 @@ export async function appendMarketDataRun(run) {
   return true;
 }
 
+export async function upsertMarketDataSyncTargets(targets = []) {
+  const pool = await getPool();
+  if (!pool || !targets.length) return false;
+  await ensureMarketDataSchema(pool);
+  for (const target of targets) {
+    await pool.query(
+      `
+        insert into market_data_sync_targets (
+          symbol, market, source_type, status, first_requested_at,
+          last_requested_at, updated_at
+        )
+        values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz, now())
+        on conflict (market, symbol)
+        do update set
+          source_type = case
+            when market_data_sync_targets.source_type = 'benchmark' then 'benchmark'
+            else excluded.source_type
+          end,
+          status = 'active',
+          last_requested_at = excluded.last_requested_at,
+          last_error = null,
+          updated_at = now()
+      `,
+      [target.symbol, target.market, target.sourceType || "user_requested", target.requestedAt || new Date().toISOString()]
+    );
+  }
+  return true;
+}
+
+export async function readMarketDataSyncTargets() {
+  const pool = await getPool();
+  if (!pool) return [];
+  await ensureMarketDataSchema(pool);
+  const result = await pool.query(
+    `
+      select symbol, market, source_type, status, first_requested_at,
+        last_requested_at, last_synced_at, last_error
+      from market_data_sync_targets
+      order by market asc, symbol asc
+    `
+  );
+  return result.rows.map((row) => ({
+    symbol: row.symbol,
+    market: row.market,
+    sourceType: row.source_type,
+    status: row.status,
+    firstRequestedAt: row.first_requested_at,
+    lastRequestedAt: row.last_requested_at,
+    lastSyncedAt: row.last_synced_at,
+    lastError: row.last_error || ""
+  }));
+}
+
+export async function updateMarketDataSyncTargetResults(results = [], syncedAt = new Date().toISOString()) {
+  const pool = await getPool();
+  if (!pool || !results.length) return false;
+  await ensureMarketDataSchema(pool);
+  for (const result of results) {
+    await pool.query(
+      `
+        update market_data_sync_targets
+        set status = $3,
+          last_synced_at = $4::timestamptz,
+          last_error = $5,
+          updated_at = now()
+        where market = $1 and upper(symbol) = upper($2)
+      `,
+      [result.market, result.symbol, result.status === "synced" ? "active" : "error", syncedAt, result.status === "synced" ? null : result.message || "行情同步失败"]
+    );
+  }
+  return true;
+}
+
 export async function upsertMarketDataBackfillTask(task) {
   const pool = await getPool();
   if (!pool) return false;
@@ -784,6 +857,25 @@ async function createMarketDataSchema(pool) {
       created_at timestamptz not null default now()
     );
 
+    create table if not exists market_data_sync_targets (
+      symbol text not null,
+      market text not null,
+      source_type text not null default 'user_requested',
+      status text not null default 'active',
+      first_requested_at timestamptz not null default now(),
+      last_requested_at timestamptz not null default now(),
+      last_synced_at timestamptz,
+      last_error text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (market, symbol),
+      check (source_type in ('user_requested', 'benchmark')),
+      check (status in ('active', 'error'))
+    );
+
+    create index if not exists market_data_sync_targets_status_idx
+      on market_data_sync_targets(status, market, symbol);
+
     create table if not exists market_data_backfill_tasks (
       id text primary key,
       user_id text not null,
@@ -851,6 +943,7 @@ async function enableMarketDataRowLevelSecurity(pool) {
     alter table market_data_fund_nav_snapshots enable row level security;
     alter table market_data_fx_rate_snapshots enable row level security;
     alter table market_data_runs enable row level security;
+    alter table market_data_sync_targets enable row level security;
     alter table market_data_backfill_tasks enable row level security;
     alter table user_asset_daily_price_snapshots enable row level security;
     alter table user_assets enable row level security;

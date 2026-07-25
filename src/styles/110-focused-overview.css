@@ -248,7 +248,8 @@
 
 .home-check-item {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
@@ -273,6 +274,20 @@
   color: var(--positive);
 }
 
+.home-check-item.is-warning > span {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.home-check-item.is-danger > span {
+  background: color-mix(in srgb, var(--negative) 12%, var(--bg-card));
+  color: var(--negative);
+}
+
+.home-check-item > .text-button {
+  justify-self: end;
+}
+
 .home-check-item strong {
   display: block;
   color: var(--text-primary);
@@ -286,6 +301,13 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .home-check-item > .text-button {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
 .allocation-section.home-dashboard-section .allocation-layout {

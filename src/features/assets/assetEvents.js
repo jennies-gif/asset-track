@@ -5,6 +5,7 @@ import {
   applyCashAssetFormMode,
   applyExistingAccountType,
   queueDraftMarketLookup,
+  deleteAsset,
   editAsset,
   handleAccountTypeChange,
   requestHideAssetFormPanel,
@@ -44,9 +45,12 @@ export function initAssetEvents(ctx) {
   });
   elements.assetForm.elements.currentPrice?.addEventListener("input", () => {
     delete elements.assetForm.dataset.autoDraftPrice;
-    if (elements.assetForm.elements.priceStatus?.value === "synced") elements.assetForm.elements.priceStatus.value = "manual";
-    if (elements.assetForm.elements.priceSource && elements.assetForm.elements.currentPrice.value.trim()) {
-      elements.assetForm.elements.priceSource.value = "用户录入";
+    const hasCurrentPrice = Boolean(elements.assetForm.elements.currentPrice.value.trim());
+    if (elements.assetForm.elements.priceStatus) {
+      elements.assetForm.elements.priceStatus.value = hasCurrentPrice ? "manual" : "";
+    }
+    if (elements.assetForm.elements.priceSource) {
+      elements.assetForm.elements.priceSource.value = hasCurrentPrice ? "用户录入" : "";
     }
     if (elements.assetForm.elements.pricedAt) elements.assetForm.elements.pricedAt.value = "";
     for (const field of ["priceKind", "priceAt", "marketTimezone", "sourceFetchedAt"]) {
@@ -118,11 +122,6 @@ export function initAssetEvents(ctx) {
     ctx.renderPortfolio();
   });
 
-  elements.portfolioStatusFilter?.addEventListener("change", () => {
-    ctx.setPortfolioFilter({ ...ctx.getPortfolioFilter(), status: elements.portfolioStatusFilter.value });
-    ctx.renderPortfolio();
-  });
-
   elements.portfolioRows.addEventListener("click", (event) => {
     const transactionButton = event.target.closest("[data-transaction-action]");
     if (transactionButton) {
@@ -143,8 +142,14 @@ export function initAssetEvents(ctx) {
     }
 
     const editButton = event.target.closest("[data-edit-asset-id]");
-    if (!editButton) return;
-    editAsset(editButton.dataset.editAssetId);
+    if (editButton) {
+      editAsset(editButton.dataset.editAssetId);
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-delete-asset-id]");
+    if (!deleteButton) return;
+    deleteAsset(deleteButton.dataset.deleteAssetId);
   });
 
   elements.historyRows?.addEventListener("click", (event) => {

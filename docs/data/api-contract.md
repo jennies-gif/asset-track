@@ -274,7 +274,7 @@
 
 ### `POST /api/market-data/sync-daily`
 
-用途：同步最新公共行情，也可按固定公共窗口返回历史行情。浏览器不发送首次持有日期；返回的公共历史行情由浏览器在本地结合 `purchaseDate` 生成每日价格。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 服务常驻运行时也会默认按本机时区每天 `22:00` 同步少量系统默认基准。
+用途：同步最新公共行情，也可按公共窗口返回历史行情。浏览器不发送首次持有日期，而是根据本地最早持有日期计算 `days`；返回的公共历史行情由浏览器在本地结合 `purchaseDate` 生成每日价格。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 会把请求代码登记为不关联用户的公共行情同步目标，不保存数量、成本、账户、交易、备注或精确持有日期。服务常驻运行时默认按本机时区每天 `22:00` 同步这些目标和全部系统分析基准。
 
 请求：
 
@@ -290,14 +290,14 @@
 
 HTTP 请求字段采用白名单，只允许：
 
-- `symbols`：1–50 个公共资产代码；只同步系统基准时可省略。
+- `symbols`：1–50 个公共资产代码；只同步系统基准时可省略。浏览器端组合超过 50 个去重代码时必须顺序分批请求，系统基准只随第一批提交，并合并各批结果。
 - `trigger`：`manual`、`auto` 或 `asset_created`。
-- `days`：1–365 天的固定公共历史窗口。
+- `days`：1–36500 天的公共历史窗口，由浏览器根据本地最早持有日期计算。
 - `includeHistory`、`includeBenchmarks`、`autoFetch`：布尔值。
 
 任何其他字段返回 `400 request_field_not_allowed`。尤其不接受 `assets`、`assetId`、`account`、`purchaseDate`、`dateFrom`、`dateTo`、数量、成本或备注。
 
-用户触发的代码集合只用于本次公共行情请求，不写入 `market_data_runs.requested_symbols`、本地运行记录或运行记录的 `raw_payload`；服务端只允许保存不含代码的聚合成功、失败和跳过数量。
+用户触发的代码不会写入 `market_data_runs.requested_symbols`、运行记录或运行记录的 `raw_payload`。代码会单独写入 `market_data_sync_targets`，只作为不关联用户的公共行情维护集合；该表不得保存 `userId`、资产 ID、数量、成本、账户、交易、备注或持有日期。
 
 如果请求包含白名单外字段，API 返回：
 

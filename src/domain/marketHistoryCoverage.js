@@ -26,6 +26,13 @@ export function missingMarketHistoryRanges(history = [], dateFrom, dateTo) {
   return ranges;
 }
 
+export function marketHistoryWindowDays(dateFrom, dateTo) {
+  const requestedFrom = normalizeDate(dateFrom);
+  const requestedTo = normalizeDate(dateTo);
+  if (!requestedFrom || !requestedTo || requestedFrom > requestedTo) return 1;
+  return Math.floor((Date.parse(`${requestedTo}T00:00:00.000Z`) - Date.parse(`${requestedFrom}T00:00:00.000Z`)) / dayMs) + 1;
+}
+
 function normalizeDate(value) {
   const raw = String(value || "").slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/u.test(raw) ? raw : "";

@@ -1,5 +1,6 @@
 import { todayIsoDate } from "../../utils/date.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../domain/userAssetDailyPrices.js";
+import { marketHistoryWindowDays } from "../../domain/marketHistoryCoverage.js";
 import { normalizeCnListedFundInstrument } from "../../domain/cnInstrumentClassification.js";
 import { findAssetQuickMatch, normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
 import { inferAssetMarket } from "../assets/marketOptions.js";
@@ -7,7 +8,7 @@ import { renderMarketSyncResult } from "./marketRender.js";
 
 let ctx = {};
 const marketAutoSyncKey = "asset-trail-market-auto-sync-v1";
-const publicHistoryWindowDays = 365;
+const marketSyncBatchSize = 50;
 
 export function configureMarketService(context) {
   ctx = context;
@@ -24,7 +25,8 @@ export function hideMarketSyncResult() {
 export async function syncLatestMarketPrices() {
   await runMarketPriceSync({
     trigger: "manual",
-    loadingMessage: (count) => `正在同步 ${count} 个已录入资产的最新价格...`
+    includeBenchmarks: true,
+    loadingMessage: () => "正在同步已录入资产与全部分析基准的价格..."
   });
 }
 
@@ -39,7 +41,8 @@ export async function syncDailyMarketPricesIfDue() {
   writeAutoSyncState({ ...autoSync, lastAttemptedDate: today, lastAttemptedAt: new Date().toISOString() });
   await runMarketPriceSync({
     trigger: "auto",
-    loadingMessage: (count) => `正在自动同步 ${count} 个已录入资产的最新价格...`,
+    includeBenchmarks: true,
+    loadingMessage: () => "正在自动同步已录入资产与全部分析基准的价格...",
     onSettled: (state) => {
       const latest = readAutoSyncState();
       if (state.status === "success" || state.status === "warning") {
@@ -70,8 +73,9 @@ export async function ensureAssetMarketHistory(asset) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         symbols: [symbol],
-        days: publicHistoryWindowDays,
+        days: marketHistoryWindowDays(asset.purchaseDate, todayIsoDate()),
         includeHistory: true,
+        includeBenchmarks: true,
         trigger: "asset_created"
       })
     });
@@ -112,50 +116,91 @@ export async function ensureAssetMarketHistory(asset) {
   }
 }
 
-async function runMarketPriceSync({ trigger, loadingMessage, onSettled } = {}) {
+async function runMarketPriceSync({ trigger, includeBenchmarks = false, loadingMessage, onSettled } = {}) {
   const symbols = symbolsForMarketSync();
-  if (!symbols.length) {
+  if (!symbols.length && !includeBenchmarks) {
     ctx.setMarketSyncState({ status: "empty", message: "当前没有可同步代码。请先填写资产代码，或在分析页选择收益对比基准。", results: [], syncedAt: "" });
     renderMarketSyncResult();
     return;
   }
-  ctx.setMarketSyncState({ status: "loading", message: loadingMessage?.(symbols.length) || `正在同步 ${symbols.length} 个代码价格...`, results: [], syncedAt: "" });
+  const requestedCount = symbols.length + (includeBenchmarks ? 9 : 0);
+  ctx.setMarketSyncState({ status: "loading", message: loadingMessage?.(requestedCount) || `正在同步 ${requestedCount} 个代码价格...`, results: [], syncedAt: "" });
   renderMarketSyncResult();
-  try {
-    const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols, trigger })
-    });
-    if (!response.ok) throw new Error(await marketApiErrorMessage(response));
-    const payload = await response.json();
-    const syncedAt = payload.syncedAt || new Date().toISOString();
-    const applied = applyMarketSyncResults(payload.results || [], syncedAt);
-    const fetchPresentation = marketFetchPresentation(payload.fetch);
+  const batches = buildMarketSyncBatches(symbols, includeBenchmarks);
+  const historyDays = marketHistoryWindowDays(earliestRecordedAssetDate(), todayIsoDate());
+  const results = [];
+  const failedBatches = [];
+  const fetchPresentations = [];
+  let syncedAt = "";
+
+  for (const [index, batch] of batches.entries()) {
+    try {
+      const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(batch.symbols.length ? { symbols: batch.symbols } : {}),
+          trigger,
+          days: historyDays,
+          includeBenchmarks: batch.includeBenchmarks,
+          includeHistory: true
+        })
+      });
+      if (!response.ok) throw new Error(await marketApiErrorMessage(response));
+      const payload = await response.json();
+      syncedAt = payload.syncedAt || syncedAt || new Date().toISOString();
+      results.push(...decorateMarketSyncResults(payload.results || [], payload.fetch));
+      fetchPresentations.push(marketFetchPresentation(payload.fetch));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "无法连接行情 API";
+      failedBatches.push({ index, symbols: batch.symbols, message });
+      results.push(...batch.symbols.map((symbol) => ({ symbol, status: "error", message })));
+    }
+  }
+
+  if (results.length && failedBatches.length < batches.length) {
+    syncedAt ||= new Date().toISOString();
+    const applied = applyMarketSyncResults(results, syncedAt);
+    for (const failed of failedBatches) markOpenAssetsPriceError(failed.symbols, failed.message);
+    const sourceWarning = fetchPresentations.some((item) => item.hasWarning);
     const nextState = {
-      status: fetchPresentation.hasWarning || !(applied.appliedCount || applied.benchmarkSyncedCount) ? "warning" : "success",
-      message: `${fetchPresentation.message}，${applied.updatedCount} 个资产价格发生变化、${applied.unchangedCount} 个资产价格未变化、${applied.benchmarkSyncedCount} 个分析基准已同步，${applied.missingCount} 个缺少缓存。`,
-      results: decorateMarketSyncResults(payload.results || [], payload.fetch),
+      status: failedBatches.length || sourceWarning || !(applied.appliedCount || applied.benchmarkSyncedCount) ? "warning" : "success",
+      message: `${batches.length} 批中 ${batches.length - failedBatches.length} 批完成、${failedBatches.length} 批失败，${applied.updatedCount} 个资产价格发生变化、${applied.unchangedCount} 个资产价格未变化、${applied.benchmarkSyncedCount} 个分析基准已同步，${applied.missingCount} 个缺少缓存或同步失败。`,
+      results,
       syncedAt
     };
     ctx.setMarketSyncState(nextState);
     ctx.persistAndRender();
     ctx.loadBenchmarkPerformance?.({ force: true });
     onSettled?.(nextState);
-  } catch (error) {
-    markOpenAssetsPriceError(symbols, error instanceof Error ? error.message : "无法连接行情 API");
+  } else {
+    const failureMessage = failedBatches.map((item) => `第 ${item.index + 1} 批：${item.message}`).join("；") || "无法连接行情 API";
+    markOpenAssetsPriceError(symbols, failureMessage);
     const nextState = {
       status: "error",
-      message: `同步失败：${error instanceof Error ? error.message : "无法连接行情 API"}`,
-      results: [],
+      message: `同步失败：${failureMessage}`,
+      results,
       syncedAt: ""
     };
     ctx.setMarketSyncState(nextState);
     ctx.persistAndRender?.();
     onSettled?.(nextState);
-  } finally {
-    renderMarketSyncResult();
   }
+  renderMarketSyncResult();
+}
+
+export function buildMarketSyncBatches(symbols, includeBenchmarks = false, batchSize = marketSyncBatchSize) {
+  const normalizedBatchSize = Number.isInteger(batchSize) && batchSize > 0 ? batchSize : marketSyncBatchSize;
+  const uniqueSymbols = [...new Set((Array.isArray(symbols) ? symbols : []).map(canonicalSyncSymbol).filter(Boolean))];
+  if (!uniqueSymbols.length) return includeBenchmarks ? [{ symbols: [], includeBenchmarks: true }] : [];
+  const batches = [];
+  for (let index = 0; index < uniqueSymbols.length; index += normalizedBatchSize) {
+    batches.push({
+      symbols: uniqueSymbols.slice(index, index + normalizedBatchSize),
+      includeBenchmarks: includeBenchmarks && index === 0
+    });
+  }
+  return batches;
 }
 
 export function marketFetchPresentation(fetchResult) {
@@ -242,6 +287,15 @@ function applyMarketSyncResults(results, syncedAt) {
       };
     }
     appliedCount += 1;
+    const refreshedDailyPrices = Array.isArray(result.history) && result.history.length && asset.purchaseDate
+      ? buildUserAssetDailyPriceSnapshots({
+          userId: "local-user",
+          asset,
+          history: result.history,
+          dateFrom: asset.purchaseDate,
+          dateTo: todayIsoDate()
+        })
+      : null;
     const changed = String(asset.currentPrice || "") !== String(result.after.currentPrice || "") ||
       String(asset.pricedAt || "") !== String(result.after.pricedAt || "") ||
       String(asset.priceAt || "") !== String(result.after.priceAt || "");
@@ -264,9 +318,9 @@ function applyMarketSyncResults(results, syncedAt) {
       sourceFetchedAt: result.after.sourceFetchedAt || asset.sourceFetchedAt || "",
       priceStatus: "synced",
       priceError: "",
-      dailyPrices: normalizeDailyPriceRows(result.dailyPrices || asset.dailyPrices),
-      dailyPriceStatus: result.dailyPriceStatus || asset.dailyPriceStatus || "",
-      dailyPriceMissingDates: Array.isArray(result.dailyPriceMissingDates) ? result.dailyPriceMissingDates : asset.dailyPriceMissingDates || [],
+      dailyPrices: normalizeDailyPriceRows(refreshedDailyPrices?.rows || result.dailyPrices || asset.dailyPrices),
+      dailyPriceStatus: refreshedDailyPrices?.status || result.dailyPriceStatus || asset.dailyPriceStatus || "",
+      dailyPriceMissingDates: refreshedDailyPrices?.missingDates || (Array.isArray(result.dailyPriceMissingDates) ? result.dailyPriceMissingDates : asset.dailyPriceMissingDates || []),
       updatedAt: syncedAt || new Date().toISOString()
     };
   });
@@ -316,6 +370,13 @@ function symbolsForRecordedAssets() {
 
 function symbolsForMarketSync() {
   return symbolsForRecordedAssets();
+}
+
+function earliestRecordedAssetDate() {
+  return ctx.getState().assets
+    .map((asset) => String(asset.purchaseDate || asset.buyDate || asset.acquiredAt || "").slice(0, 10))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/u.test(date))
+    .sort()[0] || todayIsoDate();
 }
 
 function benchmarkSymbolsForAnalysis() {

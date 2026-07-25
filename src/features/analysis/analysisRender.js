@@ -1,10 +1,9 @@
 import { calculateAttribution, formatPercent, roundDivide } from "../../domain/calculations.js";
-import { buildAssetDataIssues } from "../assets/dataQuality.js";
+import { buildAssetAnalysisLimitations } from "../assets/dataQuality.js";
 import { benchmarkInstruments } from "../../domain/marketData.js";
 import { inferAssetMarket, marketLabel } from "../assets/marketOptions.js";
 import { absBigInt } from "../../utils/bigint.js";
 import { escapeHtml } from "../../utils/dom.js";
-import { trustBadge } from "../../ui/badges.js";
 import { emptyActionState, emptyStateInner } from "../../ui/emptyState.js";
 import {
   formatDisplayCurrency,
@@ -97,8 +96,6 @@ function openAssets() { return ctx.openAssets(); }
 function calculateDisplayPortfolio(assets) { return ctx.calculateDisplayPortfolio(assets); }
 function convertUsdToDisplay(cents) { return ctx.convertUsdToDisplay(cents); }
 function renderMarketSyncResult() { return ctx.renderMarketSyncResult(); }
-function latestOverviewUpdateLabel() { return ctx.latestOverviewUpdateLabel(); }
-function fxRateSummary() { return ctx.fxRateSummary(); }
 function calculateTrendValueChangeForRange(range) { return ctx.calculateTrendValueChangeForRange(range); }
 function buildEvenlySpacedXAxisLabels(points, maxLabels) { return ctx.buildEvenlySpacedXAxisLabels(points, maxLabels); }
 function renderAttributionInternal() {
@@ -119,10 +116,10 @@ function renderAttributionInternal() {
   const convertedChange = analysis.valueChangeCents;
   const convertedContribution = analysis.contributionCents;
   const investmentResult = analysis.investmentResultCents;
-  const dataIssues = analysisDataIssues(assets);
+  const analysisLimitations = analysisDataLimitations(assets);
   const topConcentration = topHoldingConcentration(displayPortfolio.positions, displayPortfolio.totals.marketValueCents);
-  renderAnalysisJudgement(analysis, dataIssues);
-  analysisElements.analysisHealthList.innerHTML = renderAnalysisHealthMetrics(analysis, dataIssues, topConcentration);
+  renderAnalysisJudgement(analysis);
+  analysisElements.analysisHealthList.innerHTML = renderAnalysisHealthMetrics(analysis, topConcentration);
   analysisElements.stageComparisonGrid.innerHTML = [
     analysisMiniMetric("期初资产", formatDisplayCurrency(convertedStart), analysisStageStartLabel(assets)),
     analysisMiniMetric("当前资产", formatDisplayCurrency(convertedEnd), analysisStageEndLabel(assets)),
@@ -135,9 +132,8 @@ function renderAttributionInternal() {
   renderAnalysisQuality(analysis);
   renderAnalysisConcentration(analysis);
   renderAnalysisRisk(analysis);
-  renderAnalysisDataTrust(analysis, dataIssues);
+  renderAnalysisLimitations(analysis, analysisLimitations);
   renderMarketSyncResult();
-  renderAnalysisContributionRows(displayPortfolio);
 }
 
 function setAnalysisAssetCardsVisible(isVisible) {
@@ -163,11 +159,9 @@ function renderEmptyAnalysis() {
   }
   if (analysisElements.analysisContributionSummary) analysisElements.analysisContributionSummary.textContent = "";
   if (analysisElements.analysisRiskNote) {
-    analysisElements.analysisRiskNote.innerHTML = `${trustBadge("私人数据本地保存")} ${trustBadge("行情仅发送公共查询字段")} ${trustBadge("仅供记录与复盘")}`;
+    analysisElements.analysisRiskNote.innerHTML = "";
   }
-  if (analysisElements.analysisContributionRows) {
-    analysisElements.analysisContributionRows.innerHTML = `<tr><td colspan="4" class="empty-table-cell">${emptyStateInner("暂无数据核对项", "")}</td></tr>`;
-  }
+  analysisElements.analysisDataNoticeSection?.classList.add("is-hidden");
   if (analysisElements.analysisMonthlyReturnChart) analysisElements.analysisMonthlyReturnChart.innerHTML = "";
   if (analysisElements.analysisRiskAdjustedMetrics) analysisElements.analysisRiskAdjustedMetrics.innerHTML = "";
   if (analysisElements.analysisBenchmarkTrendChart) analysisElements.analysisBenchmarkTrendChart.innerHTML = "";
@@ -179,7 +173,7 @@ function renderEmptyAnalysis() {
 }
 
 
-function renderAnalysisJudgement(analysis, dataIssues) {
+function renderAnalysisJudgement(analysis) {
   if (!analysisElements.analysisJudgementTitle || !analysisElements.analysisJudgementList) return;
   const riskHigh = analysis.exposure.highRiskBps >= 3000n || analysis.drawdown.maxDrawdownBps <= -1500n || analysis.concentration.status === "high";
   const qualityOkay = analysis.realReturnBps >= 0n || analysis.investmentResultCents >= 0n;
@@ -208,12 +202,6 @@ function renderAnalysisJudgement(analysis, dataIssues) {
       text: `现金占比 ${formatShare(cashBps)}，${cashBps >= 2000n ? "仍有防守和再配置空间" : "防守缓冲相对有限"}。`
     }
   ];
-  if (dataIssues.length) {
-    items.push({
-      tone: "danger",
-      text: `仍有 ${dataIssues.length} 项数据待核对，结论需在补齐价格、费用或历史记录后复查。`
-    });
-  }
   analysisElements.analysisJudgementList.innerHTML = items.map((item) => `
     <li class="analysis-diagnosis-item is-${escapeHtml(item.tone)}">
       ${analysisDiagnosisIcon(item.tone)}
@@ -239,7 +227,7 @@ function topVolatileDriver(analysis) {
   return candidate?.name || "";
 }
 
-function renderAnalysisHealthMetrics(analysis, dataIssues, topConcentration) {
+function renderAnalysisHealthMetrics(analysis, topConcentration) {
   const cryptoBps = analysis.exposure.digitalBps;
   const metrics = [
     {
@@ -346,60 +334,6 @@ function attributionItemDescription(key) {
     manual: "手动调整用于记录迁移、对账修正或非标准资产变化。",
     unexplained: "可能来自数据缺失、价格/汇率口径不一致或记录未补全，需要优先核对。"
   }[key] || "用于解释组合价值变化的一项来源。";
-}
-
-function analysisOverallCard(analysis, { dataIssues, convertedEnd, convertedChange }) {
-  const status = analysisOverallStatus(analysis, dataIssues);
-  const changeText = formatSignedCurrency(convertedChange);
-  if (!hasDisplayValue(formatPercent(analysis.realReturnBps)) || !hasDisplayValue(formatPercent(analysis.drawdown.maxDrawdownBps))) {
-    return analysisInsufficientDataCard();
-  }
-  return `
-    <article class="analysis-overall-inner ${analysisStatusClass(status)}">
-      <div class="analysis-overall-top">
-        <span class="status-tag ${analysisStatusClass(status)}">${escapeHtml(analysisStatusLabel(status))}</span>
-        <small>${escapeHtml(analysisScopeLabel())}</small>
-      </div>
-      <strong>${escapeHtml(formatDisplayCurrency(convertedEnd))}</strong>
-      <p>区间变化 <span class="${toneClassForValue(convertedChange)}">${escapeHtml(changeText)}</span>。${escapeHtml(analysisOverallConclusion(analysis, dataIssues))}</p>
-      <dl>
-        <div>
-          <dt>真实投资收益率</dt>
-          <dd class="${toneClassForValue(analysis.realReturnBps)}">${escapeHtml(formatPercent(analysis.realReturnBps))}</dd>
-        </div>
-        <div>
-          <dt>最大回撤</dt>
-          <dd class="${toneClassForValue(analysis.drawdown.maxDrawdownBps)}">${escapeHtml(formatPercent(analysis.drawdown.maxDrawdownBps))}</dd>
-        </div>
-        <div>
-          <dt>数据可信度</dt>
-          <dd>${escapeHtml(dataIssues.length ? `${dataIssues.length} 项待核对` : "关键数据完整")}</dd>
-        </div>
-      </dl>
-    </article>
-  `;
-}
-
-function analysisInsufficientDataCard() {
-  return `
-    <article class="analysis-overall-inner analysis-empty-card">
-      <strong>暂无足够数据</strong>
-      <p>请补充资产成本价、当前价或历史记录后查看。</p>
-    </article>
-  `;
-}
-
-function analysisOverallStatus(analysis, dataIssues) {
-  if (analysis.drawdown.currentDrawdownBps <= -1000n || analysis.concentration.status === "high" || analysis.exposure.highRiskBps >= 7000n) return "high";
-  if (dataIssues.length || analysis.realReturnBps < 0n || analysis.drawdown.currentDrawdownBps <= -500n || analysis.concentration.status === "medium") return "medium";
-  return "low";
-}
-
-function analysisOverallConclusion(analysis, dataIssues) {
-  if (dataIssues.length) return "当前结论受数据缺口影响，建议先核对价格、汇率和未归因差异。";
-  if (analysis.realReturnBps < 0n) return "剔除投入后组合仍为负收益，需要重点复盘拖累来源。";
-  if (analysis.concentration.status !== "low") return "组合表现为正，但集中度偏高，需要确认是否符合风险承受范围。";
-  return "组合结构和收益质量暂未出现明显异常，继续保持数据更新。";
 }
 
 function renderAnalysisQuality(analysis) {
@@ -563,32 +497,31 @@ function renderAnalysisRisk(analysis) {
     : `当前回撤处于可观察范围。相比短期涨跌，更值得关注的是未来是否仍能坚持既定配置和复盘节奏。`;
 }
 
-function renderAnalysisDataTrust(analysis, dataIssues) {
-  if (!analysisElements.analysisRiskNote) return;
+function renderAnalysisLimitations(analysis, limitations) {
+  if (!analysisElements.analysisRiskNote || !analysisElements.analysisDataNoticeSection) return;
   const unexplained = convertUsdToDisplay(
     analysis.attribution.items.find((item) => item.key === "unexplained")?.amountCents || 0n
   );
-  const issueSummary = summarizeAnalysisIssues(dataIssues);
-  if (!dataIssues.length && unexplained === 0n) {
-    analysisElements.analysisRiskNote.innerHTML = `
-      <span class="analysis-audit-badge is-ok">关键数据完整</span>
-      <span class="analysis-audit-badge">上次更新：${escapeHtml(latestOverviewUpdateLabel())}</span>
-      <span class="analysis-audit-badge">${escapeHtml(fxRateSummary())}</span>
-      <span>仅供记录与复盘，不构成投资建议。</span>
-    `;
+  const shouldShow = limitations.length > 0 || unexplained !== 0n;
+  analysisElements.analysisDataNoticeSection.classList.toggle("is-hidden", !shouldShow);
+  if (!shouldShow) {
+    analysisElements.analysisRiskNote.innerHTML = "";
     return;
   }
+  const summary = summarizeAnalysisLimitations(limitations);
   analysisElements.analysisRiskNote.innerHTML = `
-    <span class="analysis-audit-badge is-warning">${escapeHtml(dataIssues.length ? `${dataIssues.length} 项待核对` : "存在未归因差异")}</span>
-    <span>${issueSummary ? escapeHtml(issueSummary) : `未归因差异 ${escapeHtml(formatSignedCurrency(unexplained))}，建议核对期初价格、当前价格、汇率和费用。`}</span>
-    <span class="analysis-trust-inline"><span class="analysis-audit-badge">仅供记录与复盘</span><span class="analysis-audit-badge">${escapeHtml(fxRateSummary())}</span></span>
+    <span class="analysis-audit-badge is-warning">${escapeHtml(limitations.length ? `${limitations.length} 项信息限制分析` : "存在未归因差异")}</span>
+    <span>${summary ? escapeHtml(summary) : `未归因差异 ${escapeHtml(formatSignedCurrency(unexplained))}，建议核对期初价格、汇率和费用记录。`}</span>
+    <span class="analysis-audit-badge">当前市值问题请在总览“待处理”中处理</span>
   `;
 }
 
-function summarizeAnalysisIssues(dataIssues) {
-  const rows = dataIssues.slice(0, 3).map(({ asset, issue }) => `${asset.name}：${issue.action || issue.label}`);
+function summarizeAnalysisLimitations(limitations) {
+  const rows = limitations.slice(0, 3).map(({ asset, limitation }) =>
+    `${asset.name}：${limitation.label}，${limitation.detail}`
+  );
   if (!rows.length) return "";
-  const suffix = dataIssues.length > rows.length ? `；另有 ${dataIssues.length - rows.length} 项` : "";
+  const suffix = limitations.length > rows.length ? `；另有 ${limitations.length - rows.length} 项` : "";
   return `${rows.join("；")}${suffix}`;
 }
 
@@ -691,11 +624,10 @@ function renderTopHoldings(analysis) {
     : `<p class="empty-state">暂无当前持仓。先到“资产”页添加资产，或导入 JSON 备份恢复持仓。</p>`;
 }
 
-function analysisDataIssues(assets) {
+function analysisDataLimitations(assets) {
   return assets.flatMap((asset) =>
-    buildAssetDataIssues(asset)
-      .filter((issue) => !["missing-buy-reason", "missing-close-reason"].includes(issue.key))
-      .map((issue) => ({ asset, issue }))
+    buildAssetAnalysisLimitations(asset)
+      .map((limitation) => ({ asset, limitation }))
   );
 }
 
@@ -712,93 +644,4 @@ function topHoldingConcentration(positions, totalValueCents) {
     asset: top,
     message: `当前范围内${top.name}占${formatShare(weightBps)}`
   };
-}
-
-function renderAnalysisHealthList(concentration, dataIssues, analysis) {
-  const unexplained = convertUsdToDisplay(
-    analysis.attribution.items.find((item) => item.key === "unexplained")?.amountCents || 0n
-  );
-  const digitalBps = analysis.exposure.digitalBps;
-  const qualityStatus = analysis.realReturnBps < 0n || absBigInt(unexplained) > 0n ? "medium" : "low";
-  const statusItems = [
-    {
-      label: "当前回撤较深",
-      value: formatPercent(analysis.drawdown.currentDrawdownBps),
-      status: analysis.drawdown.currentDrawdownBps <= -1000n ? "high" : analysis.drawdown.currentDrawdownBps <= -500n ? "medium" : "low",
-      hint: analysis.drawdown.currentDrawdownDays ? `已持续约 ${analysis.drawdown.currentDrawdownDays} 天` : "当前接近阶段高点"
-    },
-    {
-      label: "数字资产配置偏高",
-      value: formatShare(digitalBps),
-      status: digitalBps >= 1500n ? "high" : digitalBps >= 800n ? "medium" : "low",
-      hint: "数字资产通常波动较高，占比变化需要结合自身记录复盘"
-    },
-    {
-      label: "Top 5 集中度过高",
-      value: formatShare(concentration.top5WeightBps),
-      status: concentration.top5WeightBps >= 6000n ? "high" : concentration.top5WeightBps >= 4500n ? "medium" : "low",
-      hint: concentration.message
-    },
-    {
-      label: "收益质量",
-      value: formatPercent(analysis.realReturnBps),
-      status: qualityStatus,
-      hint: dataIssues.length ? `${dataIssues.length} 项数据待核对` : "未归因差异",
-      hintValue: dataIssues.length ? "" : formatSignedCurrency(unexplained),
-      hintClass: dataIssues.length ? "" : toneClassForValue(unexplained)
-    }
-  ];
-  return statusItems
-    .map((item) => `
-      <article class="analysis-health-item ${analysisStatusClass(item.status)}">
-        <div>
-          <span>${escapeHtml(item.label)}</span>
-          <b class="status-tag ${analysisStatusClass(item.status)}">${escapeHtml(analysisStatusLabel(item.status))}</b>
-        </div>
-        <strong class="${toneClassForValue(item.value)}">${escapeHtml(item.value)}</strong>
-        <small>${escapeHtml(item.hint)}${item.hintValue ? ` <b class="${escapeHtml(item.hintClass)}">${escapeHtml(item.hintValue)}</b>` : ""}</small>
-      </article>
-    `)
-    .join("");
-}
-
-function renderAnalysisContributionRows(portfolio) {
-  if (!analysisElements.analysisContributionRows) return;
-  const totalValue = portfolio.totals.marketValueCents || 1n;
-  const rows = portfolio.positions
-    .map((position) => {
-      const changeCents = position.marketValueCents - position.previousValueCents;
-      const issues = analysisDataIssues([position]);
-      return {
-        position,
-        changeCents,
-        weightBps: roundDivide(position.marketValueCents * 10000n, totalValue),
-        status: issues.length ? `${issues.length} 项待核对` : "完整"
-      };
-    })
-    .sort((left, right) => {
-      const rightAbs = absBigInt(right.changeCents);
-      const leftAbs = absBigInt(left.changeCents);
-      if (rightAbs === leftAbs) return right.position.name.localeCompare(left.position.name);
-      return rightAbs > leftAbs ? 1 : -1;
-    })
-    .slice(0, 6);
-  analysisElements.analysisContributionRows.innerHTML = rows.length
-    ? rows
-        .map((row) => {
-          const changeClass = toneClassForValue(row.changeCents);
-          return `
-            <tr>
-              <td>
-                <strong>${escapeHtml(row.position.name)}</strong>
-                <span>${escapeHtml([row.position.symbol, marketLabel(row.position.market), row.position.currency].filter(Boolean).join(" · "))}</span>
-              </td>
-              <td class="${changeClass}">${formatDisplayCurrency(row.changeCents)}</td>
-              <td>${formatShare(row.weightBps)}</td>
-              <td><span class="analysis-table-status ${row.status === "完整" ? "is-ok" : "is-warning"}">${escapeHtml(row.status)}</span></td>
-            </tr>
-          `;
-        })
-        .join("")
-    : `<tr><td colspan="4" class="empty-cell">暂无当前资产。</td></tr>`;
 }

@@ -13,6 +13,7 @@
 | 0007 | 市场资源库和行情抓取边界 | [0007-market-data-boundaries.md](./0007-market-data-boundaries.md) | Status Unknown — Non-authoritative | 未发现明确批准记录，不作为有效规则。 |
 | 0008 | 当前 MVP 资产数据唯一事实来源 | [0008-current-asset-source-of-truth.md](./0008-current-asset-source-of-truth.md) | Draft | 已授权草案，尚未批准。 |
 | 0009 | 公共行情价格时间语义 | [0009-market-price-time-semantics.md](./0009-market-price-time-semantics.md) | Accepted | 2026-07-13 由产品负责人批准。 |
+| 0010 | 公共行情同步目标持久化与私人资产本地事实来源边界 | [0010-public-market-sync-targets.md](./0010-public-market-sync-targets.md) | Accepted | 2026-07-23 由产品负责人批准。 |
 
 ## 状态定义
 

@@ -40,8 +40,8 @@ export function buildAssetFormPayload(existingAsset) {
     delete form[transientField];
   }
   const fxRate = form.fxRate || existingAsset?.fxRate || defaultAssetFxRate(form.currency);
-  const hasManualPrice = String(form.currentPrice || "").trim() !== "";
   const explicitPriceStatus = String(form.priceStatus || "").trim();
+  const hasManualPrice = explicitPriceStatus === "manual" && String(form.currentPrice || "").trim() !== "";
   const hasSyncedDraftPrice = explicitPriceStatus === "synced" && String(form.priceSource || "").trim() && String(form.pricedAt || "").trim();
   const hasCostPrice = Number(String(form.costPrice || existingAsset?.costPrice || "0").trim()) > 0;
   const hasExistingPrice = Boolean(existingAsset?.currentPrice && existingAsset?.priceStatus !== "pending");

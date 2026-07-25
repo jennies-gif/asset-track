@@ -28,7 +28,6 @@ import {
   convertUsdToDisplay,
   currentOverviewTotalCents,
   displayCurrency,
-  displayFxRateSummary,
   openAssets,
   overviewAssets,
   selectedAccountLabel,
@@ -103,6 +102,7 @@ import {
 import {
   applyCashAssetFormMode as applyCashAssetFormModeFromModule,
   configureAssetForm,
+  editAsset,
   renderAccountPicker,
   renderAssetQuickMatchOptions,
   startCloseAsset,
@@ -113,8 +113,6 @@ import { configureAssetFormPayload } from "./features/assets/assetFormPayload.js
 import { initAssetEvents } from "./features/assets/assetEvents.js";
 import {
   configureAssetRender,
-  priceStatusClass,
-  priceStatusLabel,
   renderPortfolio
 } from "./features/assets/assetRender.js";
 import { buildAssetChangeRecords, configureAssetTransactions } from "./features/assets/assetTransactions.js";
@@ -174,10 +172,7 @@ import {
   buildHomeRenderContext,
   calculateCumulativeReturnBps,
   configureHomeModel,
-  fxRateSummary,
-  latestOverviewUpdateLabel,
-  priceCompletenessClass,
-  priceCompletenessLabel
+  latestOverviewUpdateLabel
 } from "./features/home/homeModel.js";
 import { renderHomeDashboard as renderHomeDashboardView, renderMetrics as renderMetricsView } from "./features/home/homeRender.js";
 import { initializeComposeForms } from "./ui/composeForm.js";
@@ -225,9 +220,7 @@ configureHomeModel({
   noteAssetLabel,
   noteTagsFor,
   notSynced: NOT_SYNCED,
-  overviewAssets,
-  priceStatusClass,
-  priceStatusLabel
+  overviewAssets
 });
 configureFormatters({
   displayCurrency,
@@ -282,7 +275,6 @@ const assetContext = {
   activateTab,
   calculateDisplayPortfolio,
   convertUsdToDisplay,
-  displayFxRateSummary,
   findNoteForChange,
   findReviewNote,
   normalizeSnapshotDate,
@@ -436,8 +428,6 @@ configureAnalysisRender({
   latestTrendDate,
   renderMarketSyncResult,
   loadBenchmarkPerformance,
-  latestOverviewUpdateLabel,
-  fxRateSummary,
   calculateTrendValueChangeForRange,
   buildEvenlySpacedXAxisLabels,
   benchmarkReturnPeriods,
@@ -528,10 +518,12 @@ initMarketEvents({
 homeElements.metrics.addEventListener("change", handleInlineCurrencyChange);
 bindHomeEvents({
   activateTab,
+  editAsset,
   startQuickAsset,
   loadDemoState,
   showNoteEditor,
-  applyNoteTemplate
+  applyNoteTemplate,
+  syncLatestMarketPrices
 });
 
 initTrendEvents(trendContext);

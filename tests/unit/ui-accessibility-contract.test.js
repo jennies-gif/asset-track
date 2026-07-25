@@ -68,3 +68,16 @@ test("mobile interaction rules preserve 44px touch targets", async () => {
   assert.match(source, /@media \(max-width: 900px\)[\s\S]*?\.primary-button,[\s\S]*?min-height: 44px;/u);
   assert.match(source, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/u);
 });
+
+test("asset rows expose accessible edit and delete actions without overlapping search results", async () => {
+  const [renderSource, baseStyles] = await Promise.all([
+    readFile(resolve(projectRoot, "src/features/assets/assetRender.js"), "utf8"),
+    readFile(resolve(projectRoot, "src/styles/00-base.css"), "utf8")
+  ]);
+
+  assert.match(renderSource, /<summary aria-label="更多资产操作"[^>]*>⋯<\/summary>/u);
+  assert.match(renderSource, /class="row-action-link" data-edit-asset-id=.*type="button">编辑<\/button>/u);
+  assert.match(renderSource, /data-delete-asset-id=.*type="button">删除资产<\/button>/u);
+  assert.match(baseStyles, /\.asset-name-field\s*\{\s*grid-column: span 2;/u);
+  assert.match(baseStyles, /\.asset-match-panel\s*\{[\s\S]*?position: static;/u);
+});

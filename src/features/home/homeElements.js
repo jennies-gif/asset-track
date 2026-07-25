@@ -4,5 +4,6 @@ export const homeElements = {
   homeHoldingsList: document.querySelector("#home-holdings-list"),
   homeTransactionsList: document.querySelector("#home-transactions-list"),
   homeNotesList: document.querySelector("#home-notes-list"),
+  homeAttentionSection: document.querySelector("#home-attention-section"),
   homeChecklist: document.querySelector("#home-checklist")
 };

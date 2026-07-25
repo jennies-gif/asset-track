@@ -26,5 +26,6 @@ test("user-facing data-boundary copy distinguishes private local data from publi
 
   const combined = sources.map(([, source]) => source).join("\n");
   assert.match(combined, /私人资产明细|私人资产、交易、复盘和设置/u);
-  assert.match(combined, /公共查询字段/u);
+  assert.match(combined, /公共行情同步目标|行情代码用于公共缓存/u);
+  assert.match(combined, /不关联用户/u);
 });

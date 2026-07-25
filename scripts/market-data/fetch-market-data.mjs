@@ -28,6 +28,7 @@ import {
 } from "../../src/server/marketDataDatabase.js";
 
 const execFileAsync = promisify(execFile);
+const dayMs = 24 * 60 * 60 * 1000;
 const storageDir = path.resolve(process.env.MARKET_DATA_DIR || "storage/market-data");
 const priceFile = path.join(storageDir, "price-snapshots.json");
 const navFile = path.join(storageDir, "fund-nav-snapshots.json");
@@ -343,14 +344,22 @@ async function fetchBinanceCrypto(instrument, range) {
   // Include the preceding UTC day so a daytime sync can persist the latest
   // fully completed daily candle while the current UTC candle is still open.
   const klineDateFrom = addDays(range.dateFrom, -1);
-  const klineUrl = new URL("https://data-api.binance.vision/api/v3/klines");
-  klineUrl.searchParams.set("symbol", sourceInstrument.binanceSymbol);
-  klineUrl.searchParams.set("interval", "1d");
-  klineUrl.searchParams.set("startTime", String(Date.parse(`${klineDateFrom}T00:00:00.000Z`)));
-  klineUrl.searchParams.set("endTime", String(Date.parse(`${range.dateTo}T23:59:59.999Z`)));
-  klineUrl.searchParams.set("limit", String(historyRequestLimit(range, 1000)));
-  const klinePayload = await fetchJson(klineUrl, { referer: "https://www.binance.com/" });
-  rows.push(...normalizeBinanceKlines(klinePayload, sourceInstrument));
+  const klineEndTime = Date.parse(`${range.dateTo}T23:59:59.999Z`);
+  let klineStartTime = Date.parse(`${klineDateFrom}T00:00:00.000Z`);
+  while (klineStartTime <= klineEndTime) {
+    const klineUrl = new URL("https://data-api.binance.vision/api/v3/klines");
+    klineUrl.searchParams.set("symbol", sourceInstrument.binanceSymbol);
+    klineUrl.searchParams.set("interval", "1d");
+    klineUrl.searchParams.set("startTime", String(klineStartTime));
+    klineUrl.searchParams.set("endTime", String(klineEndTime));
+    klineUrl.searchParams.set("limit", "1000");
+    const klinePayload = await fetchJson(klineUrl, { referer: "https://www.binance.com/" });
+    if (!Array.isArray(klinePayload) || !klinePayload.length) break;
+    rows.push(...normalizeBinanceKlines(klinePayload, sourceInstrument));
+    const lastOpenTime = Number(klinePayload.at(-1)?.[0]);
+    if (!Number.isFinite(lastOpenTime) || lastOpenTime < klineStartTime || klinePayload.length < 1000) break;
+    klineStartTime = lastOpenTime + dayMs;
+  }
 
   const tickerUrl = new URL("https://data-api.binance.vision/api/v3/ticker/price");
   tickerUrl.searchParams.set("symbol", sourceInstrument.binanceSymbol);
@@ -392,21 +401,27 @@ async function fetchFrankfurterFx(pairs, range) {
 
 async function fetchTencentKline(instrument, range) {
   const symbol = toTencentSymbol(instrument);
-  const limit = command === "backfill" ? String(historyRequestLimit(range, 800)) : "10";
-  const url = new URL("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get");
-  url.searchParams.set("param", `${symbol},day,,,${limit},qfq`);
-  const payload = await fetchJson(url, { referer: "https://gu.qq.com/" });
-  const bucket = payload.data?.[symbol];
-  const rows = bucket?.qfqday || bucket?.day;
-  if (!Array.isArray(rows)) throw new Error(`腾讯证券 K 线返回缺少 day: ${instrument.symbol}`);
-  const normalizedRows = rows
-    .map((row) => normalizeTencentKlineRow(instrument, row))
-    .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
-    .filter((row) => row.tradeDate >= range.dateFrom && row.tradeDate <= range.dateTo);
+  const requestRanges = command === "backfill" ? splitDateRange(range, 700) : [range];
+  const normalizedRows = [];
+  for (const requestRange of requestRanges) {
+    const limit = command === "backfill" ? String(historyRequestLimit(requestRange, 800)) : "10";
+    const dateFrom = command === "backfill" ? requestRange.dateFrom : "";
+    const dateTo = command === "backfill" ? requestRange.dateTo : "";
+    const url = new URL("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get");
+    url.searchParams.set("param", `${symbol},day,${dateFrom},${dateTo},${limit},qfq`);
+    const payload = await fetchJson(url, { referer: "https://gu.qq.com/" });
+    const bucket = payload.data?.[symbol];
+    const rows = bucket?.qfqday || bucket?.day;
+    if (!Array.isArray(rows)) throw new Error(`腾讯证券 K 线返回缺少 day: ${instrument.symbol}`);
+    normalizedRows.push(...rows
+      .map((row) => normalizeTencentKlineRow(instrument, row))
+      .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
+      .filter((row) => row.tradeDate >= requestRange.dateFrom && row.tradeDate <= requestRange.dateTo));
+  }
   return {
     status: "ok",
     kind: "price",
-    rows: normalizedRows
+    rows: upsertRowsByDateAndSource(normalizedRows, [])
   };
 }
 
@@ -479,23 +494,28 @@ async function fetchNasdaqDaily(instrument, range) {
       ? "index"
       : "stocks";
   const requestFrom = command === "daily" ? addDays(range.dateTo, -7) : range.dateFrom;
-  const url = new URL(`https://api.nasdaq.com/api/quote/${instrument.symbol}/historical`);
-  url.searchParams.set("assetclass", assetClass);
-  url.searchParams.set("fromdate", requestFrom);
-  url.searchParams.set("todate", range.dateTo);
-  url.searchParams.set("limit", String(historyRequestLimit(range, 5000)));
-  const payload = await fetchJson(url, {
-    referer: `https://www.nasdaq.com/market-activity/${assetClass}/${instrument.symbol.toLowerCase()}`,
-    origin: "https://www.nasdaq.com"
-  });
-  const rows = payload.data?.tradesTable?.rows;
-  if (!Array.isArray(rows)) {
-    return { status: "skipped", reason: `Nasdaq 暂无 ${instrument.symbol} 在 ${range.dateTo} 前的可用日线` };
+  const requestRanges = command === "backfill"
+    ? splitDateRange({ dateFrom: requestFrom, dateTo: range.dateTo }, 3650)
+    : [{ dateFrom: requestFrom, dateTo: range.dateTo }];
+  let normalizedRows = [];
+  for (const requestRange of requestRanges) {
+    const url = new URL(`https://api.nasdaq.com/api/quote/${instrument.symbol}/historical`);
+    url.searchParams.set("assetclass", assetClass);
+    url.searchParams.set("fromdate", requestRange.dateFrom);
+    url.searchParams.set("todate", requestRange.dateTo);
+    url.searchParams.set("limit", String(historyRequestLimit(requestRange, 5000)));
+    const payload = await fetchJson(url, {
+      referer: `https://www.nasdaq.com/market-activity/${assetClass}/${instrument.symbol.toLowerCase()}`,
+      origin: "https://www.nasdaq.com"
+    });
+    const rows = payload.data?.tradesTable?.rows;
+    if (!Array.isArray(rows)) continue;
+    normalizedRows.push(...rows
+      .map((row) => normalizeNasdaqRow(instrument, row))
+      .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
+      .filter((row) => row.tradeDate >= requestRange.dateFrom && row.tradeDate <= requestRange.dateTo));
   }
-  let normalizedRows = rows
-    .map((row) => normalizeNasdaqRow(instrument, row))
-    .filter((row) => isMarketCloseAvailable(instrument.market, row.tradeDate))
-    .filter((row) => row.tradeDate >= requestFrom && row.tradeDate <= range.dateTo)
+  normalizedRows = upsertRowsByDateAndSource(normalizedRows, [])
     .sort((left, right) => left.tradeDate.localeCompare(right.tradeDate));
   if (command === "daily") normalizedRows = normalizedRows.slice(-1);
   if (!normalizedRows.length) {
@@ -573,6 +593,19 @@ function historyRequestLimit(range, maxLimit) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return maxLimit;
   const calendarDays = Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 10;
   return Math.max(10, Math.min(maxLimit, calendarDays));
+}
+
+export function splitDateRange(range, maxCalendarDays) {
+  const ranges = [];
+  const safeMaxDays = Math.max(1, Number(maxCalendarDays) || 1);
+  let cursor = range.dateFrom;
+  while (cursor <= range.dateTo) {
+    const chunkEnd = addDays(cursor, safeMaxDays - 1);
+    const dateTo = chunkEnd < range.dateTo ? chunkEnd : range.dateTo;
+    ranges.push({ dateFrom: cursor, dateTo });
+    cursor = addDays(dateTo, 1);
+  }
+  return ranges;
 }
 
 function toEastmoneySecid(instrument) {

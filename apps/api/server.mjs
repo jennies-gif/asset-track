@@ -34,6 +34,11 @@ import {
   upsertUserAssetRow,
   upsertUserAssetDailyPriceRows
 } from "../../src/server/marketDataDatabase.js";
+import {
+  loadMarketDataSyncTargets,
+  recordMarketDataSyncTargetResults,
+  registerMarketDataSyncTargets
+} from "../../src/server/marketDataSyncTargets.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
 import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
 import {
@@ -65,6 +70,7 @@ const privateAssetApiPaths = new Set([
 ]);
 const syncDailyAllowedFields = new Set(["symbols", "trigger", "includeHistory", "includeBenchmarks", "autoFetch", "days"]);
 const syncDailyAllowedTriggers = new Set(["manual", "auto", "asset_created"]);
+const maxPublicHistoryWindowDays = 36500;
 const execFileAsync = promisify(execFile);
 const demoUser = {
   id: "demo-user",
@@ -515,6 +521,20 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
   let fetchResult = null;
   let dailyPriceRowsUpserted = 0;
   let dailyPriceGapCount = 0;
+
+  const requestedSymbolSet = new Set(requestedSymbols);
+  const targetsToRegister = candidates
+    .filter((asset) => (
+      (trigger !== "scheduled" && requestedSymbolSet.has(canonicalMarketSymbol(asset.symbol))) ||
+      (body.includeBenchmarks && isBenchmarkSymbol(asset.symbol))
+    ))
+    .map((asset) => ({
+      symbol: canonicalMarketSymbol(asset.symbol),
+      market: asset.market || "UNKNOWN",
+      sourceType: isBenchmarkSymbol(asset.symbol) ? "benchmark" : "user_requested",
+      requestedAt: syncedAt
+    }));
+  if (targetsToRegister.length) await registerMarketDataSyncTargets(marketStorageDir, targetsToRegister);
   const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
   const fallbackHistoryDays = Math.max(1, Number(body.days || 7));
   const historyDateFrom = normalizeDateParam(body.dateFrom) ||
@@ -572,6 +592,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       asset.priceStatus = "pending";
       results.push({
         symbol: asset.symbol,
+        market: asset.market,
         name: asset.name,
         status: "missing",
         message: "未找到可用价格缓存"
@@ -612,6 +633,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
     }
     results.push({
       symbol: asset.symbol,
+      market: asset.market,
       name: asset.name,
       status: "synced",
       before,
@@ -627,7 +649,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
         marketTimezone: latest.marketTimezone || ""
       },
       dailyPrices: asset.externalOnly ? [] : asset.dailyPrices || [],
-      history: body.includeHistory
+      history: body.includeHistory && requestedSymbolSet.has(canonicalMarketSymbol(asset.symbol))
         ? dailyHistory
             .filter((point) => !normalizeDateParam(body.dateFrom) || point.date >= normalizeDateParam(body.dateFrom))
             .filter((point) => !historyDateTo || point.date <= historyDateTo)
@@ -646,6 +668,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
     dailyPriceGapCount
   };
   const payload = { trigger, syncedAt, summary, results, fetch: fetchResult };
+  await recordMarketDataSyncTargetResults(marketStorageDir, results, syncedAt);
   state.auditLogs.push(audit("sync_daily_market_data", "market_data", `sync-${Date.now()}`, payload));
   await appendSyncDailyRun(payload);
   return payload;
@@ -772,8 +795,13 @@ function scheduleDailyMarketSync() {
   console.log(`Next daily market data sync scheduled at ${nextRunAt.toLocaleString()} local time`);
   setTimeout(async () => {
     try {
+      const syncTargets = await loadMarketDataSyncTargets(marketStorageDir);
+      const symbols = syncTargets
+        .filter((target) => target.sourceType !== "benchmark")
+        .map((target) => canonicalMarketSymbol(target.symbol))
+        .filter(Boolean);
       const result = await runDailyMarketDataSync(
-        { includeBenchmarks: true },
+        { ...(symbols.length ? { symbols } : {}), includeBenchmarks: true },
         "scheduled",
         { publicOnly: !privateAssetCloudSyncEnabled }
       );
@@ -1142,7 +1170,15 @@ function stableBackfillTaskId({ userId, assetId, symbol, market, dateFrom, dateT
 }
 
 async function assetFromSymbol(symbol) {
-  const security = await findInstrument(symbol);
+  const normalizedSymbol = canonicalMarketSymbol(symbol);
+  const benchmark = benchmarkInstruments.find((item) => canonicalMarketSymbol(item.symbol) === normalizedSymbol);
+  const matched = benchmark || await findInstrument(normalizedSymbol);
+  const matchedSymbol = canonicalMarketSymbol(matched?.symbol);
+  const security = benchmark || (
+    matchedSymbol === normalizedSymbol || matchedSymbol.replace(/\.OF$/u, "") === normalizedSymbol.replace(/\.OF$/u, "")
+      ? matched
+      : null
+  );
   const inferred = normalizeCnListedFundInstrument(security || inferInstrumentFromSymbol(symbol));
   if (!inferred) return null;
   return normalizeAsset({
@@ -1395,8 +1431,13 @@ function validateSyncDailyRequest(body) {
     }
   }
   const days = body.days === undefined ? 7 : Number(body.days);
-  if (!Number.isInteger(days) || days < 1 || days > 365) {
-    return { ok: false, code: "validation_error", message: "days 必须在 1 到 365 之间", fieldErrors: { days: "必须是 1 到 365 的整数" } };
+  if (!Number.isInteger(days) || days < 1 || days > maxPublicHistoryWindowDays) {
+    return {
+      ok: false,
+      code: "validation_error",
+      message: `days 必须在 1 到 ${maxPublicHistoryWindowDays} 之间`,
+      fieldErrors: { days: `必须是 1 到 ${maxPublicHistoryWindowDays} 的整数` }
+    };
   }
   return {
     ok: true,

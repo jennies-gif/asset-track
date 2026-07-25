@@ -1,11 +1,17 @@
-/* Asset ledger table alignment: text scans left, money and ratios line up right. */
+/* Asset ledger tables use centered, compact columns for quick scanning. */
+#assets-panel .table-wrap {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
 #assets-panel table {
   font-variant-numeric: tabular-nums;
 }
 
 #assets-panel th,
 #assets-panel td {
-  text-align: left;
+  text-align: center;
+  vertical-align: middle;
 }
 
 #assets-panel td strong,
@@ -17,96 +23,111 @@
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
-#open-portfolio-view th:nth-child(4),
-#open-portfolio-view th:nth-child(5),
-#open-portfolio-view th:nth-child(6),
-#open-portfolio-view th:nth-child(7),
-#open-portfolio-view th:nth-child(8),
-#open-portfolio-view th:nth-child(9),
-#open-portfolio-view td:nth-child(4),
-#open-portfolio-view td:nth-child(5),
-#open-portfolio-view td:nth-child(6),
-#open-portfolio-view td:nth-child(7),
-#open-portfolio-view td:nth-child(8),
-#open-portfolio-view td:nth-child(9),
-#history-portfolio-view th:nth-child(3),
-#history-portfolio-view th:nth-child(4),
-#history-portfolio-view th:nth-child(5),
-#history-portfolio-view th:nth-child(6),
-#history-portfolio-view td:nth-child(3),
-#history-portfolio-view td:nth-child(4),
-#history-portfolio-view td:nth-child(5),
-#history-portfolio-view td:nth-child(6),
-#changes-portfolio-view th:nth-child(4),
-#changes-portfolio-view th:nth-child(5),
-#changes-portfolio-view th:nth-child(6),
-#changes-portfolio-view th:nth-child(7),
-#changes-portfolio-view th:nth-child(8),
-#changes-portfolio-view td:nth-child(4),
-#changes-portfolio-view td:nth-child(5),
-#changes-portfolio-view td:nth-child(6),
-#changes-portfolio-view td:nth-child(7),
-#changes-portfolio-view td:nth-child(8) {
-  padding-right: 16px;
-  text-align: right;
+/* The current-portfolio table has 10 columns. Keep compact fields narrow and
+   reserve enough room for the full action group. */
+#open-portfolio-view table {
+  width: 100%;
+  min-width: 1080px;
+  table-layout: fixed;
 }
 
-#open-portfolio-view td:nth-child(4),
-#open-portfolio-view td:nth-child(5),
-#open-portfolio-view td:nth-child(6),
-#open-portfolio-view td:nth-child(7),
-#open-portfolio-view td:nth-child(8),
-#open-portfolio-view td:nth-child(9),
-#history-portfolio-view td:nth-child(3),
-#history-portfolio-view td:nth-child(4),
-#history-portfolio-view td:nth-child(5),
-#history-portfolio-view td:nth-child(6),
-#changes-portfolio-view td:nth-child(4),
-#changes-portfolio-view td:nth-child(5),
-#changes-portfolio-view td:nth-child(6),
-#changes-portfolio-view td:nth-child(7),
-#changes-portfolio-view td:nth-child(8) {
-  font-family: var(--font-number);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  font-weight: var(--weight-medium);
+#open-portfolio-view th,
+#open-portfolio-view td {
+  padding-right: 8px;
+  padding-left: 8px;
 }
 
 #open-portfolio-view th:nth-child(1),
+#open-portfolio-view td:nth-child(1) {
+  width: 13%;
+}
+
 #open-portfolio-view th:nth-child(2),
+#open-portfolio-view td:nth-child(2) {
+  width: 8%;
+}
+
 #open-portfolio-view th:nth-child(3),
-#open-portfolio-view th:nth-child(10),
-#open-portfolio-view th:nth-child(11),
-#open-portfolio-view td:nth-child(1),
-#open-portfolio-view td:nth-child(2),
 #open-portfolio-view td:nth-child(3),
-#open-portfolio-view td:nth-child(10),
-#open-portfolio-view td:nth-child(11),
-#history-portfolio-view th:nth-child(1),
-#history-portfolio-view th:nth-child(2),
-#history-portfolio-view th:nth-child(7),
-#history-portfolio-view td:nth-child(1),
-#history-portfolio-view td:nth-child(2),
-#history-portfolio-view td:nth-child(7),
-#changes-portfolio-view th:nth-child(1),
-#changes-portfolio-view th:nth-child(2),
-#changes-portfolio-view th:nth-child(3),
-#changes-portfolio-view th:nth-child(9),
-#changes-portfolio-view td:nth-child(1),
-#changes-portfolio-view td:nth-child(2),
-#changes-portfolio-view td:nth-child(3),
-#changes-portfolio-view td:nth-child(9) {
-  text-align: left;
+#open-portfolio-view th:nth-child(4),
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view th:nth-child(8),
+#open-portfolio-view td:nth-child(8) {
+  width: 9%;
+}
+
+#open-portfolio-view th:nth-child(5),
+#open-portfolio-view td:nth-child(5) {
+  width: 11%;
+}
+
+#open-portfolio-view th:nth-child(7),
+#open-portfolio-view td:nth-child(7) {
+  width: 10%;
+}
+
+#open-portfolio-view th:nth-child(6),
+#open-portfolio-view td:nth-child(6) {
+  width: 6%;
+}
+
+#open-portfolio-view th:nth-child(9),
+#open-portfolio-view td:nth-child(9) {
+  width: 6%;
+}
+
+#open-portfolio-view th:nth-child(10),
+#open-portfolio-view td:nth-child(10) {
+  width: 210px;
+  min-width: 210px;
+}
+
+#open-portfolio-view th:nth-child(n + 4):nth-child(-n + 10),
+#open-portfolio-view td:nth-child(n + 4):nth-child(-n + 10) {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view td:nth-child(5),
+#open-portfolio-view td:nth-child(6),
+#open-portfolio-view td:nth-child(7),
+#open-portfolio-view td:nth-child(8),
+#open-portfolio-view td:nth-child(9) {
+  font-family: var(--font-number);
+  font-weight: var(--weight-medium);
 }
 
 #assets-panel .price-cell,
 #assets-panel .return-cell {
-  justify-items: end;
-  text-align: right;
+  justify-items: center;
+  text-align: center;
 }
 
 #open-portfolio-view .price-cell {
-  min-width: 118px;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+#open-portfolio-view .price-cell small {
+  margin-top: 2px;
+}
+
+#open-portfolio-view .cost-price-cell::after {
+  min-height: 20px;
+  content: "";
+}
+
+#open-portfolio-view td:nth-child(4),
+#open-portfolio-view .price-cell > span,
+#open-portfolio-view .asset-market-value-cell,
+#open-portfolio-view .asset-money-currency,
+#open-portfolio-view .asset-money-amount {
+  color: var(--ink);
 }
 
 #open-portfolio-view .price-cell span,
@@ -121,8 +142,13 @@
   font-weight: var(--weight-medium);
 }
 
-#open-portfolio-view .compact-status-stack,
 #assets-panel .row-actions {
-  justify-content: flex-start;
-  text-align: left;
+  justify-content: center;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  #open-portfolio-view table {
+    min-width: 1080px;
+  }
 }

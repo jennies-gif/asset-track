@@ -877,6 +877,15 @@ th,
   text-align: left;
 }
 
+#open-portfolio-view .row-more-panel .row-menu-danger {
+  color: var(--negative);
+}
+
+#open-portfolio-view .row-more-panel .row-menu-danger:hover {
+  background: color-mix(in srgb, var(--negative) 8%, var(--surface));
+  color: var(--negative);
+}
+
 @media (max-width: 900px) {
   #open-portfolio-view .table-wrap {
     overflow-x: auto;

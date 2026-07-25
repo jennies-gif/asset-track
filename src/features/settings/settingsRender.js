@@ -70,7 +70,7 @@ function applyLanguage() {
   document.querySelectorAll(".privacy-note").forEach((note) => {
     note.textContent = isEnglish
       ? "Private asset details stay in this browser. Public query fields such as symbols, markets and date ranges may be sent to the market-data service. Export JSON backups regularly."
-      : "私人资产明细保存在当前浏览器；证券代码、市场和日期范围等公共查询字段可能发送给行情服务。请定期导出 JSON 备份。";
+      : "私人资产明细保存在当前浏览器；证券代码和市场会作为不关联用户的公共行情同步目标保存在服务端，历史窗口会发送给行情服务。请定期导出 JSON 备份。";
   });
   document.querySelectorAll(".risk-note").forEach((note) => {
     note.textContent = isEnglish
@@ -90,7 +90,7 @@ function applyLanguage() {
   document.querySelectorAll(".site-status-note").forEach((note) => {
     note.textContent = isEnglish
       ? "Private data saved locally · Market queries send public fields only · Prices may be delayed · For records and reviews only"
-      : "私人数据本地保存 · 行情仅发送公共查询字段 · 价格可能延迟 · 仅供记录与复盘";
+      : "私人明细本地保存 · 行情代码用于公共缓存 · 价格可能延迟 · 仅供记录与复盘";
   });
 }
 

@@ -18,7 +18,6 @@ export function resolvePriceStatus(asset = {}, options = {}) {
   if (explicit === "missing") return status("missing", "缺少缓存", "data-warning", true);
   if (explicit === "pending") return status("pending", costPrice && costPrice !== "0" ? "按成本价暂估" : "待补价格", "data-warning", true);
   if (!currentPrice || currentPrice === "0") return status("missing", "缺当前价格", "data-warning", true);
-  if (!pricedAt || !priceSource) return status("missing", "价格待核对", "data-warning", true);
   if (isStalePrice(pricedAt, options.today)) return status("stale", "价格过期", "data-error", true);
   if (explicit === "synced") return status("synced", "同步价格", "data-ok", false);
   if (explicit === "manual" || currentPrice === costPrice) return status("manual", "手动价格", "", false);
@@ -27,9 +26,14 @@ export function resolvePriceStatus(asset = {}, options = {}) {
 
 export function priceUsesCostFallback(asset = {}) {
   const resolved = resolvePriceStatus(asset);
+  const currentPrice = String(asset.currentPrice || "").trim();
+  const costPrice = String(asset.costPrice || "").trim();
   return resolved.key === "pending" || (
-    String(asset.currentPrice || "").trim() &&
-    String(asset.currentPrice || "").trim() === String(asset.costPrice || "").trim() &&
+    currentPrice &&
+    currentPrice !== "0" &&
+    costPrice &&
+    costPrice !== "0" &&
+    currentPrice === costPrice &&
     !String(asset.pricedAt || "").trim()
   );
 }

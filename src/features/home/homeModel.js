@@ -1,13 +1,8 @@
 import { roundDivide } from "../../domain/calculations.js";
-import { resolvePriceStatus } from "../../domain/priceStatus.js";
-import { normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
-import { buildAssetDataIssues } from "../assets/dataQuality.js";
-import { inferAssetMarket } from "../assets/marketOptions.js";
-import { allocationWeightBps } from "../portfolio/portfolioRender.js";
+import { addDays, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
+import { buildAssetValuationNotices } from "../assets/dataQuality.js";
 import {
   assetTrendStartDate,
-  buildTrendPoints,
-  calculateMaxDrawdownBps,
   latestTrendDate
 } from "../trends/trendModel.js";
 
@@ -23,23 +18,75 @@ export function buildHomeRenderContext() {
     buildAssetChangeRecords: ctx.buildAssetChangeRecords,
     calculateCumulativeReturnBps,
     calculateDisplayPortfolio: ctx.calculateDisplayPortfolio,
-    calculateTrendValueChangeForRange: ctx.calculateTrendValueChangeForRange,
+    dailyPnlMetricLabel,
+    latestDailyPnlSnapshot,
     currentOverviewTotalCents: ctx.currentOverviewTotalCents,
     findNoteForChange: ctx.findNoteForChange,
-    fxRateSummary,
     latestOverviewUpdateLabel,
     noteAssetLabel: ctx.noteAssetLabel,
     noteTagsFor: ctx.noteTagsFor,
     overviewAssets: ctx.overviewAssets,
-    priceCompletenessClass,
-    priceCompletenessLabel,
-    priceStatusClass: ctx.priceStatusClass,
-    priceStatusLabel: ctx.priceStatusLabel
+    valuationAttentionItems
   };
 }
 
 export function calculateCumulativeReturnBps() {
   return ctx.calculateDisplayPortfolio(ctx.overviewAssets()).totals.returnBps;
+}
+
+export function latestDailyPnlSnapshot() {
+  const assets = ctx.overviewAssets().filter((asset) => isPositiveDecimal(asset.quantity));
+  if (!assets.length) return { amountCents: null, valuationDate: "", reason: "暂无资产" };
+
+  const pricedAssets = assets.filter((asset) => !isCashAsset(asset));
+  if (!pricedAssets.length) return { amountCents: 0n, valuationDate: "", reason: "" };
+
+  const hasUnusablePrice = pricedAssets.some((asset) => {
+    const status = String(asset.priceStatus || "").trim();
+    return !isPositiveDecimal(asset.currentPrice) ||
+      !isPositiveDecimal(asset.previousPrice) ||
+      !normalizePriceDate(asset.pricedAt) ||
+      ["pending", "missing", "error"].includes(status);
+  });
+  if (hasUnusablePrice) {
+    return { amountCents: null, valuationDate: "", reason: "缺少可核对的当前价或上一交易日价格" };
+  }
+
+  const priceDates = [...new Set(pricedAssets.map((asset) => normalizePriceDate(asset.pricedAt)))];
+  if (priceDates.length !== 1) {
+    return { amountCents: null, valuationDate: "", reason: "组合内资产的最新行情日期不一致" };
+  }
+
+  const { totals } = ctx.calculateDisplayPortfolio(assets);
+  return {
+    amountCents: totals.marketValueCents - totals.previousValueCents,
+    valuationDate: priceDates[0],
+    reason: ""
+  };
+}
+
+export function dailyPnlMetricLabel(snapshot) {
+  const valuationDate = normalizePriceDate(snapshot?.valuationDate);
+  if (!valuationDate) return "昨日收益";
+  const dateLabel = valuationDate.slice(5);
+  return valuationDate === addDays(todayIsoDate(), -1)
+    ? `昨日收益（${dateLabel}）`
+    : `最近交易日收益（${dateLabel}）`;
+}
+
+function isCashAsset(asset) {
+  return String(asset.market || "").toUpperCase() === "CASH" || String(asset.type || "").trim() === "现金";
+}
+
+function normalizePriceDate(value) {
+  const date = normalizeSnapshotDate(value || "");
+  return /^\d{4}-\d{2}-\d{2}$/u.test(date) ? date : "";
+}
+
+function isPositiveDecimal(value) {
+  const normalized = String(value ?? "").trim().replaceAll(",", "");
+  if (!/^\d+(?:\.\d+)?$/u.test(normalized)) return false;
+  return BigInt(normalized.replace(".", "")) > 0n;
 }
 
 export function annualizedCumulativeReturnBps(returnBps) {
@@ -61,46 +108,10 @@ function earliestOverviewAssetDate(assets) {
   return dates[0] || todayIsoDate();
 }
 
-export function portfolioHealthSnapshot() {
-  const assets = ctx.overviewAssets();
-  const { positions, totals } = ctx.calculateDisplayPortfolio(assets);
-  const dataIssues = assets.reduce((count, asset) => count + buildAssetDataIssues(asset).length, 0);
-  const cryptoWeightBps = allocationWeightBps(positions, totals.marketValueCents, (position) => position.type === "数字资产" || inferAssetMarket(position) === "WEB3");
-  const cashWeightBps = allocationWeightBps(positions, totals.marketValueCents, (position) => position.type === "现金" || inferAssetMarket(position) === "CASH");
-  const drawdownBps = calculateMaxDrawdownBps(buildTrendPoints()) || 0n;
-  const isHigh = cryptoWeightBps >= 3000n || drawdownBps <= -2000n || dataIssues > 0;
-  const isMedium = cryptoWeightBps >= 1500n || drawdownBps <= -1000n || cashWeightBps < 500n;
-  return {
-    label: isHigh ? "风险偏高" : isMedium ? "需要关注" : "相对稳健",
-    className: isHigh ? "negative" : isMedium ? "warning" : "positive",
-    cryptoWeightBps,
-    cashWeightBps,
-    dataIssues
-  };
-}
-
-export function priceCompletenessLabel() {
-  const assets = ctx.overviewAssets();
-  if (!assets.length) return "暂无价格数据";
-  const pending = assets.filter((asset) => resolvePriceStatus(asset).needsReview).length;
-  if (pending) return `${pending} 项价格待核对`;
-  const synced = assets.filter((asset) => asset.priceStatus === "synced").length;
-  if (synced) return `含 ${synced} 项同步价格`;
-  return "手动价格";
-}
-
-export function priceCompletenessClass() {
-  const assets = ctx.overviewAssets();
-  if (!assets.length) return "";
-  return assets.some((asset) => resolvePriceStatus(asset).needsReview) ? "warning" : "positive";
-}
-
-export function fxRateSummary() {
-  const state = ctx.getState();
-  const currency = ctx.displayCurrency();
-  if (currency === "CNY") return `USD/CNY ${state.settings?.usdCnyRate || "6.85"}`;
-  if (currency === "HKD") return `USD/HKD ${state.settings?.usdHkdRate || "7.82"}`;
-  return "原币种折算 USD";
+export function valuationAttentionItems() {
+  return ctx.overviewAssets().flatMap((asset) =>
+    buildAssetValuationNotices(asset).map((notice) => ({ asset, notice }))
+  );
 }
 
 export function latestOverviewUpdateLabel() {

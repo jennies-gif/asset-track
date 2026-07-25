@@ -3,7 +3,6 @@ export function getAssetElements() {
     portfolioRows: document.querySelector("#portfolio-rows"),
     portfolioAccountFilter: document.querySelector("#portfolio-account-filter"),
     portfolioTypeFilter: document.querySelector("#portfolio-type-filter"),
-    portfolioStatusFilter: document.querySelector("#portfolio-status-filter"),
     portfolioFilterSummary: document.querySelector("#portfolio-filter-summary"),
     historyRows: document.querySelector("#history-rows"),
     assetChangeRows: document.querySelector("#asset-change-rows"),

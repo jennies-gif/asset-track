@@ -14,7 +14,7 @@ import {
 } from "../../ui/formatters.js";
 
 export function renderMetrics(elements, context) {
-  const latestChange = context.calculateTrendValueChangeForRange("day");
+  const dailyPnl = context.latestDailyPnlSnapshot();
   const hasAssets = context.overviewAssets().length > 0;
   const portfolio = context.calculateDisplayPortfolio(context.overviewAssets());
   const cumulativePnl = portfolio.totals.unrealizedPnlCents;
@@ -35,8 +35,8 @@ export function renderMetrics(elements, context) {
             <b class="${toneClassForValue(cumulativePnl)}">${escapeHtml(formatSignedCurrency(cumulativePnl))}</b>
           </span>
           <span>
-            <small>最近变化</small>
-            <b class="${toneClassForValue(latestChange || 0n)}">${escapeHtml(formatOptionalSignedAmount(latestChange))}</b>
+            <small>${escapeHtml(context.dailyPnlMetricLabel(dailyPnl))}</small>
+            <b class="${toneClassForValue(dailyPnl.amountCents)}"${dailyPnl.reason ? ` title="${escapeHtml(dailyPnl.reason)}"` : ""}>${escapeHtml(dailyPnl.amountCents === null ? "暂无法计算" : formatOptionalSignedAmount(dailyPnl.amountCents))}</b>
           </span>
         </div>
         ${hasAssets ? "" : `
@@ -58,7 +58,6 @@ export function renderMetrics(elements, context) {
           ${snapshotStatusItem("本地保存", "已保存在当前浏览器", "positive")}
           ${snapshotStatusItem("行情查询", "仅发送代码等公共字段", "warning")}
           ${snapshotStatusItem("更新时间", context.latestOverviewUpdateLabel(), "")}
-          ${snapshotStatusItem("价格核对", context.priceCompletenessLabel(), context.priceCompletenessClass())}
         </div>
       </aside>
     </section>
@@ -90,8 +89,6 @@ export function renderHomeDataStatus(elements, context) {
   if (!elements.homeDataStatus) return;
   elements.homeDataStatus.innerHTML = [
     trustBadge(`上次更新：${context.latestOverviewUpdateLabel()}`),
-    trustBadge(context.priceCompletenessLabel(), context.priceCompletenessClass()),
-    trustBadge(context.fxRateSummary()),
     `<span class="home-risk-note">数据保存在本机浏览器，重要修改后建议导出备份。</span>`
   ].join("");
 }
@@ -117,12 +114,10 @@ export function renderHomeHoldings(elements, context) {
             <th>市值</th>
             <th>收益</th>
             <th>占比</th>
-            <th>状态</th>
           </tr>
         </thead>
         <tbody>
           ${rows.map((position) => {
-            const asset = assets.find((item) => item.id === position.id) || position;
             const pnlClass = position.hasCostBasis ? toneClassForValue(position.unrealizedPnlCents) : "";
             const weightBps = totals.marketValueCents === 0n ? 0n : roundDivide(position.marketValueCents * 10000n, totals.marketValueCents);
             return `
@@ -141,7 +136,6 @@ export function renderHomeHoldings(elements, context) {
                   <span class="${pnlClass}">${position.hasCostBasis ? formatSignedAmountOnly(position.unrealizedPnlCents) : "暂无法计算"}</span>
                 </td>
                 <td class="home-holdings-number">${formatShare(weightBps)}</td>
-                <td class="home-holdings-status">${trustBadge(context.priceStatusLabel(asset), context.priceStatusClass(asset))}</td>
               </tr>
             `;
           }).join("")}
@@ -208,42 +202,17 @@ export function renderHomeNotes(elements, context) {
 }
 
 export function renderHomeChecklist(elements, context) {
-  if (!elements.homeChecklist) return;
-  const assets = context.overviewAssets();
-  const priceMissing = assets.filter((asset) => asset.priceStatus === "pending" || !asset.pricedAt || !asset.priceSource).length;
-  const accountMissing = assets.filter((asset) => !String(asset.account || "").trim()).length;
-  const transactionCount = context.buildAssetChangeRecords().length;
-  const reviewedChanges = context.buildAssetChangeRecords().filter((change) => context.findNoteForChange(change)).length;
-  const unreviewedTransactions = Math.max(0, transactionCount - reviewedChanges);
-  const items = [
-    {
-      label: priceMissing ? `${priceMissing} 个资产缺少可追踪价格` : "价格记录较完整",
-      detail: priceMissing ? "会影响收益、配置和归因可信度。" : "价格来源和时间可追踪。",
-      done: priceMissing === 0
-    },
-    {
-      label: accountMissing ? `${accountMissing} 个资产未关联账户` : "资产已关联账户",
-      detail: accountMissing ? "会影响账户维度筛选和对账。" : "账户维度完整。",
-      done: accountMissing === 0
-    },
-    {
-      label: unreviewedTransactions ? `${unreviewedTransactions} 条交易尚未关联复盘` : "交易复盘已覆盖",
-      detail: unreviewedTransactions ? "会影响后续复盘追溯。" : "交易记录已有复盘线索。",
-      done: unreviewedTransactions === 0
-    },
-    {
-      label: "建议导出 JSON 备份",
-      detail: "当前数据保存在浏览器本地，集中录入或导入后建议备份。",
-      done: false
-    }
-  ];
-  elements.homeChecklist.innerHTML = items.map((item) => `
-    <div class="home-check-item${item.done ? " is-done" : ""}">
-      <span aria-hidden="true">${item.done ? "✓" : "•"}</span>
+  if (!elements.homeChecklist || !elements.homeAttentionSection) return;
+  const items = context.valuationAttentionItems();
+  elements.homeAttentionSection.classList.toggle("is-hidden", items.length === 0);
+  elements.homeChecklist.innerHTML = items.map(({ asset, notice }) => `
+    <div class="home-check-item is-${escapeHtml(notice.severity)}">
+      <span aria-hidden="true">!</span>
       <div>
-        <strong>${escapeHtml(item.label)}</strong>
-        <small>${escapeHtml(item.detail)}</small>
+        <strong>${escapeHtml(asset.name || asset.symbol || "未命名资产")} · ${escapeHtml(notice.label)}</strong>
+        <small>${escapeHtml(notice.detail)} ${escapeHtml(notice.action)}</small>
       </div>
+      <button class="text-button" data-home-action="resolve-price" data-asset-id="${escapeHtml(asset.id)}" type="button">手动处理</button>
     </div>
   `).join("");
 }

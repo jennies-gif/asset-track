@@ -26,7 +26,7 @@ http://127.0.0.1:4180
 API_HOST=0.0.0.0 npm run api:start
 ```
 
-服务启动后默认按本机时区每天 `22:00` 自动执行一次行情同步，逻辑与手动调用 `POST /api/market-data/sync-daily` 相同。可用 `MARKET_DAILY_SYNC_HOUR`、`MARKET_DAILY_SYNC_MINUTE` 调整时间，或用 `MARKET_DAILY_SYNC_ENABLED=false` 关闭。
+服务启动后默认按本机时区每天 `22:00` 自动执行一次行情同步，更新已登记的公共行情同步目标和全部分析基准。可用 `MARKET_DAILY_SYNC_HOUR`、`MARKET_DAILY_SYNC_MINUTE` 调整时间，或用 `MARKET_DAILY_SYNC_ENABLED=false` 关闭。
 
 ## 线上部署
 
@@ -44,7 +44,7 @@ MARKET_DAILY_SYNC_ENABLED=true
 
 `API_ALLOWED_ORIGINS` 是逗号分隔的前端来源白名单。不要在生产环境长期使用 `*`，除非只是临时公开演示。
 
-设置 `DATABASE_URL` 后，资产资源主库、行情价格、基金净值、汇率和同步运行记录会写入 Supabase PostgreSQL。资产搜索优先查询 PostgreSQL；没有数据库或数据库暂无资源库数据时会回退到文件缓存。如果使用 Render Free，不要把 `MARKET_DATA_DIR` 指向 `/var/data`，除非已经配置可写的持久化 Disk。
+设置 `DATABASE_URL` 后，资产资源主库、行情价格、基金净值、汇率、公共行情同步目标和同步运行记录会写入 Supabase PostgreSQL。资产搜索优先查询 PostgreSQL；没有数据库或数据库暂无资源库数据时会回退到文件缓存。线上要保证用户关闭页面后仍能每日更新，必须配置 PostgreSQL；文件回退只适合本地开发。如果使用 Render Free，不要把 `MARKET_DATA_DIR` 指向 `/var/data`，除非已经配置可写的持久化 Disk。
 
 ## 已有接口
 
@@ -61,7 +61,7 @@ MARKET_DAILY_SYNC_ENABLED=true
 - `GET /api/market-data/history?symbol=00700`
 - `GET /api/market-data/fx-rates?base=USD&quote=CNY`
 - `POST /api/market-data/fetch-recent`
-- `POST /api/market-data/sync-daily`：按公共代码同步最新行情；只接受 `symbols`、`trigger`、`days`、`includeHistory`、`includeBenchmarks`、`autoFetch`。不接收首次持有日期、账户、资产 ID、数量、成本或备注，也不持久化用户请求的代码集合。
+- `POST /api/market-data/sync-daily`：按公共代码同步最新行情；只接受 `symbols`、`trigger`、`days`、`includeHistory`、`includeBenchmarks`、`autoFetch`。不接收首次持有日期、账户、资产 ID、数量、成本或备注；请求代码会登记为不关联用户的公共行情同步目标。
 - `GET /api/asset-prices/daily`：私人资产 API，种子版默认关闭；主入口读取本地 `dailyPrices`。
 - `GET /api/market-data/tasks`：私人资产 API，种子版默认关闭。
 - `POST /api/market-data/tasks/backfill`：私人资产 API，种子版默认关闭。

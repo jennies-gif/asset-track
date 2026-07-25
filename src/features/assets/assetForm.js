@@ -6,6 +6,7 @@ import { accountTypeLabel, inferAccountType, normalizeAccountTypeFormValue, save
 import { assetQuickMatchOptions, findAssetQuickMatch, findAssetQuickMatches, isManualCashMatch, normalizeQuickMatchText } from "./assetQuickMatch.js";
 import { inferAssetMarket, marketLabel } from "./marketOptions.js";
 import { buildAssetFormPayload, defaultAssetFxRate } from "./assetFormPayload.js";
+import { buildAssetValuationNotices } from "./dataQuality.js";
 import { buildAddAssetUpdate, buildSellAssetUpdate } from "./assetTransactions.js";
 import { clearAssetFieldErrors, humanizeAssetError, setTransactionFieldError, validateAssetFormByMode } from "./assetValidation.js";
 import { ensureAssetMarketHistory } from "../market/marketService.js";
@@ -478,6 +479,12 @@ function setDraftPriceStatus(status, message) {
   const form = ctx.elements.assetForm;
   const help = form?.querySelector("[data-price-fallback]");
   if (!help) return;
+  const manualPriceField = form.querySelector(".manual-current-price-field");
+  if (["error", "missing", "warning"].includes(status)) {
+    manualPriceField?.classList.remove("is-hidden");
+  } else if (status === "synced") {
+    manualPriceField?.classList.add("is-hidden");
+  }
   help.dataset.lookupStatus = status;
   help.textContent = message || "成本价可后续补充；缺成本时收益和归因会标记为暂无法计算。";
 }
@@ -672,6 +679,7 @@ export function editAsset(id) {
   resetAssetFormMode("edit");
   ctx.elements.assetForm.dataset.editingId = id;
   fillAssetForm(asset);
+  syncManualCurrentPriceField(asset);
   syncAccountPickerToName(asset.account);
   ctx.elements.assetSubmitButton.textContent = "更新资产";
   ctx.elements.assetError.textContent = "";
@@ -680,6 +688,37 @@ export function editAsset(id) {
   ctx.activateTab("assets");
   showAssetFormPanel("编辑资产", "更新关键持仓信息；如需记录新的买入、卖出或清仓，请从持仓行进入“记录交易”。");
   ctx.elements.assetForm.elements.name.focus();
+}
+
+export function deleteAsset(id) {
+  const state = ctx.getState();
+  const asset = state.assets.find((item) => item.id === id);
+  if (!asset) return;
+  const label = [asset.name, asset.symbol].filter(Boolean).join(" · ") || "该资产";
+  const confirmed = confirm(
+    `确认永久删除“${label}”？\n\n资产及其买入、卖出记录将从本机删除；关联复盘正文会保留，但不再关联该资产。此操作只能通过备份恢复。`
+  );
+  if (!confirmed) return;
+  ctx.setState(removeAssetFromState(state, id));
+  ctx.persistAndRender();
+}
+
+export function removeAssetFromState(state, assetId) {
+  const normalizedId = String(assetId || "");
+  const removedAsset = state?.assets?.find((asset) => asset.id === normalizedId);
+  if (!normalizedId || !removedAsset) return state;
+  return {
+    ...state,
+    assets: state.assets.filter((asset) => asset.id !== normalizedId),
+    notes: (Array.isArray(state.notes) ? state.notes : []).map((note) => {
+      if (note.assetId !== normalizedId) return note;
+      const { assetId: _removedAssetId, ...preservedNote } = note;
+      return {
+        ...preservedNote,
+        asset: preservedNote.asset || removedAsset.name || removedAsset.symbol || "已删除资产"
+      };
+    })
+  };
 }
 
 export function startCloseAsset(id) {
@@ -849,12 +888,19 @@ export function resetAssetFormMode(mode = "create") {
     ctx.elements.assetMatchPanel.innerHTML = "";
   }
   assetMatchCandidates = [];
+  syncManualCurrentPriceField();
   if (ctx.elements.assetForm.elements.accountTypeCustom) ctx.elements.assetForm.elements.accountTypeCustom.value = "";
   updateCustomAccountTypeVisibility();
   resetOptionalEntryPanels();
   applyCashAssetFormMode();
   if (ctx.elements.assetForm.elements.adjustmentType) ctx.elements.assetForm.elements.adjustmentType.value = "buy";
   ctx.elements.assetSubmitButton.textContent = mode === "edit" ? "更新资产" : isTransactionModeName(mode) ? "确认买入" : "保存资产";
+}
+
+function syncManualCurrentPriceField(asset) {
+  const field = ctx.elements.assetForm?.querySelector(".manual-current-price-field");
+  const shouldShow = Boolean(asset && buildAssetValuationNotices(asset).length);
+  field?.classList.toggle("is-hidden", !shouldShow);
 }
 
 function resetOptionalEntryPanels() {

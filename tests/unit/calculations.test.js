@@ -27,7 +27,7 @@ import {
   lookupSecurity
 } from "../../src/domain/marketData.js";
 import { buildUserAssetDailyPriceSnapshots } from "../../src/domain/userAssetDailyPrices.js";
-import { missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
+import { marketHistoryWindowDays, missingMarketHistoryRanges } from "../../src/domain/marketHistoryCoverage.js";
 import { isDailyHistoryPoint, isMarketCloseAvailable, selectCurrentValuationPoint } from "../../src/domain/marketPriceSemantics.js";
 import { isCnExchangeListedFundSymbol, normalizeCnListedFundInstrument, removeOtcDuplicatesOfListedCnInstruments } from "../../src/domain/cnInstrumentClassification.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
@@ -51,7 +51,14 @@ import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from
 import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
 import { buildWorstMonth } from "../../src/features/analysis/analysisModel.js";
 import { calculateRiskAdjustedMetrics } from "../../src/features/analysis/analysisReturns.js";
-import { decorateMarketSyncResults, marketFetchPresentation } from "../../src/features/market/marketService.js";
+import {
+  buildMarketSyncBatches,
+  configureMarketService,
+  decorateMarketSyncResults,
+  marketFetchPresentation,
+  syncLatestMarketPrices
+} from "../../src/features/market/marketService.js";
+import { configureMarketRender } from "../../src/features/market/marketRender.js";
 import { configureFormatters, formatDisplayCurrency, formatSignedCurrency, formatUnitPrice } from "../../src/ui/formatters.js";
 
 test("parses decimal values with deterministic rounding", () => {
@@ -356,6 +363,21 @@ test("does not schedule another market history fetch when the requested range is
     ),
     []
   );
+});
+
+test("requests the complete market history window from the earliest holding date", () => {
+  assert.equal(marketHistoryWindowDays("2023-01-01", "2026-01-01"), 1097);
+  assert.equal(marketHistoryWindowDays("2026-01-01", "2026-01-01"), 1);
+  assert.equal(marketHistoryWindowDays("", "2026-01-01"), 1);
+});
+
+test("splits long external history requests into contiguous bounded ranges", async () => {
+  const moduleUrl = `../../scripts/market-data/fetch-market-data.mjs?split=${Date.now()}`;
+  const { splitDateRange } = await import(moduleUrl);
+  assert.deepEqual(splitDateRange({ dateFrom: "2023-01-01", dateTo: "2026-01-01" }, 700), [
+    { dateFrom: "2023-01-01", dateTo: "2024-11-30" },
+    { dateFrom: "2024-12-01", dateTo: "2026-01-01" }
+  ]);
 });
 
 test("builds portfolio trend from synced daily asset prices before falling back to estimates", () => {
@@ -749,11 +771,100 @@ test("keeps seed-version private asset data out of default API payloads", async 
   assert.equal(marketServiceSource.includes("quantity: asset.quantity"), false);
   assert.equal(marketServiceSource.includes("costPrice: asset.costPrice"), false);
   assert.equal(marketServiceSource.includes("account: asset.account"), false);
+  assert.equal(marketServiceSource.includes("includeBenchmarks: true"), true);
+  assert.equal(marketServiceSource.includes("days: marketHistoryWindowDays"), true);
+  assert.equal(marketServiceSource.includes("publicHistoryWindowDays = 365"), false);
   assert.equal(marketServiceSource.includes("body: JSON.stringify({\n        symbols: [symbol],\n        dateFrom"), false);
   assert.equal(marketRenderSource.includes("/api/asset-prices/daily"), false);
   assert.equal(apiSource.includes("requestedSymbols: []"), true);
+  assert.equal(apiSource.includes("userId: target"), false);
   assert.equal(apiSource.includes('{ persistRun: false }'), true);
   assert.equal(fetchScriptSource.includes('options["persist-run"] !== "false"'), true);
+});
+
+test("splits large local portfolios into API-safe market sync batches", () => {
+  const symbols = Array.from({ length: 121 }, (_, index) => `ASSET${index + 1}`);
+  const batches = buildMarketSyncBatches([...symbols, "asset1"], true);
+
+  assert.deepEqual(batches.map((batch) => batch.symbols.length), [50, 50, 21]);
+  assert.deepEqual(batches.map((batch) => batch.includeBenchmarks), [true, false, false]);
+  assert.equal(batches.flatMap((batch) => batch.symbols).filter((symbol) => symbol === "ASSET1").length, 1);
+  assert.deepEqual(buildMarketSyncBatches([], true), [{ symbols: [], includeBenchmarks: true }]);
+  assert.deepEqual(buildMarketSyncBatches([], false), []);
+});
+
+test("keeps successful market sync batches when a later batch fails", async () => {
+  let state = {
+    assets: Array.from({ length: 51 }, (_, index) => ({
+      id: `asset-${index + 1}`,
+      symbol: `ASSET${index + 1}`,
+      market: "US",
+      purchaseDate: "2025-01-01",
+      currentPrice: "1"
+    }))
+  };
+  let marketSyncState = { status: "idle", message: "", results: [], syncedAt: "" };
+  const requests = [];
+  let benchmarkReloadCount = 0;
+  const originalFetch = globalThis.fetch;
+
+  configureMarketService({
+    marketApiBaseUrl: "https://market.example.test",
+    getState: () => state,
+    setState: (nextState) => {
+      state = nextState;
+    },
+    getMarketSyncState: () => marketSyncState,
+    setMarketSyncState: (nextState) => {
+      marketSyncState = nextState;
+    },
+    persistAndRender: () => {},
+    selectedBenchmarkInstruments: () => [],
+    loadBenchmarkPerformance: () => {
+      benchmarkReloadCount += 1;
+    }
+  });
+  configureMarketRender({
+    elements: {},
+    getMarketSyncState: () => marketSyncState
+  });
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    if (requests.length === 2) {
+      return {
+        ok: false,
+        status: 503,
+        clone: () => ({ json: async () => ({ message: "第二批失败" }) })
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        syncedAt: "2026-07-23T12:00:00.000Z",
+        fetch: { status: "covered" },
+        results: body.symbols.map((symbol) => ({
+          symbol,
+          status: "synced",
+          after: { currentPrice: "2", pricedAt: "2026-07-22" }
+        }))
+      })
+    };
+  };
+
+  try {
+    await syncLatestMarketPrices();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requests.map((request) => request.symbols.length), [50, 1]);
+  assert.deepEqual(requests.map((request) => request.includeBenchmarks), [true, false]);
+  assert.equal(state.assets[0].priceStatus, "synced");
+  assert.equal(state.assets[50].priceStatus, "error");
+  assert.equal(marketSyncState.status, "warning");
+  assert.match(marketSyncState.message, /2 批中 1 批完成、1 批失败/);
+  assert.equal(benchmarkReloadCount, 1);
 });
 
 test("searches the lightweight instrument seed for common assets", () => {

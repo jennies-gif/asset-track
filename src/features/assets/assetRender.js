@@ -14,7 +14,7 @@ import {
   formatUnitPrice,
   toneClassForValue
 } from "../../ui/formatters.js";
-import { buildAssetDataIssues } from "./dataQuality.js";
+import { buildAssetValuationNotices } from "./dataQuality.js";
 import { marketLabel } from "./marketOptions.js";
 import { buildAssetChangeRecords, latestSellPrice } from "./assetTransactions.js";
 import { formatHoldingDays } from "./assetForm.js";
@@ -25,16 +25,8 @@ export function configureAssetRender(context) {
   ctx = context;
 }
 
-export function priceStatusLabel(asset) {
-  return resolvePriceStatus(asset).label;
-}
-
-export function priceStatusClass(asset) {
-  return resolvePriceStatus(asset).className;
-}
-
 export function renderPortfolioFilters(openAssets) {
-  if (!ctx.elements.portfolioAccountFilter || !ctx.elements.portfolioTypeFilter || !ctx.elements.portfolioStatusFilter) return;
+  if (!ctx.elements.portfolioAccountFilter || !ctx.elements.portfolioTypeFilter) return;
   const accounts = uniqueSorted(openAssets.map((asset) => asset.account).filter(Boolean));
   const types = uniqueSorted(openAssets.map((asset) => asset.type).filter(Boolean));
   let portfolioFilter = ctx.getPortfolioFilter();
@@ -57,7 +49,6 @@ export function renderPortfolioFilters(openAssets) {
     ...types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`)
   ].join("");
   ctx.elements.portfolioTypeFilter.value = portfolioFilter.type;
-  ctx.elements.portfolioStatusFilter.value = portfolioFilter.status;
 }
 
 function uniqueSorted(items) {
@@ -68,10 +59,6 @@ function assetMatchesPortfolioFilter(asset) {
   const portfolioFilter = ctx.getPortfolioFilter();
   if (portfolioFilter.account !== "all" && asset.account !== portfolioFilter.account) return false;
   if (portfolioFilter.type !== "all" && asset.type !== portfolioFilter.type) return false;
-  if (portfolioFilter.status === "all") return true;
-  const hasIssues = buildAssetDataIssues(asset).length > 0;
-  if (portfolioFilter.status === "needs-review") return hasIssues;
-  if (portfolioFilter.status === "complete") return !hasIssues;
   return true;
 }
 
@@ -80,8 +67,6 @@ function portfolioFilterLabel() {
   const labels = [];
   if (portfolioFilter.account !== "all") labels.push(`账户：${portfolioFilter.account}`);
   if (portfolioFilter.type !== "all") labels.push(`类型：${portfolioFilter.type}`);
-  if (portfolioFilter.status === "needs-review") labels.push("数据状态：待核对");
-  if (portfolioFilter.status === "complete") labels.push("数据状态：关键数据完整");
   return labels.join("，");
 }
 
@@ -118,10 +103,14 @@ export function renderPortfolio() {
           </td>
           <td>${escapeHtml(position.account)}</td>
           <td>${escapeHtml([position.type, marketLabel(position.market)].filter(Boolean).join(" / "))}</td>
-          <td>${isCash ? "—" : escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</td>
+          <td>
+            <div class="price-cell cost-price-cell">
+              <span>${isCash ? "—" : escapeHtml(formatUnitPrice(asset.costPrice, asset.currency, "未填写"))}</span>
+            </div>
+          </td>
           <td>${renderPriceCell(asset)}</td>
           <td>${escapeHtml(formatHoldingDays(asset))}</td>
-          <td class="asset-market-value-cell">${renderDisplayCurrencyAmount(position.marketValueCents, asset)}</td>
+          <td class="asset-market-value-cell">${renderDisplayCurrencyAmount(position.marketValueCents)}</td>
           <td>
             ${isCash
               ? `<div class="return-cell"><strong>—</strong><span>现金无价格收益</span></div>`
@@ -131,7 +120,6 @@ export function renderPortfolio() {
                 </div>`}
           </td>
           <td>${formatShare(weightBps)}</td>
-          <td>${renderDataStatus(asset)}</td>
           <td>
             <div class="row-actions">
               ${renderRowActions(position.id)}
@@ -141,9 +129,9 @@ export function renderPortfolio() {
       `;
     })
     .join("")
-    : `<tr><td colspan="11" class="empty-table-cell">${
+    : `<tr><td colspan="10" class="empty-table-cell">${
         positions.length
-          ? emptyStateInner("当前筛选下暂无持仓", "请调整账户、类型或数据状态筛选，或新增一笔资产记录。")
+          ? emptyStateInner("当前筛选下暂无持仓", "请调整账户或类型筛选，或新增一笔资产记录。")
           : emptyStateInner("暂无当前持仓", "添加第一笔资产后，这里会展示账户、成本价、当前价、市值、收益、占比和价格状态。")
       }</td></tr>`;
 
@@ -189,32 +177,39 @@ function renderPriceCell(asset) {
   const status = resolvePriceStatus(asset);
   if (status.key === "cash") {
     return `
-      <div class="price-cell is-cash" title="现金按原币余额估值；折算汇率见市值列。">
+      <div class="price-cell is-cash" title="现金按原币余额估值；外币折算汇率可在设置中调整。">
         <span>—</span>
         <small class="data-ok">现金按余额</small>
       </div>
     `;
   }
-  const shortMeta = shortPriceMeta(asset, status);
+  const attention = buildAssetValuationNotices(asset)[0];
+  const shortMeta = attention ? attentionPriceMeta(asset, attention) : shortPriceMeta(asset, status);
   const detail = priceDetailTitle(asset, status);
   return `
     <div class="price-cell" title="${escapeHtml(detail)}">
       <span>${escapeHtml(formatUnitPrice(asset.currentPrice || asset.costPrice, asset.currency, "待补价格"))}</span>
-      <small class="${escapeHtml(status.className)}">${escapeHtml(shortMeta)}</small>
+      <small class="${escapeHtml(attention ? attention.severity === "danger" ? "data-error" : "data-warning" : status.className)}">
+        ${attention ? `<i class="price-attention-dot" aria-hidden="true"></i>` : ""}
+        ${escapeHtml(shortMeta)}
+      </small>
     </div>
   `;
 }
 
-function renderDisplayCurrencyAmount(cents, asset) {
+function attentionPriceMeta(asset, notice) {
+  const date = asset.pricedAt ? formatShortDate(asset.pricedAt) : "";
+  return [notice.label, date].filter(Boolean).join(" · ");
+}
+
+function renderDisplayCurrencyAmount(cents) {
   const { currency, amount } = formatDisplayCurrencyParts(cents);
-  const fxSummary = ctx.displayFxRateSummary?.(asset) || "";
   return `
     <span class="asset-value-stack">
       <span class="asset-money">
         <span class="asset-money-currency">${escapeHtml(currency)}</span>
         <span class="asset-money-amount">${escapeHtml(amount)}</span>
       </span>
-      ${fxSummary ? `<small class="asset-fx-rate">折算 ${escapeHtml(fxSummary)} · 设置汇率</small>` : ""}
     </span>
   `;
 }
@@ -267,12 +262,6 @@ function renderCurrentPriceHeading(assets) {
 }
 
 function renderRowActions(assetId) {
-  const secondaryActions = [
-    ["dividend", "分红", true],
-    ["transfer-in", "转入", true],
-    ["transfer-out", "转出", true],
-    ["adjust-cost", "调整成本", true]
-  ];
   return `
     <button class="row-action-link" data-asset-id="${escapeHtml(assetId)}" data-transaction-action="buy" type="button">买入</button>
     <span class="row-action-separator" aria-hidden="true">|</span>
@@ -283,15 +272,9 @@ function renderRowActions(assetId) {
     <button class="row-action-link" data-edit-asset-id="${escapeHtml(assetId)}" type="button">编辑</button>
     <span class="row-action-separator" aria-hidden="true">|</span>
     <details class="row-more-menu">
-      <summary aria-label="更多操作">...</summary>
-      <div class="row-more-panel">
-        ${secondaryActions.map(([action, label, disabled]) => {
-          return `
-            <button data-asset-id="${escapeHtml(assetId)}" data-transaction-action="${escapeHtml(action)}" ${disabled ? "disabled aria-disabled=\"true\" title=\"后续支持\"" : ""} type="button">
-              ${escapeHtml(disabled ? `${label}（后续支持）` : label)}
-            </button>
-          `;
-        }).join("")}
+      <summary aria-label="更多资产操作" title="更多资产操作">⋯</summary>
+      <div class="row-more-panel" aria-label="资产操作">
+        <button class="row-menu-danger" data-delete-asset-id="${escapeHtml(assetId)}" type="button">删除资产</button>
       </div>
     </details>
   `;
@@ -329,31 +312,4 @@ function renderClosedAssetRow(asset) {
       </td>
     </tr>
   `;
-}
-
-function renderDataStatus(asset) {
-  const issues = buildAssetDataIssues(asset);
-  const priceTone = compactStatusTone(priceStatusClass(asset));
-  if (!issues.length) {
-    return `
-      <div class="status-stack compact-status-stack">
-        <span class="asset-status-badge is-${priceTone}">${escapeHtml(priceStatusLabel(asset))}</span>
-        <span class="asset-status-badge is-success">完整</span>
-      </div>
-    `;
-  }
-  return `
-    <div class="status-stack compact-status-stack">
-      <span class="asset-status-badge is-${priceTone}">${escapeHtml(priceStatusLabel(asset))}</span>
-      ${issues.slice(0, 1).map((issue) => `<span class="asset-status-badge is-${issue.severity === "high" ? "danger" : "warning"}">${escapeHtml(issue.label)}</span>`).join("")}
-      ${issues.length > 1 ? `<small>+${issues.length - 1} 项</small>` : ""}
-    </div>
-  `;
-}
-
-function compactStatusTone(className = "") {
-  if (className.includes("positive") || className.includes("ok")) return "success";
-  if (className.includes("error") || className.includes("negative")) return "danger";
-  if (className.includes("warning")) return "warning";
-  return "neutral";
 }

@@ -354,6 +354,25 @@ create table market_data_runs (
   created_at timestamptz not null default now()
 );
 
+create table market_data_sync_targets (
+  symbol text not null,
+  market text not null,
+  source_type text not null default 'user_requested',
+  status text not null default 'active',
+  first_requested_at timestamptz not null default now(),
+  last_requested_at timestamptz not null default now(),
+  last_synced_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (market, symbol),
+  check (source_type in ('user_requested', 'benchmark')),
+  check (status in ('active', 'error'))
+);
+
+create index market_data_sync_targets_status_idx
+  on market_data_sync_targets(status, market, symbol);
+
 create table market_data_backfill_tasks (
   id text primary key,
   user_id text not null,
@@ -462,6 +481,7 @@ alter table market_data_price_snapshots enable row level security;
 alter table market_data_fund_nav_snapshots enable row level security;
 alter table market_data_fx_rate_snapshots enable row level security;
 alter table market_data_runs enable row level security;
+alter table market_data_sync_targets enable row level security;
 alter table market_data_backfill_tasks enable row level security;
 alter table user_asset_daily_price_snapshots enable row level security;
 alter table user_assets enable row level security;

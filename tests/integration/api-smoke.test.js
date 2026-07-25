@@ -379,6 +379,11 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(sync.results[0].after.priceStatus, "synced");
     assert.equal(sync.results[0].after.sourceFetchedAt, "2026-06-02T10:00:00.000Z");
     assert.equal(sync.results[0].dailyPrices.length, 0);
+    const registeredTargets = JSON.parse(await fs.readFile(path.join(marketDataDir, "sync-targets.json"), "utf8"));
+    assert.deepEqual(
+      registeredTargets.map((target) => ({ symbol: target.symbol, market: target.market, sourceType: target.sourceType })),
+      [{ symbol: "00700", market: "HK", sourceType: "user_requested" }]
+    );
 
     const legacyListedEtfSync = await postJson("/api/market-data/sync-daily", {
       symbols: ["513050.OF", "513050"],
@@ -397,6 +402,13 @@ test("api skeleton serves health, positions and attribution", async () => {
     });
     assert.equal(coveredHistory.fetch, null);
     assert.equal(coveredHistory.results[0].history.length, 2);
+
+    const longHistoryWindow = await postJson("/api/market-data/sync-daily", {
+      symbols: ["00700"],
+      days: 1097,
+      autoFetch: false
+    });
+    assert.equal(longHistoryWindow.summary.syncedCount, 1);
 
     const dailyPrices = await rawGetJson("/api/asset-prices/daily?assetId=asset-00700");
     assert.equal(dailyPrices.status, 403);
@@ -469,6 +481,12 @@ test("api skeleton serves health, positions and attribution", async () => {
       .map((result) => result.symbol);
     assert.equal(syncedSymbols.includes("00700"), false);
     assert.ok(syncedSymbols.includes("000300"));
+    const targetsWithBenchmarks = JSON.parse(await fs.readFile(path.join(marketDataDir, "sync-targets.json"), "utf8"));
+    assert.equal(
+      targetsWithBenchmarks.filter((target) => target.sourceType === "benchmark").length,
+      9,
+      JSON.stringify(targetsWithBenchmarks)
+    );
 
     const attribution = await rawPostJson("/api/attribution/runs", {
       startDate: "2026-01-29",
