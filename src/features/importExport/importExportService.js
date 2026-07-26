@@ -275,7 +275,7 @@ function summarizeImportState(state = {}) {
   };
 }
 
-function downloadText(filename, content, type) {
+export function downloadText(filename, content, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -284,5 +284,5 @@ function downloadText(filename, content, type) {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

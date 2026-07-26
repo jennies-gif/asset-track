@@ -223,7 +223,8 @@ function largestGroupWeight(items, keySelector, totalValueCents) {
   };
 }
 
-function annualizedAnalysisReturnBps(returnBps, assets) {
+export function annualizedAnalysisReturnBps(returnBps, assets) {
+  if (returnBps === null || returnBps === undefined) return null;
   const { start, end } = selectedAnalysisBounds(assets);
   const startMs = Date.parse(`${start}T00:00:00.000Z`);
   const endMs = Date.parse(`${end}T00:00:00.000Z`);
