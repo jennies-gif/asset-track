@@ -846,6 +846,10 @@ th,
   text-underline-offset: 3px;
 }
 
+.asset-form-delete-action {
+  margin-right: auto;
+}
+
 .row-action-separator {
   display: inline;
   color: var(--line-strong);

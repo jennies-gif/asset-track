@@ -23,6 +23,7 @@ export function getAssetElements() {
     assetForm: document.querySelector("#asset-form"),
     assetError: document.querySelector("#asset-error"),
     assetSubmitButton: document.querySelector('#asset-form button[type="submit"]'),
+    assetDeleteButton: document.querySelector("#delete-editing-asset"),
     closeFields: document.querySelector("#close-fields"),
     portfolioCurrentPriceHeading: document.querySelector("#portfolio-current-price-heading"),
     historyCurrentPriceHeading: document.querySelector("#history-current-price-heading"),

@@ -69,15 +69,24 @@ test("mobile interaction rules preserve 44px touch targets", async () => {
   assert.match(source, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/u);
 });
 
-test("asset rows expose accessible edit and delete actions without overlapping search results", async () => {
-  const [renderSource, baseStyles] = await Promise.all([
+test("asset rows and the edit form expose accessible delete actions without overlapping search results", async () => {
+  const [indexSource, renderSource, formSource, eventsSource, elementsSource, baseStyles] = await Promise.all([
+    readFile(resolve(projectRoot, "index.html"), "utf8"),
     readFile(resolve(projectRoot, "src/features/assets/assetRender.js"), "utf8"),
+    readFile(resolve(projectRoot, "src/features/assets/assetForm.js"), "utf8"),
+    readFile(resolve(projectRoot, "src/features/assets/assetEvents.js"), "utf8"),
+    readFile(resolve(projectRoot, "src/features/assets/assetElements.js"), "utf8"),
     readFile(resolve(projectRoot, "src/styles/00-base.css"), "utf8")
   ]);
 
   assert.match(renderSource, /<summary aria-label="更多资产操作"[^>]*>⋯<\/summary>/u);
   assert.match(renderSource, /class="row-action-link" data-edit-asset-id=.*type="button">编辑<\/button>/u);
   assert.match(renderSource, /data-delete-asset-id=.*type="button">删除资产<\/button>/u);
+  assert.match(indexSource, /id="delete-editing-asset" type="button">删除资产<\/button>/u);
+  assert.match(elementsSource, /assetDeleteButton: document\.querySelector\("#delete-editing-asset"\)/u);
+  assert.match(eventsSource, /assetDeleteButton\?\.addEventListener\("click"[\s\S]*?deleteAsset\(editingId\)/u);
+  assert.match(formSource, /assetDeleteButton\.classList\.toggle\("is-hidden", mode !== "edit"\)/u);
+  assert.match(formSource, /assetDeleteButton\.disabled = mode !== "edit"/u);
   assert.match(baseStyles, /\.asset-name-field\s*\{\s*grid-column: span 2;/u);
   assert.match(baseStyles, /\.asset-match-panel\s*\{[\s\S]*?position: static;/u);
 });

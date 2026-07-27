@@ -375,7 +375,11 @@
             </fieldset>
             <div class="transaction-live-summary is-hidden" id="transaction-live-summary" aria-live="polite"></div>
             <p class="form-error" id="asset-error" role="alert"></p>
-            <div class="form-actions"><button class="secondary-button" type="button" data-cancel-asset-form>取消</button><button class="primary-button" type="submit">保存资产</button></div>
+            <div class="form-actions button-row">
+              <button class="danger-button asset-form-delete-action is-hidden" id="delete-editing-asset" type="button">删除资产</button>
+              <button class="secondary-button" type="button" data-cancel-asset-form>取消</button>
+              <button class="primary-button" type="submit">保存资产</button>
+            </div>
           </form>
         </section>
 

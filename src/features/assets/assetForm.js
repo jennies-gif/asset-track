@@ -773,12 +773,19 @@ export function deleteAsset(id) {
   const state = ctx.getState();
   const asset = state.assets.find((item) => item.id === id);
   if (!asset) return;
+  const isEditingDeletedAsset = ctx.elements.assetForm.dataset.editingId === id;
   const label = [asset.name, asset.symbol].filter(Boolean).join(" · ") || "该资产";
   const confirmed = confirm(
     `确认永久删除“${label}”？\n\n资产及其买入、卖出记录将从本机删除；关联复盘正文会保留，但不再关联该资产。此操作只能通过备份恢复。`
   );
   if (!confirmed) return;
   ctx.setState(removeAssetFromState(state, id));
+  if (isEditingDeletedAsset) {
+    ctx.elements.assetForm.reset();
+    resetAssetFormMode("create");
+    setDefaultAssetFormValues();
+    hideAssetFormPanel();
+  }
   ctx.persistAndRender();
 }
 
@@ -981,6 +988,10 @@ export function resetAssetFormMode(mode = "create") {
   applyCashAssetFormMode();
   if (ctx.elements.assetForm.elements.adjustmentType) ctx.elements.assetForm.elements.adjustmentType.value = "buy";
   ctx.elements.assetSubmitButton.textContent = mode === "edit" ? "更新资产" : isTransactionModeName(mode) ? "确认买入" : "保存资产";
+  if (ctx.elements.assetDeleteButton) {
+    ctx.elements.assetDeleteButton.classList.toggle("is-hidden", mode !== "edit");
+    ctx.elements.assetDeleteButton.disabled = mode !== "edit";
+  }
 }
 
 function syncManualCurrentPriceField(asset) {

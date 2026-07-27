@@ -122,6 +122,10 @@ export function initAssetEvents(ctx) {
   });
   elements.closeAssetFormButton?.addEventListener("click", requestHideAssetFormPanel);
   elements.assetForm.querySelector("[data-cancel-asset-form]")?.addEventListener("click", requestHideAssetFormPanel);
+  elements.assetDeleteButton?.addEventListener("click", () => {
+    const editingId = elements.assetForm.dataset.editingId;
+    if (editingId) deleteAsset(editingId);
+  });
 
   elements.portfolioAccountFilter?.addEventListener("change", () => {
     ctx.setPortfolioFilter({ ...ctx.getPortfolioFilter(), account: elements.portfolioAccountFilter.value });
