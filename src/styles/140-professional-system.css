@@ -850,6 +850,11 @@ th,
   margin-right: auto;
 }
 
+#asset-form .form-actions {
+  grid-column: 1 / -1;
+  align-items: center;
+}
+
 .row-action-separator {
   display: inline;
   color: var(--line-strong);
