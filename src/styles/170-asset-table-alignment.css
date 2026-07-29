@@ -1,4 +1,4 @@
-/* Asset ledger tables use centered, compact columns for quick scanning. */
+/* Asset ledger tables use compact columns with semantic alignment. */
 #assets-panel .table-wrap {
   overflow-x: auto;
   scrollbar-gutter: stable;
@@ -10,7 +10,6 @@
 
 #assets-panel th,
 #assets-panel td {
-  text-align: center;
   vertical-align: middle;
 }
 
@@ -35,6 +34,21 @@
 #open-portfolio-view td {
   padding-right: 8px;
   padding-left: 8px;
+}
+
+#open-portfolio-view th:nth-child(-n + 3),
+#open-portfolio-view td:nth-child(-n + 3) {
+  text-align: left;
+}
+
+#open-portfolio-view th:nth-child(n + 4):nth-child(-n + 9),
+#open-portfolio-view td:nth-child(n + 4):nth-child(-n + 9) {
+  text-align: right;
+}
+
+#open-portfolio-view th:nth-child(10),
+#open-portfolio-view td:nth-child(10) {
+  text-align: center;
 }
 
 #open-portfolio-view th:nth-child(1),
@@ -98,17 +112,17 @@
   font-weight: var(--weight-medium);
 }
 
-#assets-panel .price-cell,
-#assets-panel .return-cell {
-  justify-items: center;
-  text-align: center;
+#open-portfolio-view .price-cell,
+#open-portfolio-view .return-cell {
+  justify-items: end;
+  text-align: right;
 }
 
 #open-portfolio-view .price-cell {
   display: flex;
   width: 100%;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   gap: 7px;
 }

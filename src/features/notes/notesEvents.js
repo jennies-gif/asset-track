@@ -26,6 +26,15 @@ export function initNotesEvents(context) {
   });
   elements.noteSaveDraftButton.addEventListener("click", () => context.saveNoteFromForm("draft"));
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      const openMenus = [...elements.notesList.querySelectorAll(".note-card-menu[open]")];
+      if (openMenus.length) {
+        const summary = openMenus[0].querySelector("summary");
+        closeNoteMenus(openMenus);
+        summary?.focus();
+        return;
+      }
+    }
     if (!elements.notesEditor.classList.contains("is-hidden") && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       context.saveNoteFromForm("published");
@@ -50,9 +59,7 @@ export function initNotesEvents(context) {
     context.commitCustomNoteTag();
   });
   elements.noteForm.elements.customTag.addEventListener("blur", context.commitCustomNoteTag);
-  elements.noteAssetSelect?.addEventListener("change", () => {
-    if (!elements.noteAssetSelect.value) context.clearNoteTransactionLink({ keepAsset: true });
-  });
+  elements.noteAssetSelect?.addEventListener("change", context.syncNoteAssetSelection);
   elements.noteTransactionSelect.addEventListener("change", context.applySelectedNoteTransaction);
 
   elements.closeReviewLater.addEventListener("click", context.hideCloseReviewPrompt);
@@ -64,6 +71,9 @@ export function initNotesEvents(context) {
   });
 
   elements.notesList.addEventListener("click", (event) => {
+    const activeMenu = event.target.closest(".note-card-menu");
+    closeNoteMenus(elements.notesList.querySelectorAll(".note-card-menu[open]"), activeMenu);
+
     const toggleButton = event.target.closest("[data-toggle-body-id]");
     if (toggleButton) {
       context.toggleBody(toggleButton);
@@ -96,6 +106,11 @@ export function initNotesEvents(context) {
     context.showNoteReader(card.dataset.openNoteId);
   });
 
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".note-card-menu")) return;
+    closeNoteMenus(elements.notesList.querySelectorAll(".note-card-menu[open]"));
+  });
+
   elements.notesList.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     if (event.target.closest(".note-card-menu")) return;
@@ -124,5 +139,11 @@ export function initNotesEvents(context) {
       item.classList.toggle("is-active", item === button);
     });
     context.renderNotes();
+  });
+}
+
+export function closeNoteMenus(menus, except = null) {
+  [...menus].forEach((menu) => {
+    if (menu !== except) menu.removeAttribute("open");
   });
 }

@@ -38,6 +38,20 @@ export function priceUsesCostFallback(asset = {}) {
   );
 }
 
+export function manualPriceMetadata({ currentPrice, pricedAt } = {}) {
+  return {
+    currentPrice: String(currentPrice || "").trim(),
+    pricedAt: String(pricedAt || "").trim(),
+    priceStatus: "manual",
+    priceSource: "用户录入",
+    priceKind: "",
+    priceAt: "",
+    marketTimezone: "",
+    sourceFetchedAt: "",
+    priceError: ""
+  };
+}
+
 export function isStalePrice(pricedAt, today = todayIsoDate()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(pricedAt || ""))) return false;
   const pricedTime = Date.parse(`${pricedAt}T00:00:00.000Z`);

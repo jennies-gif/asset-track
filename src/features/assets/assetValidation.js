@@ -66,6 +66,19 @@ export function validateAssetFormByMode(existingAsset) {
   if (String(form.elements.currentPrice?.value || "").trim()) {
     firstError ||= validatePositiveDecimalField("currentPrice", "当前价格必须大于 0。");
   }
+  if (form.dataset.manualPriceExpanded === "true") {
+    if (!String(form.elements.currentPrice?.value || "").trim()) {
+      firstError ||= validatePositiveDecimalField("currentPrice", "请填写手动当前价。");
+    }
+    const pricedAt = String(form.elements.pricedAt?.value || "").trim();
+    if (!pricedAt) {
+      setFieldError("pricedAt", "请选择价格日期。");
+      firstError ||= "请选择价格日期。";
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(pricedAt)) {
+      setFieldError("pricedAt", "日期格式无效。");
+      firstError ||= "请检查价格日期。";
+    }
+  }
   firstError ||= validatePositiveDecimalField("fxRate", "币种或汇率缺失会导致估值不完整。");
   if (String(form.elements.previousFxRate?.value || "").trim()) {
     firstError ||= validatePositiveDecimalField("previousFxRate", "期初汇率必须大于 0。");

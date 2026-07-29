@@ -34,6 +34,25 @@ test("trend chart includes a screen-reader summary and tabular alternative", asy
   assert.match(source, /<caption>当前筛选范围内的总资产趋势明细<\/caption>/u);
 });
 
+test("overview and analysis expose one consistent reporting range vocabulary", async () => {
+  const source = await readFile(resolve(projectRoot, "index.html"), "utf8");
+  const overviewRanges = [...source.matchAll(/data-range-value="([^"]+)"[^>]*>([^<]+)<\/button>/gu)]
+    .map(([, value, label]) => [value, label]);
+  const analysisRanges = [...source.matchAll(/data-analysis-range-value="([^"]+)"[^>]*>([^<]+)<\/button>/gu)]
+    .map(([, value, label]) => [value, label]);
+
+  assert.deepEqual(overviewRanges, [
+    ["1", "近1月"],
+    ["3", "近3月"],
+    ["ytd", "今年"],
+    ["all", "记录至今"],
+    ["custom", "自定义"]
+  ]);
+  assert.deepEqual(analysisRanges, overviewRanges);
+  assert.equal(source.includes('data-range-value="day"'), false);
+  assert.equal(source.includes('data-analysis-range-value="6"'), false);
+});
+
 test("analysis keeps benchmark comparison and its trend chart permanently visible", async () => {
   const [indexSource, analysisRenderSource] = await Promise.all([
     readFile(resolve(projectRoot, "index.html"), "utf8"),
@@ -60,6 +79,18 @@ test("analysis keeps concentration and return contribution as adjacent persisten
   assert.ok(contributionIndex < attributionIndex);
   assert.equal(source.includes("<summary><span>资产贡献排行</span>"), false);
   assert.match(source, /<section class="analysis-card"[^>]+aria-labelledby="analysis-contribution-title"/u);
+});
+
+test("analysis exposes the approved attribution hierarchy and opens risk details by default", async () => {
+  const [indexSource, analysisUiSource] = await Promise.all([
+    readFile(resolve(projectRoot, "index.html"), "utf8"),
+    readFile(resolve(projectRoot, "src/features/analysis/analysisUi.js"), "utf8")
+  ]);
+
+  assert.match(indexSource, /<details class="analysis-card analysis-disclosure" data-analysis-requires-assets open>/u);
+  assert.match(indexSource, /class="analysis-detail-metrics" id="analysis-concentration-metrics"/u);
+  assert.match(indexSource, /class="analysis-detail-metrics" id="analysis-risk-metrics"/u);
+  assert.match(analysisUiSource, /class="attribution-equation" role="img" aria-label=/u);
 });
 
 test("mobile interaction rules preserve 44px touch targets", async () => {

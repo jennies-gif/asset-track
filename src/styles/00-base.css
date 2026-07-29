@@ -2186,18 +2186,9 @@ small {
   background: var(--surface-muted);
 }
 
-.market-sync-summary strong,
-.market-sync-summary span,
-.market-sync-row small,
-.market-sync-row span {
+.market-sync-summary strong {
   font-size: 12px;
   line-height: 1.4;
-}
-
-.market-sync-summary span,
-.market-sync-row small,
-.market-sync-row span {
-  color: var(--muted);
 }
 
 .market-sync-summary.is-error {
@@ -2209,28 +2200,9 @@ small {
   border-color: color-mix(in srgb, var(--positive) 30%, var(--line));
 }
 
-.market-sync-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-}
-
-.market-sync-row {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-}
-
-.market-sync-row strong,
-.market-sync-row span,
-.market-sync-row small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.market-sync-summary.is-warning {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--line));
+  background: color-mix(in srgb, var(--warning-soft) 52%, var(--surface));
 }
 
 .analysis-filter {
@@ -3124,6 +3096,26 @@ small {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   gap: 16px;
+}
+
+.manual-current-price-control {
+  margin-top: 16px;
+}
+
+.manual-current-price-panel {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+}
+
+.manual-current-price-panel .form-section-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.manual-current-price-panel .form-help {
+  margin-bottom: 0;
 }
 
 .wide-row {

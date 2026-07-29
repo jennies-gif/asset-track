@@ -41,10 +41,70 @@ export function validateStoredState(value) {
       issues.push(issue(field, "存在时必须是数组"));
     }
   }
+  if (Array.isArray(value.notes)) {
+    value.notes.forEach((note, index) => validateNote(note, index, issues));
+  }
 
   return issues.length
     ? invalid("state_invalid", "本地数据结构无法安全识别", issues)
     : { ok: true, issues: [] };
+}
+
+function validateNote(note, index, issues) {
+  const path = `notes[${index}]`;
+  if (!isPlainObject(note)) {
+    issues.push(issue(path, "必须是对象"));
+    return;
+  }
+  if (!String(note.id ?? "").trim()) issues.push(issue(`${path}.id`, "关键字段无法识别"));
+  for (const field of ["title", "content", "asset", "assetId", "type", "template", "format", "status"]) {
+    const value = note[field];
+    if (value !== undefined && value !== null && typeof value !== "string") {
+      issues.push(issue(`${path}.${field}`, "存在时必须是文本"));
+    }
+  }
+  if (note.tags !== undefined && (!Array.isArray(note.tags) || note.tags.some((tag) => typeof tag !== "string"))) {
+    issues.push(issue(`${path}.tags`, "存在时必须是文本数组"));
+  }
+  if (note.contextSnapshot !== undefined) validateNoteContextSnapshot(note.contextSnapshot, `${path}.contextSnapshot`, issues);
+}
+
+function validateNoteContextSnapshot(snapshot, path, issues) {
+  if (!isPlainObject(snapshot)) {
+    issues.push(issue(path, "必须是对象"));
+    return;
+  }
+  if (Number(snapshot.version) !== 1) issues.push(issue(`${path}.version`, "不支持的复盘依据版本"));
+  const textFields = [
+    "capturedAt",
+    "assetId",
+    "assetName",
+    "symbol",
+    "account",
+    "currency",
+    "quantity",
+    "costPrice",
+    "currentPrice",
+    "pricedAt",
+    "priceSource",
+    "priceStatus",
+    "priceStatusLabel",
+    "transactionLabel",
+    "transactionDate",
+    "transactionAction",
+    "transactionQuantity",
+    "transactionPrice"
+  ];
+  textFields.forEach((field) => {
+    if (snapshot[field] !== undefined && typeof snapshot[field] !== "string") {
+      issues.push(issue(`${path}.${field}`, "存在时必须是文本"));
+    }
+  });
+  for (const field of ["quantity", "costPrice", "currentPrice", "transactionQuantity", "transactionPrice"]) {
+    const value = snapshot[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (!decimalPattern.test(String(value).trim())) issues.push(issue(`${path}.${field}`, "必须是有效十进制数"));
+  }
 }
 
 export function validateBackupPayload(value) {

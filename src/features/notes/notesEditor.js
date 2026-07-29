@@ -1,5 +1,5 @@
 import { formatDisplayCurrency, formatUnitPrice } from "../../ui/formatters.js";
-import { formatDate } from "../../utils/date.js";
+import { resolvePriceStatus } from "../../domain/priceStatus.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { inferNoteAssetId, noteTagsFor } from "./notesRender.js";
 
@@ -27,7 +27,9 @@ export function openCloseReviewNote(asset, type = "close") {
   if (reviewTag) reviewTag.checked = true;
   setNoteTemplateSelection(template);
   elements.noteForm.dataset.template = template;
-  if (contentInput) contentInput.value = buildReviewTemplate(template, { asset, actionType: type });
+  if (contentInput) contentInput.value = buildReviewTemplate(template);
+  elements.noteForm.dataset.defaultTitle = titleInput?.value || "";
+  syncNoteAssetSelection();
   updateNoteCounters();
   contentInput?.focus();
   requestAnimationFrame(() => {
@@ -52,7 +54,11 @@ export function openChangeReviewNote(change) {
   if (reviewTag) reviewTag.checked = true;
   setNoteTemplateSelection(template);
   elements.noteForm.dataset.template = template;
-  if (contentInput) contentInput.value = buildReviewTemplate(template, { asset: change.asset, change, actionType: change.action });
+  if (contentInput) contentInput.value = buildReviewTemplate(template);
+  elements.noteForm.dataset.defaultTitle = titleInput?.value || "";
+  populateNoteTransactionOptions(change.asset.id, noteTransactionLabel(change));
+  setNoteTransactionLink(noteTransactionLabel(change));
+  updateNoteContextPreview();
   updateNoteCounters();
   contentInput?.focus();
   requestAnimationFrame(() => {
@@ -74,13 +80,11 @@ export function reviewTemplateForChange(change) {
 
 export function applyNoteTemplate(template = "blank", options = {}) {
   const elements = ctx.elements;
-  const state = ctx.getState();
   const contentInput = elements.noteForm.elements.content;
   const titleInput = elements.noteForm.elements.title;
-  const selectedAsset = state.assets.find((asset) => asset.id === elements.noteAssetSelect?.value);
   const currentContent = contentInput.value.trim();
   const currentTemplate = elements.noteForm.dataset.template || "";
-  const currentTemplateContent = currentTemplate ? buildReviewTemplate(currentTemplate, { asset: selectedAsset }) : "";
+  const currentTemplateContent = currentTemplate ? buildReviewTemplate(currentTemplate) : "";
   const canOverwrite = options.overwrite || !currentContent || currentContent === currentTemplateContent.trim();
   if (!canOverwrite) {
     setNoteTemplateSelection(currentTemplate || "blank");
@@ -89,14 +93,8 @@ export function applyNoteTemplate(template = "blank", options = {}) {
 
   setNoteTemplateSelection(template);
   elements.noteForm.dataset.template = template;
-  contentInput.value = buildReviewTemplate(template, { asset: selectedAsset });
-  if (!titleInput.value.trim()) {
-    titleInput.value = {
-      buy: selectedAsset ? `${selectedAsset.name} 买入复盘` : "买入复盘",
-      hold: selectedAsset ? `${selectedAsset.name} 持有观察` : "持有观察",
-      close: selectedAsset ? `${selectedAsset.name} 清仓复盘` : "清仓复盘"
-    }[template] || "";
-  }
+  contentInput.value = buildReviewTemplate(template);
+  updateDefaultNoteTitle({ template, force: options.overwrite && !titleInput.value.trim() });
   const defaultTag = template === "hold" ? "持有观察" : "交易复盘";
   const reviewTag = elements.noteForm.querySelector(`input[name="tags"][value="${defaultTag}"]`);
   if (template !== "blank" && reviewTag) reviewTag.checked = true;
@@ -118,6 +116,7 @@ export function showNoteEditor(note = null) {
   elements.notesEditor.classList.remove("is-hidden");
   elements.noteForm.reset();
   delete elements.noteForm.dataset.template;
+  delete elements.noteForm.dataset.defaultTitle;
   clearDynamicNoteTags();
   elements.noteCustomTagField.classList.add("is-hidden");
   populateNoteAssetOptions();
@@ -129,7 +128,9 @@ export function showNoteEditor(note = null) {
     elements.noteForm.dataset.editingId = note.id;
     elements.noteForm.elements.title.value = note.title || "";
     elements.noteForm.elements.asset.value = note.asset || "";
-    setNoteAssetLink(note.assetId || inferNoteAssetId(note));
+    const linkedAssetId = note.assetId || inferNoteAssetId(note);
+    setNoteAssetLink(linkedAssetId);
+    populateNoteTransactionOptions(linkedAssetId, note.asset || "");
     elements.noteForm.elements.format.value = note.format || "plain";
     elements.noteForm.elements.status.value = note.status || "published";
     elements.noteForm.dataset.template = note.template || "blank";
@@ -145,6 +146,7 @@ export function showNoteEditor(note = null) {
       }
     });
   }
+  updateNoteContextPreview();
   updateNoteCounters();
   elements.noteForm.elements.title.focus();
 }
@@ -156,9 +158,11 @@ export function hideNoteEditor() {
   elements.notesHome.classList.remove("is-hidden");
   elements.noteForm.reset();
   delete elements.noteForm.dataset.template;
+  delete elements.noteForm.dataset.defaultTitle;
   clearDynamicNoteTags();
   elements.noteCustomTagField.classList.add("is-hidden");
   clearNoteTransactionLink();
+  updateNoteContextPreview();
   setNoteTemplateSelection("blank");
   delete elements.noteForm.dataset.editingId;
   updateNoteCounters();
@@ -190,11 +194,28 @@ export function applySelectedNoteTransaction() {
   const value = elements.noteTransactionSelect.value;
   if (!value) {
     clearNoteTransactionLink({ keepAsset: true });
+    updateNoteContextPreview();
     return;
   }
   const selectedOption = elements.noteTransactionSelect.selectedOptions[0];
-  if (selectedOption?.dataset.assetId) setNoteAssetLink(selectedOption.dataset.assetId);
+  if (selectedOption?.dataset.assetId) {
+    setNoteAssetLink(selectedOption.dataset.assetId);
+    populateNoteTransactionOptions(selectedOption.dataset.assetId, value);
+  }
   setNoteTransactionLink(value);
+  updateDefaultNoteTitle();
+  updateNoteContextPreview();
+}
+
+export function syncNoteAssetSelection() {
+  const elements = ctx.elements;
+  const assetId = elements.noteAssetSelect?.value || "";
+  const linkedOption = elements.noteTransactionSelect?.selectedOptions?.[0];
+  const selectedTransaction = linkedOption?.dataset.assetId === assetId ? elements.noteTransactionSelect.value : "";
+  populateNoteTransactionOptions(assetId, selectedTransaction);
+  setNoteTransactionLink(selectedTransaction);
+  updateDefaultNoteTitle();
+  updateNoteContextPreview();
 }
 
 export function setNoteAssetLink(assetId) {
@@ -219,25 +240,16 @@ export function clearNoteTransactionLink(options = {}) {
   elements.noteTransactionSelect.value = "";
 }
 
-function buildReviewTemplate(template = "blank", context = {}) {
-  if (template === "buy") return buildBuyReviewTemplate(context.asset, context.change);
-  if (template === "hold") return buildHoldReviewTemplate(context.asset);
-  if (template === "close") return buildCloseReviewTemplate(context.asset, context.actionType || "close", context.change);
+export function buildReviewTemplate(template = "blank") {
+  if (template === "buy") return buildBuyReviewTemplate();
+  if (template === "hold") return buildHoldReviewTemplate();
+  if (template === "close") return buildCloseReviewTemplate();
   return "";
 }
 
-function buildBuyReviewTemplate(asset = {}, change = null) {
-  const factLines = [
-    `买入事实：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"} / ${change?.date || formatDate(asset.purchaseDate || asset.updatedAt)}`,
-    `数量：${change?.quantity || asset.quantity || "未填写"}`,
-    `买入价格：${formatUnitPrice(change?.changePrice || asset.costPrice, asset.currency, "未填写")}`,
-    `资金来源：${formatUnitPrice(asset.contribution, asset.currency, "未填写")}`
-  ];
+function buildBuyReviewTemplate() {
   return [
-    ...factLines,
-    "",
     "买入理由：",
-    asset.buyReason || "",
     "",
     "核心假设：",
     "",
@@ -247,12 +259,8 @@ function buildBuyReviewTemplate(asset = {}, change = null) {
   ].join("\n");
 }
 
-function buildHoldReviewTemplate(asset = {}) {
+function buildHoldReviewTemplate() {
   return [
-    `观察对象：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"}`,
-    `当前价格：${formatUnitPrice(asset.currentPrice, asset.currency, "未填写")}`,
-    `成本价格：${formatUnitPrice(asset.costPrice, asset.currency, "未填写")}`,
-    "",
     "持有理由是否仍成立：",
     "",
     "这段时间发生了什么变化：",
@@ -263,20 +271,9 @@ function buildHoldReviewTemplate(asset = {}) {
   ].join("\n");
 }
 
-function buildCloseReviewTemplate(asset = {}, type = "close", change = null) {
-  const actionLabel = { buy: "买入", sell: "卖出", close: "清仓" }[type] || "清仓";
-  const realizedPnl =
-    asset.realizedPnlCents !== undefined ? formatDisplayCurrency(ctx.convertUsdToDisplay(BigInt(asset.realizedPnlCents || "0"))) : "待核对";
-  const factLines = [
-    `${actionLabel}事实：${asset.name || "未关联资产"} / ${asset.account || "未填写账户"} / ${change?.date || formatDate(asset.closedAt || asset.purchaseDate || asset.updatedAt)}`,
-    `成交价格：${formatUnitPrice(change?.changePrice || asset.closePrice || asset.currentPrice || asset.costPrice, asset.currency, "未填写")}`
-  ];
-  if (type !== "buy") factLines.push(`已实现收益：${realizedPnl}`);
+function buildCloseReviewTemplate() {
   return [
-    ...factLines,
-    "",
-    `${actionLabel}原因：`,
-    asset.closeReason || "",
+    "卖出或清仓原因：",
     "",
     "当时的情绪和风险感受：",
     "",
@@ -397,12 +394,102 @@ function populateNoteAssetOptions() {
   ].join("");
 }
 
-function populateNoteTransactionOptions() {
+function populateNoteTransactionOptions(assetId = "", selectedValue = "") {
   const elements = ctx.elements;
-  const changes = ctx.buildAssetChangeRecords();
+  const changes = ctx.buildAssetChangeRecords()
+    .filter((change) => !assetId || change.asset.id === assetId);
   elements.noteTransactionSelect.innerHTML = changes.length
     ? `<option value="">不关联交易</option>${changes
         .map((change) => `<option value="${escapeHtml(noteTransactionLabel(change))}" data-asset-id="${escapeHtml(change.asset.id)}">${escapeHtml(noteTransactionLabel(change))}</option>`)
         .join("")}`
-    : `<option value="">暂无可关联交易</option>`;
+    : `<option value="">${assetId ? "该资产暂无可关联交易" : "暂无可关联交易"}</option>`;
+  elements.noteTransactionSelect.value = changes.some((change) => noteTransactionLabel(change) === selectedValue)
+    ? selectedValue
+    : "";
+}
+
+function defaultNoteTitle(template = "blank", asset = null) {
+  const base = {
+    buy: "买入复盘",
+    hold: "持有观察",
+    close: "卖出/清仓复盘"
+  }[template] || "";
+  return asset && base ? `${asset.name} ${base}` : base;
+}
+
+function updateDefaultNoteTitle(options = {}) {
+  const elements = ctx.elements;
+  const titleInput = elements.noteForm.elements.title;
+  const template = elements.noteForm.dataset.template || elements.noteForm.elements.template?.value || "blank";
+  const asset = ctx.getState().assets.find((item) => item.id === elements.noteAssetSelect?.value);
+  const previousDefault = elements.noteForm.dataset.defaultTitle || "";
+  const nextDefault = defaultNoteTitle(template, asset);
+  const currentTitle = titleInput.value.trim();
+  const mayUpdate = options.force || !currentTitle || (previousDefault && currentTitle === previousDefault);
+  if (mayUpdate) titleInput.value = nextDefault;
+  elements.noteForm.dataset.defaultTitle = mayUpdate ? nextDefault : previousDefault;
+  updateNoteCounters();
+}
+
+export function updateNoteContextPreview() {
+  const elements = ctx.elements;
+  if (!elements.noteContextPreview) return;
+  const snapshot = buildNoteContextSnapshot({ capturedAt: "" });
+  if (!snapshot) {
+    elements.noteContextPreview.innerHTML = "<span class=\"note-context-source\">尚未关联资产或交易。</span>";
+    return;
+  }
+  elements.noteContextPreview.innerHTML = renderContextSnapshot(snapshot);
+}
+
+export function buildNoteContextSnapshot(options = {}) {
+  const elements = ctx.elements;
+  const state = ctx.getState();
+  const assetId = String(elements.noteAssetSelect?.value || "").trim();
+  const transactionLabel = String(elements.noteForm.elements.asset?.value || "").trim();
+  const asset = state.assets.find((item) => item.id === assetId);
+  const change = transactionLabel
+    ? ctx.buildAssetChangeRecords().find((item) => noteTransactionLabel(item) === transactionLabel)
+    : null;
+  if (!asset && !change) return null;
+  const sourceAsset = asset || change.asset;
+  const priceStatus = resolvePriceStatus(sourceAsset);
+  return {
+    version: 1,
+    capturedAt: options.capturedAt === "" ? "" : new Date().toISOString(),
+    assetId: String(sourceAsset.id || ""),
+    assetName: String(sourceAsset.name || ""),
+    symbol: String(sourceAsset.symbol || ""),
+    account: String(sourceAsset.account || ""),
+    currency: String(sourceAsset.currency || ""),
+    quantity: String(sourceAsset.quantity || ""),
+    costPrice: String(sourceAsset.costPrice || ""),
+    currentPrice: String(sourceAsset.currentPrice || ""),
+    pricedAt: String(sourceAsset.pricedAt || ""),
+    priceSource: String(sourceAsset.priceSource || ""),
+    priceStatus: priceStatus.key,
+    priceStatusLabel: priceStatus.label,
+    transactionLabel,
+    transactionDate: String(change?.date || ""),
+    transactionAction: String(change?.action || ""),
+    transactionQuantity: String(change?.quantity || ""),
+    transactionPrice: String(change?.changePrice || "")
+  };
+}
+
+function renderContextSnapshot(snapshot) {
+  const assetSummary = [snapshot.assetName, snapshot.symbol, snapshot.account].filter(Boolean).join(" · ") || "未关联资产";
+  const priceSummary = [
+    formatUnitPrice(snapshot.currentPrice, snapshot.currency, "待补价格"),
+    snapshot.priceStatusLabel,
+    snapshot.pricedAt,
+    snapshot.priceSource
+  ].filter(Boolean).join(" · ");
+  return `
+    <dl>
+      <div><dt>资产</dt><dd>${escapeHtml(assetSummary)}</dd></div>
+      <div><dt>当前价</dt><dd>${escapeHtml(priceSummary)}</dd></div>
+      ${snapshot.transactionLabel ? `<div><dt>交易</dt><dd>${escapeHtml(snapshot.transactionLabel)}</dd></div>` : ""}
+    </dl>
+  `;
 }

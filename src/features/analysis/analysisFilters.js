@@ -1,4 +1,5 @@
-import { addMonths, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
+import { reportingPresetBounds } from "../../domain/reportingRange.js";
+import { todayIsoDate } from "../../utils/date.js";
 import { escapeHtml } from "../../utils/dom.js";
 
 let ctx = {};
@@ -57,12 +58,16 @@ export function renderAnalysisFilters() {
 
 export function selectedAnalysisAssets() {
   syncAnalysisFilters();
+  return analysisAssetsForFilter(analysisFilter);
+}
+
+export function analysisAssetsForFilter(filter = analysisFilter) {
   const assets = openAssets();
-  const accountAssets = analysisFilter.account === "all"
+  const accountAssets = filter.account === "all"
     ? assets
-    : assets.filter((asset) => asset.account === analysisFilter.account);
-  if (analysisFilter.assetId === "all") return accountAssets;
-  return accountAssets.filter((asset) => asset.id === analysisFilter.assetId);
+    : assets.filter((asset) => asset.account === filter.account);
+  if (filter.assetId === "all") return accountAssets;
+  return accountAssets.filter((asset) => asset.id === filter.assetId);
 }
 
 export function analysisScopeLabel() {
@@ -77,7 +82,12 @@ function openAssets() { return ctx.openAssets(); }
 function buildAccountSummaries() { return ctx.buildAccountSummaries(); }
 
 function analysisDateRangeLabel() {
-  const presetLabel = { "1": "近一月", "3": "近三月", "6": "近半年", ytd: "今年" }[analysisFilter.range];
+  const presetLabel = {
+    "1": "近1月",
+    "3": "近3月",
+    ytd: "今年",
+    all: "记录至今"
+  }[analysisFilter.range];
   if (presetLabel) return `${presetLabel}（${analysisFilter.startDate} 至 ${analysisFilter.endDate}）`;
   if (!analysisFilter.startDate && !analysisFilter.endDate) return "累计全部持仓收益";
   if (analysisFilter.startDate && analysisFilter.endDate) {
@@ -87,8 +97,6 @@ function analysisDateRangeLabel() {
   return `交易日期 ${analysisFilter.endDate} 之前`;
 }
 
-export function analysisPresetBounds(range, end = todayIsoDate()) {
-  const normalizedEnd = normalizeSnapshotDate(end) || todayIsoDate();
-  const start = range === "ytd" ? `${normalizedEnd.slice(0, 4)}-01-01` : addMonths(normalizedEnd, -Number(range || 1));
-  return { startDate: start, endDate: normalizedEnd };
+export function analysisPresetBounds(range, end = todayIsoDate(), assets = []) {
+  return reportingPresetBounds(range, { end, assets });
 }

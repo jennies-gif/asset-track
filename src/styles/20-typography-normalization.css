@@ -369,10 +369,6 @@ small,
     width: 100%;
   }
 
-  .market-sync-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .portfolio-filter {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -639,7 +635,6 @@ small,
     .analysis-card:not(.analysis-card-wide) .analysis-mini-metrics,
   .portfolio-filter,
   .analysis-filter,
-  .market-sync-list,
   .analysis-health-list,
   .stage-comparison-grid,
   .analysis-cashflow-grid,

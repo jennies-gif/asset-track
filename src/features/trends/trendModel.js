@@ -1,6 +1,10 @@
 import { calculateMoneyFromQuantity, roundDivide } from "../../domain/calculations.js";
+import {
+  earliestRecordedDate,
+  reportingPresetBounds
+} from "../../domain/reportingRange.js";
 import { demoTrendEndDate } from "../../constants/appConstants.js";
-import { addDays, addMonths, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
+import { addMonths, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
 import { normalizeSnapshots } from "../../state/normalizers.js";
 
 let ctx = {};
@@ -160,19 +164,20 @@ export function buildTrendPointsForRange(range) {
 
 export function buildTrendSeriesForRange(range) {
   const end = latestTrendControlDate();
-  let start = addMonths(end, -12);
-  if (range === "day") start = addDays(end, -1);
-  else if (range === "ytd") start = `${end.slice(0, 4)}-01-01`;
-  else start = addMonths(end, -Number(range || 12));
-  const dates = buildTrendDates(start, end);
   const assets = ctx.overviewAssets();
+  const snapshots = normalizeSnapshots(ctx.getState().snapshots);
+  const { startDate: start } = reportingPresetBounds(range, {
+    end,
+    assets,
+    snapshots
+  });
+  const dates = buildTrendDates(start, end);
   if (assets.some((asset) => Number(asset.quantity) > 0)) {
     return {
       points: buildAssetTrendPoints(assets, dates),
       source: trendSourceForAssets(assets)
     };
   }
-  const snapshots = normalizeSnapshots(ctx.getState().snapshots);
   return {
     points: buildSnapshotTrendPoints(dates),
     source: trendSourceForSnapshots(snapshots, assets)
@@ -187,16 +192,23 @@ export function latestTrendControlDate() {
   return assetLatest || snapshots.at(-1)?.date || todayIsoDate();
 }
 
+export function earliestTrendRecordDate() {
+  const snapshots = normalizeSnapshots(ctx.getState().snapshots);
+  return earliestRecordedDate({
+    assets: ctx.overviewAssets(),
+    snapshots
+  });
+}
+
 export function trendRangeLabel() {
   const { elements } = ctx;
   return {
-    day: "一日变化",
-    "1": "一月变化",
+    "1": "近1月变化",
     "3": "近3月变化",
     ytd: "今年变化",
-    "12": "一年变化",
+    all: "记录至今变化",
     custom: "区间变化"
-  }[elements.trendRange.value] || "一年变化";
+  }[elements.trendRange.value] || "今年变化";
 }
 
 export function buildReturnTrendPoints(points) {
@@ -217,12 +229,11 @@ function selectedTrendBounds() {
   const latest = elements.trendEnd.value || assetLatest || snapshots.at(-1)?.date || todayIsoDate();
   let start = elements.trendStart.value;
   if (!start) {
-    if (elements.trendRange.value === "day") start = addDays(latest, -1);
-    else if (elements.trendRange.value === "ytd") start = `${latest.slice(0, 4)}-01-01`;
-    else {
-      const months = Number(elements.trendRange.value);
-      start = addMonths(latest, Number.isFinite(months) ? -months : -12);
-    }
+    start = reportingPresetBounds(elements.trendRange.value, {
+      end: latest,
+      assets: ctx.overviewAssets(),
+      snapshots
+    }).startDate;
   }
   return { start, end: latest };
 }

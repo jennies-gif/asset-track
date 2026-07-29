@@ -29,7 +29,7 @@ test("core static app modules have unique DOM targets in index.html", async () =
   }
 });
 
-test("asset entry keeps manual current price recovery hidden from the normal flow", async () => {
+test("asset entry exposes manual current price only from the edit recovery control", async () => {
   const indexSource = await readFile(resolve(projectRoot, "index.html"), "utf8");
   const currencyIndex = indexSource.indexOf('name="currency"');
   const purchaseDateIndex = indexSource.indexOf('name="purchaseDate"');
@@ -39,7 +39,12 @@ test("asset entry keeps manual current price recovery hidden from the normal flo
   assert.ok(currencyIndex < purchaseDateIndex);
   assert.ok(purchaseDateIndex < costPriceIndex);
   assert.ok(costPriceIndex < quantityIndex);
-  assert.match(indexSource, /<input name="currentPrice" type="hidden">/u);
+  assert.match(indexSource, /class="manual-current-price-control is-hidden"[^>]*id="manual-current-price-control"/u);
+  assert.match(indexSource, /id="toggle-manual-current-price"[^>]*aria-expanded="false"[^>]*aria-controls="manual-current-price-panel"[^>]*>手动填写当前价/u);
+  assert.match(indexSource, /class="manual-current-price-panel is-hidden"[^>]*id="manual-current-price-panel"/u);
+  assert.match(indexSource, /当前价\s*<input name="currentPrice" inputmode="decimal"/u);
+  assert.match(indexSource, /价格日期\s*<input name="pricedAt" type="date"/u);
+  assert.match(indexSource, /成功获取公共行情时会更新为同步价格/u);
   assert.doesNotMatch(indexSource, /当前价格 \/ 最新净值/u);
   assert.match(indexSource, /自动填写首次持有日期当日或此前最近交易日的买入价格/u);
 });

@@ -15,6 +15,7 @@
 | 0009 | 公共行情价格时间语义 | [0009-market-price-time-semantics.md](./0009-market-price-time-semantics.md) | Accepted | 2026-07-13 由产品负责人批准。 |
 | 0010 | 公共行情同步目标持久化与私人资产本地事实来源边界 | [0010-public-market-sync-targets.md](./0010-public-market-sync-targets.md) | Accepted | 2026-07-23 由产品负责人批准。 |
 | 0011 | 运行时公共资产发现、验证与资源库补录边界 | [0011-runtime-instrument-discovery.md](./0011-runtime-instrument-discovery.md) | Accepted | 2026-07-25 由产品负责人批准。 |
+| 0012 | 种子版总览昨日收益与最大回撤边界 | [0012-seed-overview-daily-return-and-drawdown.md](./0012-seed-overview-daily-return-and-drawdown.md) | Draft | 2026-07-28 已获开发任务授权起草，尚待产品负责人批准。 |
 
 ## 状态定义
 

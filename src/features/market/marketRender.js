@@ -16,24 +16,35 @@ export function renderMarketSyncResult() {
   const marketSyncState = ctx.getMarketSyncState();
   if (!elements.marketSyncResult || !elements.syncMarketDataButton) return;
   const isLoading = marketSyncState.status === "loading";
+  const presentation = marketSyncStatusPresentation(marketSyncState);
   elements.syncMarketDataButton.disabled = isLoading;
-  elements.syncMarketDataButton.textContent = isLoading ? "检查中..." : "检查价格更新";
+  elements.syncMarketDataButton.textContent = isLoading ? "更新中..." : "检查价格更新";
   if (marketSyncState.status === "idle") {
     elements.marketSyncResult.innerHTML = "";
     return;
   }
-  const rows = (marketSyncState.results || []).slice(0, 6);
   elements.marketSyncResult.innerHTML = `
-    <div class="market-sync-summary is-${escapeHtml(marketSyncState.status)}">
-      <strong>${escapeHtml(marketSyncState.message)}</strong>
-      ${marketSyncState.syncedAt ? `<span>${escapeHtml(formatMonthDayTimeMinute(marketSyncState.syncedAt))}</span>` : ""}
+    <div class="market-sync-summary is-${escapeHtml(presentation.tone)}">
+      <strong>${escapeHtml(presentation.message)}</strong>
     </div>
-    ${rows.length ? `
-      <div class="market-sync-list">
-        ${rows.map(renderMarketSyncRow).join("")}
-      </div>
-    ` : ""}
   `;
+}
+
+export function marketSyncStatusPresentation(state = {}) {
+  switch (state.status) {
+    case "loading":
+      return { message: "正在抓取最新价格…", tone: "loading" };
+    case "success":
+      return { message: "抓取最新价格成功", tone: "success" };
+    case "warning":
+      return { message: "抓取最新价格完成，部分价格更新失败", tone: "warning" };
+    case "error":
+      return { message: "抓取最新价格失败", tone: "error" };
+    case "empty":
+      return { message: "暂无可更新的价格", tone: "empty" };
+    default:
+      return { message: "", tone: "idle" };
+  }
 }
 
 export function renderAssetTrendSelector() {
@@ -139,33 +150,6 @@ function loadDailyAssetPriceSeries(asset) {
     }))
     .filter((point) => point.date && Number.isFinite(point.close) && point.close > 0)
     .sort((left, right) => left.date.localeCompare(right.date));
-}
-
-function renderMarketSyncRow(result) {
-  const after = result.after || {};
-  const status = result.status !== "synced"
-    ? "缺缓存"
-    : result.syncDisplayStatus === "cached"
-      ? "使用缓存"
-      : "已同步";
-  const fetchedAt = after.sourceFetchedAt || after.syncedAt || result.sourceFetchedAt || result.syncedAt || "";
-  const timeLabel = after.priceKind === "latest" && after.priceAt
-    ? `${formatMonthDayTimeMinute(after.priceAt)} 最新价`
-    : after.pricedAt
-      ? `${after.pricedAt.slice(5)} ${after.priceKind === "unit_nav" ? "净值" : after.priceKind === "reference" ? "参考价" : "收盘"}`
-      : fetchedAt
-        ? formatMonthDayTimeMinute(fetchedAt)
-        : "-";
-  const detail = result.status === "synced"
-    ? `${after.currentPrice || "-"} · ${timeLabel} · ${after.priceSource || "-"}`
-    : result.message || "未找到可用价格缓存";
-  return `
-    <article class="market-sync-row">
-      <strong>${escapeHtml(result.name || result.symbol || "未知资产")}</strong>
-      <span>${escapeHtml([result.symbol, status].filter(Boolean).join(" · "))}</span>
-      <small>${escapeHtml(detail)}</small>
-    </article>
-  `;
 }
 
 function seriesMax(series) {

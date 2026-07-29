@@ -25,14 +25,101 @@ export function analysisStatusClass(status) {
   return "is-low";
 }
 
-export function analysisMiniMetric(label, value, hint) {
+export function analysisMiniMetric(label, value, hint, options = {}) {
+  const variantClass = options.variant ? ` is-${escapeHtml(options.variant)}` : "";
+  const hintClass = options.emphasizeHint ? ' class="is-emphasis"' : "";
   return `
-    <article class="analysis-mini-metric">
+    <article class="analysis-mini-metric${variantClass}">
       <span>${escapeHtml(label)}</span>
       <strong class="${toneClassForValue(value)}">${escapeHtml(value)}</strong>
-      <small>${escapeHtml(hint)}</small>
+      <small${hintClass}>${escapeHtml(hint)}</small>
     </article>
   `;
+}
+
+export function renderAttributionEquation({
+  startValue,
+  contribution,
+  investmentResult,
+  endValue,
+  startLabel,
+  endLabel
+}) {
+  const accessibleEquation = `期初资产 ${startValue}，加净投入 ${contribution}，加投资结果 ${investmentResult}，等于当前资产 ${endValue}`;
+  const terms = [
+    { label: "期初资产", value: startValue, hint: startLabel, operator: "+" },
+    { label: "净投入", value: contribution, hint: "用户录入资金变化", operator: "+" },
+    { label: "投资结果", value: investmentResult, hint: "价格、汇率、收入与费用", operator: "=" },
+    { label: "当前资产", value: endValue, hint: endLabel }
+  ];
+  return `
+    <div class="attribution-equation" role="img" aria-label="${escapeHtml(accessibleEquation)}">
+      ${terms.map((term) => `
+        <div class="attribution-equation-term">
+          <span>${escapeHtml(term.label)}</span>
+          <strong class="${toneClassForValue(term.value)}">${escapeHtml(term.value)}</strong>
+          <small>${escapeHtml(term.hint)}</small>
+        </div>
+        ${term.operator ? `<span class="attribution-equation-operator" aria-hidden="true">${term.operator}</span>` : ""}
+      `).join("")}
+    </div>
+  `;
+}
+
+function ceilDivide(value, divisor) {
+  return (value + divisor - 1n) / divisor;
+}
+
+function floorToStep(value, step) {
+  if (value >= 0n) return (value / step) * step;
+  return -ceilDivide(-value, step) * step;
+}
+
+function ceilToStep(value, step) {
+  if (value >= 0n) return ceilDivide(value, step) * step;
+  return -((-value) / step) * step;
+}
+
+function niceIntegerStep(rawStep) {
+  const positiveStep = rawStep > 0n ? rawStep : 1n;
+  let magnitude = 1n;
+  while (positiveStep >= magnitude * 10n) magnitude *= 10n;
+  for (const factor of [1n, 2n, 5n, 10n]) {
+    const candidate = magnitude * factor;
+    if (candidate >= positiveStep) return candidate;
+  }
+  return magnitude * 10n;
+}
+
+export function buildNicePercentScale(values, targetTickCount = 6) {
+  const normalizedValues = values.map((value) => BigInt(value));
+  const rawMin = normalizedValues.reduce((current, value) => value < current ? value : current, 0n);
+  const rawMax = normalizedValues.reduce((current, value) => value > current ? value : current, 0n);
+  const rawRange = rawMax - rawMin;
+  if (rawRange === 0n) {
+    return {
+      min: -100n,
+      max: 100n,
+      step: 50n,
+      ticks: [-100n, -50n, 0n, 50n, 100n]
+    };
+  }
+  const padding = rawRange > 0n ? (rawRange + 19n) / 20n : 50n;
+  const paddedMin = rawMin < 0n ? rawMin - padding : 0n;
+  const paddedMax = rawMax > 0n ? rawMax + padding : 0n;
+  const desiredIntervals = BigInt(Math.max(3, targetTickCount - 1));
+  const step = niceIntegerStep(ceilDivide(paddedMax - paddedMin || 1n, desiredIntervals));
+  let min = floorToStep(paddedMin, step);
+  let max = ceilToStep(paddedMax, step);
+
+  if (min === max) {
+    min = min < 0n ? min - step : 0n;
+    max = max > 0n ? max + step : step;
+  }
+
+  const ticks = [];
+  for (let value = min; value <= max; value += step) ticks.push(value);
+  return { min, max, step, ticks };
 }
 
 export function stageMetric(label, valueCents, hint) {
@@ -135,29 +222,24 @@ export function renderBenchmarkComparisonChart(series, buildEvenlySpacedXAxisLab
   const allPoints = visibleSeries.flatMap((item) => item.points);
   const firstDate = allPoints.reduce((current, point) => point.date < current ? point.date : current, allPoints[0].date);
   const lastDate = allPoints.reduce((current, point) => point.date > current ? point.date : current, allPoints[0].date);
-  const minReturn = allPoints.reduce((current, point) => BigInt(point.returnBps) < current ? BigInt(point.returnBps) : current, 0n);
-  const maxReturn = allPoints.reduce((current, point) => BigInt(point.returnBps) > current ? BigInt(point.returnBps) : current, 0n);
-  const range = maxReturn === minReturn ? 1n : maxReturn - minReturn;
+  const yScale = buildNicePercentScale(allPoints.map((point) => point.returnBps));
+  const range = yScale.max - yScale.min;
   const startMs = Date.parse(`${firstDate}T00:00:00.000Z`);
   const endMs = Date.parse(`${lastDate}T00:00:00.000Z`);
   const timeRange = Math.max(1, endMs - startMs);
-  const yFor = (returnBps) => chartTop + Number(((maxReturn - BigInt(returnBps)) * BigInt(chartBottom - chartTop)) / range);
+  const yFor = (returnBps) => chartTop + Number(((yScale.max - BigInt(returnBps)) * BigInt(chartBottom - chartTop)) / range);
   const xFor = (date) => {
     const dateMs = Date.parse(`${date}T00:00:00.000Z`);
     return leftPad + ((width - leftPad - rightPad) * (dateMs - startMs)) / timeRange;
   };
-  const yTicks = [
-    { value: maxReturn, label: formatPercent(maxReturn), className: "chart-grid" },
-    { value: 0n, label: "0%", className: "chart-axis" },
-    { value: minReturn, label: formatPercent(minReturn), className: "chart-grid" }
-  ]
-    .map((tick) => ({ ...tick, y: yFor(tick.value) }))
-    .sort((left, right) => left.y - right.y)
-    .filter((tick, index, ticks) => {
-      const duplicateValue = ticks.findIndex((item) => item.value === tick.value) !== index;
-      const overlapsPrevious = index > 0 && Math.abs(tick.y - ticks[index - 1].y) < 18;
-      return !duplicateValue && !overlapsPrevious;
-    });
+  const yTicks = [...yScale.ticks]
+    .reverse()
+    .map((value) => ({
+      value,
+      label: value === 0n ? "0%" : formatPercent(value),
+      className: value === 0n ? "chart-axis" : "chart-grid",
+      y: yFor(value)
+    }));
   const xAxisPoints = buildEvenlySpacedXAxisLabels(
     [{ date: firstDate, x: leftPad }, { date: lastDate, x: width - rightPad }],
     2

@@ -1,4 +1,7 @@
-import { analysisPresetBounds } from "./analysisFilters.js";
+import {
+  analysisAssetsForFilter,
+  analysisPresetBounds
+} from "./analysisFilters.js";
 
 export function initAnalysisEvents({
   elements,
@@ -13,19 +16,21 @@ export function initAnalysisEvents({
   loadBenchmarkPerformance
 }) {
   elements.analysisAccountFilter?.addEventListener("change", () => {
-    setAnalysisFilter({
+    const nextFilter = {
       ...getAnalysisFilter(),
       account: elements.analysisAccountFilter.value || "all",
       assetId: "all"
-    });
+    };
+    setAnalysisFilter(withRecordBoundsForScope(nextFilter));
     renderAttribution();
   });
 
   elements.analysisAssetFilter?.addEventListener("change", () => {
-    setAnalysisFilter({
+    const nextFilter = {
       ...getAnalysisFilter(),
       assetId: elements.analysisAssetFilter.value || "all"
-    });
+    };
+    setAnalysisFilter(withRecordBoundsForScope(nextFilter));
     renderAttribution();
   });
 
@@ -35,7 +40,15 @@ export function initAnalysisEvents({
       const current = getAnalysisFilter();
       setAnalysisFilter(range === "custom"
         ? { ...current, range }
-        : { ...current, range, ...analysisPresetBounds(range, current.endDate) });
+        : {
+            ...current,
+            range,
+            ...analysisPresetBounds(
+              range,
+              current.endDate,
+              analysisAssetsForFilter(current)
+            )
+          });
       renderAttribution();
     });
   });
@@ -69,4 +82,16 @@ export function initAnalysisEvents({
   elements.attributionMetrics?.addEventListener("change", handleInlineCurrencyChange);
 
   getAnalysisReturnMetric();
+
+  function withRecordBoundsForScope(filter) {
+    if (filter.range !== "all") return filter;
+    return {
+      ...filter,
+      ...analysisPresetBounds(
+        "all",
+        filter.endDate,
+        analysisAssetsForFilter(filter)
+      )
+    };
+  }
 }

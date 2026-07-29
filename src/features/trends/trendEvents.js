@@ -1,5 +1,8 @@
-import { addDays, addMonths } from "../../utils/date.js";
-import { latestTrendControlDate } from "./trendModel.js";
+import { addMonths } from "../../utils/date.js";
+import {
+  earliestTrendRecordDate,
+  latestTrendControlDate
+} from "./trendModel.js";
 
 let ctx = {};
 
@@ -63,8 +66,8 @@ export function initializeTrendControls() {
 export function applyTrendPreset(range) {
   const { elements } = ctx;
   const end = elements.trendEnd.value || latestTrendControlDate();
-  if (range === "day") {
-    elements.trendStart.value = addDays(end, -1);
+  if (range === "all") {
+    elements.trendStart.value = earliestTrendRecordDate() || addMonths(end, -12);
   } else if (range === "ytd") {
     elements.trendStart.value = `${end.slice(0, 4)}-01-01`;
   } else {
@@ -76,6 +79,11 @@ export function applyTrendPreset(range) {
 
 export function syncRangePills() {
   const { elements } = ctx;
+  if (elements.trendRange.value === "all") {
+    const end = elements.trendEnd.value || latestTrendControlDate();
+    elements.trendStart.value = earliestTrendRecordDate() || addMonths(end, -12);
+    elements.trendEnd.value = end;
+  }
   document.querySelectorAll("[data-range-value]").forEach((button) => {
     const active = button.dataset.rangeValue === elements.trendRange.value;
     button.classList.toggle("is-active", active);

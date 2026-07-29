@@ -1,5 +1,7 @@
 import { defaultAssetFxRate } from "./assetFormPayload.js";
 import { clearAssetFieldErrors } from "./assetValidation.js";
+import { manualPriceMetadata } from "../../domain/priceStatus.js";
+import { todayIsoDate } from "../../utils/date.js";
 import {
   applyAssetQuickMatch,
   applyCashAssetFormMode,
@@ -15,6 +17,7 @@ import {
   startSellAsset,
   submitAssetForm,
   syncAdjustmentMode,
+  toggleManualCurrentPriceField,
   syncOptionalEntryPanels,
   updateAssetMatchPanel,
   updateAssetLiveSummary,
@@ -43,20 +46,24 @@ export function initAssetEvents(ctx) {
     updateAssetLiveSummary();
     updateTransactionLiveSummary();
   });
-  elements.assetForm.elements.currentPrice?.addEventListener("input", () => {
+  const markManualCurrentPriceDraft = () => {
+    if (elements.assetForm.dataset.manualPriceExpanded !== "true") return;
     delete elements.assetForm.dataset.autoDraftPrice;
-    const hasCurrentPrice = Boolean(elements.assetForm.elements.currentPrice.value.trim());
-    if (elements.assetForm.elements.priceStatus) {
-      elements.assetForm.elements.priceStatus.value = hasCurrentPrice ? "manual" : "";
+    delete elements.assetForm.dataset.autoDraftCurrentPrice;
+    elements.assetForm.dataset.manualPriceDirty = "true";
+    if (elements.assetForm.elements.currentPrice?.value.trim() && !elements.assetForm.elements.pricedAt?.value) {
+      elements.assetForm.elements.pricedAt.value = todayIsoDate();
     }
-    if (elements.assetForm.elements.priceSource) {
-      elements.assetForm.elements.priceSource.value = hasCurrentPrice ? "用户录入" : "";
+    const metadata = manualPriceMetadata({
+      currentPrice: elements.assetForm.elements.currentPrice?.value,
+      pricedAt: elements.assetForm.elements.pricedAt?.value
+    });
+    for (const [field, value] of Object.entries(metadata)) {
+      if (elements.assetForm.elements[field]) elements.assetForm.elements[field].value = value;
     }
-    if (elements.assetForm.elements.pricedAt) elements.assetForm.elements.pricedAt.value = "";
-    for (const field of ["priceKind", "priceAt", "marketTimezone", "sourceFetchedAt"]) {
-      if (elements.assetForm.elements[field]) elements.assetForm.elements[field].value = "";
-    }
-  });
+  };
+  elements.assetForm.elements.currentPrice?.addEventListener("input", markManualCurrentPriceDraft);
+  elements.assetForm.elements.pricedAt?.addEventListener("change", markManualCurrentPriceDraft);
   elements.assetForm.elements.costPrice?.addEventListener("input", () => {
     delete elements.assetForm.dataset.autoDraftPrice;
     delete elements.assetForm.dataset.autoDraftCostPrice;
@@ -126,6 +133,7 @@ export function initAssetEvents(ctx) {
     const editingId = elements.assetForm.dataset.editingId;
     if (editingId) deleteAsset(editingId);
   });
+  elements.manualCurrentPriceToggle?.addEventListener("click", toggleManualCurrentPriceField);
 
   elements.portfolioAccountFilter?.addEventListener("change", () => {
     ctx.setPortfolioFilter({ ...ctx.getPortfolioFilter(), account: elements.portfolioAccountFilter.value });

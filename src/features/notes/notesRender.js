@@ -1,6 +1,7 @@
 import { normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
+import { resolvePriceStatus } from "../../domain/priceStatus.js";
 import { emptyActionState } from "../../ui/emptyState.js";
-import { formatDisplayCurrency } from "../../ui/formatters.js";
+import { formatDisplayCurrency, formatUnitPrice } from "../../ui/formatters.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { renderNoteContent } from "./markdown.js";
 
@@ -22,7 +23,10 @@ export function renderNotes() {
   elements.noteFilterTags.innerHTML = renderNoteFilterTags(tags, activeFilter);
   const notes = state.notes.filter((note) => {
     const noteTags = noteTagsFor(note);
-    const matchesTag = activeFilter === "全部" || noteTypeForNote(note) === activeFilter || noteTags.includes(activeFilter);
+    const matchesTag = activeFilter === "全部" ||
+      (activeFilter === "草稿" && note.status === "draft") ||
+      noteTypeForNote(note) === activeFilter ||
+      noteTags.includes(activeFilter);
     const haystack = normalizeQuickMatchText([note.title, note.content, note.asset, noteAssetLabel(note), noteTags.join(" ")].join(" "));
     return matchesTag && (!query || haystack.includes(query));
   });
@@ -50,6 +54,7 @@ export function renderNotes() {
         <article class="note-card${isSelected ? " is-active" : ""}" data-open-note-id="${escapeHtml(note.id)}" tabindex="0" role="button" aria-label="查看复盘：${escapeHtml(note.title)}">
           <div class="note-card-main">
             <div class="note-card-meta">
+              ${note.status === "draft" ? "<span class=\"note-status-pill\">草稿</span>" : ""}
               ${displayTags.map((tag) => `<span>${escapeHtml(`#${tag}`)}</span>`).join("")}
               <time>${escapeHtml(formatNoteDate(note.updatedAt || note.createdAt))}</time>
             </div>
@@ -84,7 +89,7 @@ export function noteTypeFromTags(tags) {
 }
 
 export function noteDisplayTagsFor(note) {
-  const tags = uniqueNoteTags(noteTagsFor(note));
+  const tags = uniqueNoteTags(noteTagsFor(note)).filter((tag) => tag !== "草稿");
   const type = noteTypeForNote(note);
   if (!tags.length) return [type];
   const customTags = tags.filter((tag) => !NOTE_FILTERS.includes(tag));
@@ -136,6 +141,7 @@ export function showNoteReader(id, options = {}) {
   const linkedAsset = noteAssetLabel(note);
   const linkedChange = findLinkedChangeForNote(note);
   const noteDate = formatNoteDate(note.updatedAt || note.createdAt);
+  if (elements.noteReaderHeaderMeta) elements.noteReaderHeaderMeta.innerHTML = renderNoteReaderHeaderMeta(note);
   elements.noteReaderMeta.innerHTML = renderNoteReaderMeta(note, {
     noteDate,
     type: noteTypeForNote(note),
@@ -166,7 +172,10 @@ export function hideNoteReader() {
 function noteTagSummary() {
   const state = ctx.getState();
   const tags = new Set();
-  state.notes.forEach((note) => noteTagsFor(note).forEach((tag) => tags.add(tag)));
+  state.notes.forEach((note) => {
+    if (note.status === "draft") tags.add("草稿");
+    noteTagsFor(note).forEach((tag) => tags.add(tag));
+  });
   return [...tags];
 }
 
@@ -233,10 +242,8 @@ function formatNoteDate(value) {
 }
 
 function renderNoteReaderMeta(note, details) {
-  const tags = renderNoteReaderTags(noteDisplayTagsFor(note));
-  const status = note.status === "draft" ? "<span class=\"note-status-pill\">草稿</span>" : "";
   if (isBlankTemplateNote(note)) {
-    return [tags, status].filter(Boolean).join("");
+    return renderNoteEvidence(note, details);
   }
 
   const realizedReturn = noteRealizedReturnLabel(note, details.linkedChange);
@@ -261,7 +268,6 @@ function renderNoteReaderMeta(note, details) {
     { label: "实现收益", value: realizedReturn }
   ];
   return `
-    ${tags}
     <dl class="note-reader-meta-grid">
       ${rows.map((row) => `
         <div>
@@ -270,8 +276,13 @@ function renderNoteReaderMeta(note, details) {
         </div>
       `).join("")}
     </dl>
-    ${status}
+    ${renderNoteEvidence(note, details)}
   `;
+}
+
+function renderNoteReaderHeaderMeta(note) {
+  const status = note.status === "draft" ? "<span class=\"note-status-pill\">草稿</span>" : "";
+  return [status, renderNoteReaderTags(noteDisplayTagsFor(note))].filter(Boolean).join("");
 }
 
 function renderNoteReaderTags(tags) {
@@ -296,4 +307,52 @@ function noteRealizedReturnLabel(note, linkedChange = null) {
   if (asset.realizedPnlCents !== undefined) return formatDisplayCurrency(ctx.convertUsdToDisplay(BigInt(asset.realizedPnlCents || "0")));
   if (linkedChange && (linkedChange.action === "卖出" || linkedChange.action === "清仓")) return "待核对";
   return "未记录";
+}
+
+function renderNoteEvidence(note, details) {
+  const snapshot = note.contextSnapshot;
+  if (isContextSnapshot(snapshot)) {
+    return renderEvidenceCard(snapshot, "记录时数据", "保存复盘时留存于当前浏览器");
+  }
+  const state = ctx.getState();
+  const asset = state.assets.find((item) => item.id === (note.assetId || inferNoteAssetId(note)));
+  if (!asset && !details.linkedChange) return "";
+  const sourceAsset = asset || details.linkedChange.asset;
+  const status = resolvePriceStatus(sourceAsset);
+  return renderEvidenceCard({
+    assetName: sourceAsset.name,
+    symbol: sourceAsset.symbol,
+    account: sourceAsset.account,
+    currency: sourceAsset.currency,
+    quantity: sourceAsset.quantity,
+    costPrice: sourceAsset.costPrice,
+    currentPrice: sourceAsset.currentPrice,
+    pricedAt: sourceAsset.pricedAt,
+    priceSource: sourceAsset.priceSource,
+    priceStatusLabel: status.label,
+    transactionLabel: note.asset || ""
+  }, "当前资产信息", "历史复盘未保存记录时快照，以下为当前值");
+}
+
+function renderEvidenceCard(snapshot, title, sourceLabel) {
+  const assetLabel = [snapshot.assetName, snapshot.symbol, snapshot.account].filter(Boolean).join(" · ") || "未关联";
+  const currentPrice = formatUnitPrice(snapshot.currentPrice, snapshot.currency, "待补价格");
+  const priceMeta = [snapshot.priceStatusLabel, snapshot.pricedAt, snapshot.priceSource].filter(Boolean).join(" · ") || "未记录来源";
+  const rows = [
+    ["资产", assetLabel],
+    ["当前价", `${currentPrice} · ${priceMeta}`],
+    ["成本价", formatUnitPrice(snapshot.costPrice, snapshot.currency, "未记录")],
+    ["数量", snapshot.quantity || "未记录"],
+    ["关联交易", snapshot.transactionLabel || "未关联"]
+  ];
+  return `
+    <section class="note-evidence-card" aria-label="${escapeHtml(title)}">
+      <header><strong>${escapeHtml(title)}</strong><span class="note-context-source">${escapeHtml(sourceLabel)}</span></header>
+      <dl>${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
+    </section>
+  `;
+}
+
+function isContextSnapshot(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Number(value.version) === 1;
 }

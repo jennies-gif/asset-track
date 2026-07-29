@@ -402,6 +402,19 @@
 }
 
 @media (max-width: 640px) {
+  #analysis-panel .analysis-range-field .range-pills {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 1.35fr minmax(0, 1fr);
+    min-height: 46px;
+  }
+
+  #analysis-panel .analysis-range-field .range-pill {
+    min-height: 44px;
+    padding-right: 4px;
+    padding-left: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
   #analysis-panel > .panel-heading,
   #analysis-panel .analysis-judgement-card,
   #analysis-panel .analysis-focus-grid > .analysis-card:first-child {

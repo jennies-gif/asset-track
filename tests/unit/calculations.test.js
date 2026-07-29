@@ -31,7 +31,7 @@ import { marketHistoryWindowDays, missingMarketHistoryRanges } from "../../src/d
 import { isDailyHistoryPoint, isMarketCloseAvailable, selectCurrentValuationPoint } from "../../src/domain/marketPriceSemantics.js";
 import { isCnExchangeListedFundSymbol, normalizeCnListedFundInstrument, removeOtcDuplicatesOfListedCnInstruments } from "../../src/domain/cnInstrumentClassification.js";
 import { activeInstrumentRegistry, instrumentMatchStatus, lookupInstrument, searchInstruments } from "../../src/domain/instrumentRegistry.js";
-import { priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
+import { manualPriceMetadata, priceUsesCostFallback, resolvePriceStatus } from "../../src/domain/priceStatus.js";
 import {
   cryptoInstruments,
   defaultFxPairs,
@@ -47,6 +47,8 @@ import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.j
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
 import { configureNotesRender, noteDisplayTagsFor, noteTypeFromTags, showNoteReader } from "../../src/features/notes/notesRender.js";
+import { buildReviewTemplate } from "../../src/features/notes/notesEditor.js";
+import { closeNoteMenus } from "../../src/features/notes/notesEvents.js";
 import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from "../../src/features/trends/trendModel.js";
 import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
 import { buildWorstMonth } from "../../src/features/analysis/analysisModel.js";
@@ -58,7 +60,7 @@ import {
   marketFetchPresentation,
   syncLatestMarketPrices
 } from "../../src/features/market/marketService.js";
-import { configureMarketRender } from "../../src/features/market/marketRender.js";
+import { configureMarketRender, marketSyncStatusPresentation, renderMarketSyncResult } from "../../src/features/market/marketRender.js";
 import { configureFormatters, formatDisplayCurrency, formatSignedCurrency, formatUnitPrice } from "../../src/ui/formatters.js";
 
 test("parses decimal values with deterministic rounding", () => {
@@ -67,11 +69,47 @@ test("parses decimal values with deterministic rounding", () => {
   assert.equal(scaledIntToDecimal(123500n, 4), "12.35");
 });
 
+test("manual current price replaces synced provenance without losing its date", () => {
+  const metadata = manualPriceMetadata({
+    currentPrice: " 123.45 ",
+    pricedAt: "2026-07-29"
+  });
+
+  assert.deepEqual(metadata, {
+    currentPrice: "123.45",
+    pricedAt: "2026-07-29",
+    priceStatus: "manual",
+    priceSource: "用户录入",
+    priceKind: "",
+    priceAt: "",
+    marketTimezone: "",
+    sourceFetchedAt: "",
+    priceError: ""
+  });
+
+  const asset = normalizeAsset({
+    name: "虚构手动价格资产",
+    type: "其他",
+    account: "测试账户",
+    currency: "CNY",
+    quantity: "2",
+    costPrice: "100",
+    ...metadata
+  });
+  assert.equal(asset.priceStatus, "manual");
+  assert.equal(asset.priceSource, "用户录入");
+  assert.equal(asset.pricedAt, "2026-07-29");
+  assert.equal(asset.priceError, "");
+});
+
 test("uses the same explicit analysis periods as the total asset trend", () => {
   assert.deepEqual(analysisPresetBounds("1", "2026-07-12"), { startDate: "2026-06-12", endDate: "2026-07-12" });
   assert.deepEqual(analysisPresetBounds("3", "2026-07-12"), { startDate: "2026-04-12", endDate: "2026-07-12" });
-  assert.deepEqual(analysisPresetBounds("6", "2026-07-12"), { startDate: "2026-01-12", endDate: "2026-07-12" });
   assert.deepEqual(analysisPresetBounds("ytd", "2026-07-12"), { startDate: "2026-01-01", endDate: "2026-07-12" });
+  assert.deepEqual(
+    analysisPresetBounds("all", "2026-07-12", [{ purchaseDate: "2024-09-08" }]),
+    { startDate: "2024-09-08", endDate: "2026-07-12" }
+  );
 });
 
 test("keeps holdings opened before the analysis period in drawdown calculations", () => {
@@ -133,6 +171,7 @@ test("renders blank note reader tags without the review detail grid", () => {
   const elements = {
     notesReader: { dataset: {}, classList: classList(), scrollIntoView() {} },
     noteReaderTitle: { textContent: "" },
+    noteReaderHeaderMeta: { innerHTML: "" },
     noteReaderMeta: { innerHTML: "" },
     noteReaderAsset: { innerHTML: "", classList: classList() },
     noteReaderContent: { innerHTML: "" },
@@ -161,9 +200,29 @@ test("renders blank note reader tags without the review detail grid", () => {
 
   showNoteReader("note-blank", { scroll: false });
 
-  assert.match(elements.noteReaderMeta.innerHTML, /#闪念/);
+  assert.match(elements.noteReaderHeaderMeta.innerHTML, /#闪念/);
   assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /note-reader-meta-grid/);
   assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /日期|关联资产|实现收益/);
+});
+
+test("review templates contain reflection prompts without system-owned asset facts", () => {
+  const template = buildReviewTemplate("hold");
+  assert.match(template, /持有理由是否仍成立/);
+  assert.doesNotMatch(template, /当前价格|成本价格|未关联资产/);
+});
+
+test("closing note menus preserves only the active menu", () => {
+  const menu = (open = true) => ({
+    open,
+    removeAttribute(name) {
+      if (name === "open") this.open = false;
+    }
+  });
+  const first = menu();
+  const second = menu();
+  closeNoteMenus([first, second], second);
+  assert.equal(first.open, false);
+  assert.equal(second.open, true);
 });
 
 test("formats invalid percent inputs as unavailable data", () => {
@@ -794,6 +853,46 @@ test("splits large local portfolios into API-safe market sync batches", () => {
   assert.equal(batches.flatMap((batch) => batch.symbols).filter((symbol) => symbol === "ASSET1").length, 1);
   assert.deepEqual(buildMarketSyncBatches([], true), [{ symbols: [], includeBenchmarks: true }]);
   assert.deepEqual(buildMarketSyncBatches([], false), []);
+});
+
+test("shows one concise market sync status without exposing per-asset results", () => {
+  assert.deepEqual(marketSyncStatusPresentation({ status: "loading" }), {
+    message: "正在抓取最新价格…",
+    tone: "loading"
+  });
+  assert.deepEqual(marketSyncStatusPresentation({ status: "success" }), {
+    message: "抓取最新价格成功",
+    tone: "success"
+  });
+  assert.deepEqual(marketSyncStatusPresentation({ status: "warning" }), {
+    message: "抓取最新价格完成，部分价格更新失败",
+    tone: "warning"
+  });
+  assert.deepEqual(marketSyncStatusPresentation({ status: "error" }), {
+    message: "抓取最新价格失败",
+    tone: "error"
+  });
+  assert.deepEqual(marketSyncStatusPresentation({ status: "empty" }), {
+    message: "暂无可更新的价格",
+    tone: "empty"
+  });
+
+  const marketSyncResult = { innerHTML: "" };
+  const syncMarketDataButton = { disabled: false, textContent: "" };
+  configureMarketRender({
+    elements: { marketSyncResult, syncMarketDataButton },
+    getMarketSyncState: () => ({
+      status: "success",
+      message: "1 批完成，2 个资产和 9 个分析基准已同步",
+      results: [{ name: "不应展示的虚构资产", symbol: "FAKE" }],
+      syncedAt: "2026-07-29T00:00:00.000Z"
+    })
+  });
+  renderMarketSyncResult();
+
+  assert.match(marketSyncResult.innerHTML, /抓取最新价格成功/u);
+  assert.doesNotMatch(marketSyncResult.innerHTML, /虚构资产|FAKE|分析基准|批完成/u);
+  assert.equal(syncMarketDataButton.textContent, "检查价格更新");
 });
 
 test("keeps successful market sync batches when a later batch fails", async () => {

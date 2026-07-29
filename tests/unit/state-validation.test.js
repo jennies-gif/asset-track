@@ -39,3 +39,39 @@ test("backup validation accepts wrapped and direct states", () => {
   assert.equal(validateBackupPayload({ state }).ok, true);
   assert.equal(validateBackupPayload(state).ok, true);
 });
+
+test("stored state accepts legacy notes and optional versioned review context", () => {
+  const legacy = { id: "note-legacy", title: "旧复盘", content: "正文" };
+  const withContext = {
+    id: "note-context",
+    title: "带依据的复盘",
+    content: "正文",
+    contextSnapshot: {
+      version: 1,
+      capturedAt: "2026-07-29T00:00:00.000Z",
+      assetId: "asset-1",
+      assetName: "测试资产",
+      currency: "CNY",
+      quantity: "1",
+      costPrice: "10",
+      currentPrice: "11",
+      priceStatus: "manual",
+      priceStatusLabel: "手动价格",
+      transactionLabel: ""
+    }
+  };
+  assert.equal(validateStoredState({ assets: [validAsset], notes: [legacy, withContext] }).ok, true);
+});
+
+test("stored state rejects malformed review context without affecting legacy compatibility", () => {
+  const result = validateStoredState({
+    assets: [validAsset],
+    notes: [{
+      id: "note-invalid-context",
+      contextSnapshot: { version: 2, currentPrice: "not-a-number" }
+    }]
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((item) => item.path === "notes[0].contextSnapshot.version"));
+  assert.ok(result.issues.some((item) => item.path === "notes[0].contextSnapshot.currentPrice"));
+});

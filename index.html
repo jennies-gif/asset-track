@@ -148,12 +148,12 @@
             </div>
             <form class="date-range" aria-label="总资产趋势日期范围">
               <label class="is-hidden">图表指标 <select id="trend-metric"><option value="value">总资产</option><option value="return">收益率</option></select></label>
-              <label class="is-hidden">时间范围 <select id="trend-range"><option value="day">1日</option><option value="1">1月</option><option value="3">近3月</option><option value="ytd">今年</option><option value="12" selected>近一年</option><option value="custom">自定义</option></select></label>
+              <label class="is-hidden">时间范围 <select id="trend-range"><option value="1">近1月</option><option value="3">近3月</option><option value="ytd" selected>今年</option><option value="all">记录至今</option><option value="custom">自定义</option></select></label>
               <div class="range-pills" aria-label="趋势时间范围">
-                <button class="range-pill" data-range-value="day" type="button">1日</button>
-                <button class="range-pill" data-range-value="1" type="button">1月</button>
+                <button class="range-pill" data-range-value="1" type="button">近1月</button>
                 <button class="range-pill" data-range-value="3" type="button">近3月</button>
                 <button class="range-pill" data-range-value="ytd" type="button">今年</button>
+                <button class="range-pill" data-range-value="all" type="button">记录至今</button>
                 <button class="range-pill" data-range-value="custom" type="button">自定义</button>
               </div>
               <label class="custom-date">开始日期 <input id="trend-start" type="date"></label>
@@ -309,7 +309,16 @@
                 <label><span>股数</span> <input name="quantity" required inputmode="decimal" placeholder="请输入股数"></label>
                 <label class="advanced-field">期初价 <input name="previousPrice" inputmode="decimal"></label>
               </div>
-              <input name="currentPrice" type="hidden">
+              <div class="manual-current-price-control is-hidden" id="manual-current-price-control">
+                <button class="secondary-button" id="toggle-manual-current-price" type="button" aria-expanded="false" aria-controls="manual-current-price-panel">手动填写当前价</button>
+                <div class="manual-current-price-panel is-hidden" id="manual-current-price-panel">
+                  <div class="form-section-grid">
+                    <label>当前价 <input name="currentPrice" inputmode="decimal" placeholder="请输入当前价格"></label>
+                    <label>价格日期 <input name="pricedAt" type="date"></label>
+                  </div>
+                  <p class="form-help">保存后标记为手动价格；以后成功获取公共行情时会更新为同步价格。</p>
+                </div>
+              </div>
               <input name="assetRegistryId" type="hidden">
               <input name="assetMatchStatus" type="hidden" value="unmatched">
               <input name="marketDataSupported" type="hidden" value="false">
@@ -324,12 +333,12 @@
               <input name="manualAdjustment" type="hidden" value="0">
               <input name="transactionType" type="hidden" value="买入">
               <input name="priceSource" type="hidden">
-              <input name="pricedAt" type="hidden">
               <input name="priceStatus" type="hidden">
               <input name="priceKind" type="hidden">
               <input name="priceAt" type="hidden">
               <input name="marketTimezone" type="hidden">
               <input name="sourceFetchedAt" type="hidden">
+              <input name="priceError" type="hidden">
               <p class="form-help" data-price-fallback>选择资产后会自动填写首次持有日期当日或此前最近交易日的买入价格；价格仍可自行修改。</p>
               <div class="asset-live-summary" id="asset-live-summary" aria-live="polite"></div>
             </fieldset>
@@ -410,7 +419,7 @@
           <form class="analysis-filter" aria-label="分析范围筛选">
             <label>账户 <select id="analysis-account-filter"></select></label>
             <label>资产 <select id="analysis-asset-filter"></select></label>
-            <fieldset class="analysis-range-field"><legend>时间范围</legend><div class="range-pills" aria-label="分析时间范围"><button class="range-pill" data-analysis-range-value="1" type="button">一月</button><button class="range-pill" data-analysis-range-value="3" type="button">三月</button><button class="range-pill" data-analysis-range-value="6" type="button">半年</button><button class="range-pill" data-analysis-range-value="ytd" type="button">今年</button><button class="range-pill" data-analysis-range-value="custom" type="button">自定义</button></div></fieldset>
+            <fieldset class="analysis-range-field"><legend>时间范围</legend><div class="range-pills" aria-label="分析时间范围"><button class="range-pill" data-analysis-range-value="1" type="button">近1月</button><button class="range-pill" data-analysis-range-value="3" type="button">近3月</button><button class="range-pill" data-analysis-range-value="ytd" type="button">今年</button><button class="range-pill" data-analysis-range-value="all" type="button">记录至今</button><button class="range-pill" data-analysis-range-value="custom" type="button">自定义</button></div></fieldset>
             <label class="analysis-custom-date is-visible">开始 <input id="analysis-start" type="date"></label>
             <label class="analysis-custom-date is-visible">结束 <input id="analysis-end" type="date"></label>
             <p class="filter-summary" id="analysis-range-summary"></p>
@@ -443,10 +452,10 @@
             <div class="table-wrap"><table class="analysis-return-table"><thead><tr><th>指标</th><th>近1月</th><th>近3月</th><th>今年</th><th>累计</th><th>年化</th></tr></thead><tbody id="analysis-monthly-return-chart"></tbody></table></div>
             <div class="benchmark-comparison-chart" id="analysis-benchmark-trend-chart"></div>
           </section>
-          <section class="analysis-card" data-analysis-requires-assets aria-labelledby="analysis-concentration-title"><h3 id="analysis-concentration-title">集中度</h3><div id="analysis-concentration-metrics"></div><div id="analysis-top-holdings"></div><p id="analysis-concentration-note"></p></section>
+          <section class="analysis-card" data-analysis-requires-assets aria-labelledby="analysis-concentration-title"><h3 id="analysis-concentration-title">集中度</h3><div class="analysis-detail-metrics" id="analysis-concentration-metrics"></div><div id="analysis-top-holdings"></div><p id="analysis-concentration-note"></p></section>
           <section class="analysis-card" data-analysis-requires-assets aria-labelledby="analysis-contribution-title"><h3 id="analysis-contribution-title">收益贡献</h3><p class="section-description">查看主要正负贡献来源及其对组合结果的影响。</p><div class="attribution-list" id="analysis-top-return-assets"></div><p class="analysis-auto-summary" id="analysis-contribution-summary"></p></section>
           <details class="analysis-card analysis-card-wide analysis-disclosure"><summary><span>资产变动归因</span><small>拆解投入、价格、汇率、分红与费用影响</small></summary><div class="analysis-disclosure-content"><div class="analysis-mini-metrics" id="stage-comparison-grid"></div><div class="waterfall-chart" id="analysis-cashflow-chart"></div></div></details>
-          <details class="analysis-card analysis-disclosure" data-analysis-requires-assets><summary><span>风险明细</span><small>查看波动、回撤与高风险暴露</small></summary><div class="analysis-disclosure-content"><div id="analysis-risk-metrics"></div><div id="analysis-drawdown-chart"></div></div></details>
+          <details class="analysis-card analysis-disclosure" data-analysis-requires-assets open><summary><span>风险明细</span><small>查看波动、回撤与高风险暴露</small></summary><div class="analysis-disclosure-content"><div class="analysis-detail-metrics" id="analysis-risk-metrics"></div><div id="analysis-drawdown-chart"></div></div></details>
           <div id="attribution-metrics" class="is-hidden"></div>
           <div id="attribution-list" class="is-hidden"></div>
           <div id="analysis-quality-metrics" class="is-hidden"></div>
@@ -466,7 +475,18 @@
           <div class="notes-workspace">
             <div class="notes-list-shell"><div class="notes-list" id="notes-list"></div><div class="notes-pagination" aria-label="复盘分页"><button type="button">1</button></div></div>
             <section class="notes-reader is-hidden" id="notes-reader">
-              <article class="note-reader-card"><div class="note-detail-inner"><div class="note-reader-actions"><button class="secondary-button compact-button" id="note-reader-edit" type="button">编辑</button></div><h2 id="note-reader-title"></h2><div class="note-reader-meta" id="note-reader-meta"></div><div class="note-reader-asset" id="note-reader-asset"></div><div class="note-reader-content" id="note-reader-content"></div><button class="danger-button compact-button is-hidden" id="note-reader-delete" type="button">删除</button></div></article>
+              <article class="note-reader-card">
+                <div class="note-detail-inner">
+                  <header class="note-reader-header">
+                    <div class="note-reader-heading-copy"><h2 id="note-reader-title"></h2><div class="note-reader-header-meta" id="note-reader-header-meta"></div></div>
+                    <div class="note-reader-actions"><button class="secondary-button compact-button" id="note-reader-edit" type="button">编辑</button></div>
+                  </header>
+                  <div class="note-reader-meta" id="note-reader-meta"></div>
+                  <div class="note-reader-asset" id="note-reader-asset"></div>
+                  <div class="note-reader-content" id="note-reader-content"></div>
+                  <button class="danger-button compact-button is-hidden" id="note-reader-delete" type="button">删除</button>
+                </div>
+              </article>
             </section>
           </div>
         </section>
@@ -474,11 +494,16 @@
           <div class="notes-editor-heading"><h2><span>写复盘</span></h2><button class="secondary-button compact-button" id="note-back-button" type="button">返回</button></div>
           <form class="note-form" id="note-form">
             <section class="note-editor-card">
-              <label class="note-title-field"><strong>标题</strong><span class="note-input-shell"><input name="title" maxlength="80" required placeholder="写下这次复盘的核心判断"><small id="note-title-count">0/80</small></span></label>
-              <fieldset class="note-template-field"><legend>模板</legend><input name="template" type="hidden" value="blank"><div class="note-template-cards" id="note-template-cards"><button class="note-template-card" data-note-template="hold" type="button">持有观察</button><button class="note-template-card" data-note-template="buy" type="button">买入复盘</button><button class="note-template-card" data-note-template="close" type="button">卖出/清仓复盘</button><button class="note-template-card is-selected" data-note-template="blank" type="button">空白复盘</button></div></fieldset>
-              <fieldset class="note-tag-field"><legend>标签</legend><div class="note-tag-options"><label><input type="checkbox" name="tags" value="交易复盘"><span># 交易复盘</span></label><label><input type="checkbox" name="tags" value="持有观察"><span># 持有观察</span></label><label><input type="checkbox" name="tags" value="原则"><span># 原则</span></label><label><input type="checkbox" name="tags" value="理财学习"><span># 复盘学习</span></label><label><input type="checkbox" name="tags" value="交易心理"><span># 交易心理</span></label><button class="note-new-tag-button" id="note-new-tag-button" type="button">＋ 新建标签</button><label class="note-custom-tag is-hidden" id="note-custom-tag-field"><input name="customTag" maxlength="12" placeholder="输入标签名"></label></div></fieldset>
-              <label class="note-content-field"><strong>正文</strong><span class="note-textarea-shell"><textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结..."></textarea><small id="note-content-count">0/5000</small></span></label>
-              <section class="note-link-card"><strong>关联资产与交易</strong><label class="note-asset-link-field">关联资产 <select name="assetId" id="note-asset-select"></select></label><input name="asset" type="hidden"><label class="note-asset-link-field">关联交易 <select id="note-transaction-select" aria-label="选择关联资产变动"></select></label><input name="format" type="hidden" value="plain"><input name="status" type="hidden" value="published"></section>
+              <div class="note-writing-area">
+                <label class="note-title-field"><strong>标题</strong><span class="note-input-shell"><input name="title" maxlength="80" required placeholder="写下这次复盘的核心判断"><small id="note-title-count">0/80</small></span></label>
+                <label class="note-content-field"><strong>正文</strong><span class="note-textarea-shell"><textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结..."></textarea><small id="note-content-count">0/5000</small></span></label>
+              </div>
+              <aside class="note-editor-sidebar" aria-label="复盘设置与依据">
+                <fieldset class="note-template-field"><legend>模板</legend><input name="template" type="hidden" value="blank"><div class="note-template-cards" id="note-template-cards"><button class="note-template-card" data-note-template="hold" type="button">持有观察</button><button class="note-template-card" data-note-template="buy" type="button">买入复盘</button><button class="note-template-card" data-note-template="close" type="button">卖出/清仓复盘</button><button class="note-template-card is-selected" data-note-template="blank" type="button">空白复盘</button></div></fieldset>
+                <fieldset class="note-tag-field"><legend>标签</legend><div class="note-tag-options"><label><input type="checkbox" name="tags" value="交易复盘"><span># 交易复盘</span></label><label><input type="checkbox" name="tags" value="持有观察"><span># 持有观察</span></label><label><input type="checkbox" name="tags" value="原则"><span># 原则</span></label><label><input type="checkbox" name="tags" value="理财学习"><span># 复盘学习</span></label><label><input type="checkbox" name="tags" value="交易心理"><span># 交易心理</span></label><button class="note-new-tag-button" id="note-new-tag-button" type="button">＋ 新建标签</button><label class="note-custom-tag is-hidden" id="note-custom-tag-field"><input name="customTag" maxlength="12" placeholder="输入标签名"></label></div></fieldset>
+                <section class="note-link-card"><strong>关联资产与交易</strong><label class="note-asset-link-field">关联资产 <select name="assetId" id="note-asset-select"></select></label><input name="asset" type="hidden"><label class="note-asset-link-field">关联交易 <select id="note-transaction-select" aria-label="选择关联资产变动"></select></label><input name="format" type="hidden" value="plain"><input name="status" type="hidden" value="published"></section>
+                <section class="note-context-card" aria-labelledby="note-context-title"><strong id="note-context-title">复盘依据</strong><p>由系统维护；关联变化只更新这里，不覆盖标题和正文。</p><div class="note-context-preview" id="note-context-preview" aria-live="polite"></div></section>
+              </aside>
             </section>
             <div class="note-editor-actions"><button class="secondary-button note-draft-button" id="note-save-draft" type="button">保存草稿</button><button class="primary-button note-save-button" type="submit">保存</button></div>
           </form>

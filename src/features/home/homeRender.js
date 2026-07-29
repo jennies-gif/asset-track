@@ -15,6 +15,7 @@ import {
 
 export function renderMetrics(elements, context) {
   const dailyPnl = context.latestDailyPnlSnapshot();
+  const syncSummary = context.latestOverviewSyncSummary();
   const hasAssets = context.overviewAssets().length > 0;
   const portfolio = context.calculateDisplayPortfolio(context.overviewAssets());
   const cumulativePnl = portfolio.totals.unrealizedPnlCents;
@@ -38,6 +39,7 @@ export function renderMetrics(elements, context) {
             <small>${escapeHtml(context.dailyPnlMetricLabel(dailyPnl))}</small>
             <b class="${toneClassForValue(dailyPnl.amountCents)}"${dailyPnl.reason ? " aria-describedby=\"home-daily-pnl-reason\"" : ""}>${escapeHtml(dailyPnl.amountCents === null ? "暂无法计算" : formatOptionalSignedAmount(dailyPnl.amountCents))}</b>
             ${dailyPnl.reason ? `<small class="snapshot-metric-reason" id="home-daily-pnl-reason">${escapeHtml(dailyPnl.reason)}</small>` : ""}
+            ${dailyPnl.detail ? `<small class="snapshot-metric-reason">${escapeHtml(dailyPnl.detail)}</small>` : ""}
           </span>
         </div>
         ${hasAssets ? "" : `
@@ -58,14 +60,14 @@ export function renderMetrics(elements, context) {
         <div class="snapshot-status-list">
           ${snapshotStatusItem("本地保存", "已保存在当前浏览器", "positive")}
           ${snapshotStatusItem("行情查询", "仅发送代码等公共字段", "warning")}
-          ${snapshotStatusItem("更新时间", context.latestOverviewUpdateLabel(), "")}
+          ${snapshotStatusItem("行情同步", syncSummary.value, syncSummary.tone, syncSummary.detail)}
         </div>
       </aside>
     </section>
   `;
 }
 
-function snapshotStatusItem(label, value, className = "") {
+function snapshotStatusItem(label, value, className = "", detail = "") {
   const tone = className === "positive" ? "positive" : className === "warning" || className === "negative" ? "warning" : "neutral";
   return `
     <div class="snapshot-status-item">
@@ -73,6 +75,7 @@ function snapshotStatusItem(label, value, className = "") {
       <span>
         <small>${escapeHtml(label)}</small>
         <b>${escapeHtml(value)}</b>
+        ${detail ? `<small class="snapshot-status-detail">${escapeHtml(detail)}</small>` : ""}
       </span>
     </div>
   `;

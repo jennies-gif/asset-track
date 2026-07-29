@@ -110,6 +110,10 @@ body,
 }
 
 @media (max-width: 640px) {
+  .manual-current-price-panel .form-section-grid {
+    grid-template-columns: 1fr;
+  }
+
   #assets-panel th,
   #assets-panel td,
   #open-portfolio-view th,
@@ -123,6 +127,232 @@ body,
   #notes-panel .note-editor-actions .primary-button,
   #notes-panel .note-editor-actions .secondary-button {
     padding: 7px 12px;
+  }
+}
+
+/* Notes scheme B: separate system-owned context from user-owned writing. */
+#notes-panel .notes-list-shell {
+  padding-right: 22px;
+  border-right: 1px solid var(--line);
+}
+
+#notes-panel .note-reader-card {
+  padding-top: 4px;
+}
+
+#notes-panel .note-reader-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+#notes-panel .note-reader-heading-copy {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+#notes-panel .note-reader-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#notes-panel .note-reader-actions {
+  flex: 0 0 auto;
+}
+
+#notes-panel .note-reader-header-meta .note-status-pill {
+  order: -1;
+}
+
+#notes-panel .note-editor-card {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  gap: 20px;
+}
+
+#notes-panel .note-writing-area {
+  grid-column: 2;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+#notes-panel .note-editor-sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+#notes-panel .note-writing-area .note-title-field,
+#notes-panel .note-writing-area .note-content-field {
+  display: grid;
+  grid-column: auto;
+  grid-row: auto;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#notes-panel .note-editor-sidebar .note-template-field,
+#notes-panel .note-editor-sidebar .note-tag-field,
+#notes-panel .note-editor-sidebar .note-link-card,
+#notes-panel .note-editor-sidebar .note-context-card {
+  display: grid;
+  grid-column: auto;
+  grid-row: auto;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+#notes-panel .note-editor-sidebar .note-context-card {
+  border-bottom: 0;
+}
+
+#notes-panel .note-context-card > strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#notes-panel .note-context-card > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#notes-panel .note-context-preview {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#notes-panel .note-context-preview dl,
+#notes-panel .note-context-preview div {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+#notes-panel .note-context-preview dt {
+  color: var(--muted);
+}
+
+#notes-panel .note-context-preview dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+#notes-panel .note-context-source {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#notes-panel .note-evidence-card {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-muted);
+}
+
+#notes-panel .note-evidence-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#notes-panel .note-evidence-card header strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#notes-panel .note-evidence-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+}
+
+#notes-panel .note-evidence-card dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#notes-panel .note-evidence-card dd {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  #notes-panel .notes-list-shell {
+    padding-right: 0;
+    padding-bottom: 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  #notes-panel .note-editor-card {
+    grid-template-columns: 1fr;
+  }
+
+  #notes-panel .note-writing-area,
+  #notes-panel .note-editor-sidebar {
+    grid-column: 1;
+  }
+
+  #notes-panel .note-writing-area {
+    grid-row: 1;
+  }
+
+  #notes-panel .note-editor-sidebar {
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  #notes-panel .note-reader-header {
+    gap: 12px;
+  }
+
+  #notes-panel .note-reader-header .secondary-button {
+    min-width: 64px;
+    padding-inline: 10px;
+  }
+
+  #notes-panel .note-evidence-card dl {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -744,5 +974,97 @@ small {
   #open-portfolio-view td:nth-child(10) {
     width: 48%;
     min-width: 0;
+  }
+}
+
+/* Overview tables prioritize complete financial values over decorative whitespace. */
+.allocation-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.allocation-table th,
+.allocation-table td {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.allocation-table th:first-child,
+.allocation-table td:first-child {
+  width: 34%;
+}
+
+.allocation-table th:nth-child(2),
+.allocation-table td:nth-child(2) {
+  width: 16%;
+}
+
+.allocation-table th:nth-child(3),
+.allocation-table td:nth-child(3),
+.allocation-table th:nth-child(4),
+.allocation-table td:nth-child(4) {
+  width: 25%;
+  white-space: nowrap;
+}
+
+.home-holdings-table {
+  min-width: 680px;
+}
+
+.home-holdings-table th,
+.home-holdings-table td {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.snapshot-status-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media (max-width: 900px) {
+  .home-holdings-table {
+    min-width: 640px;
+  }
+}
+
+@media (max-width: 640px) {
+  .allocation-table {
+    min-width: 0;
+  }
+
+  .allocation-table th:nth-child(2),
+  .allocation-table td:nth-child(2) {
+    display: none;
+  }
+
+  .allocation-table th,
+  .allocation-table td {
+    padding-right: 4px;
+    padding-left: 4px;
+    font-size: 12px;
+  }
+
+  .allocation-table th:first-child,
+  .allocation-table td:first-child {
+    width: 24%;
+  }
+
+  .allocation-table th:nth-child(3),
+  .allocation-table td:nth-child(3),
+  .allocation-table th:nth-child(4),
+  .allocation-table td:nth-child(4) {
+    width: 38%;
+  }
+
+  .home-holdings-table {
+    min-width: 0;
+  }
+
+  .home-holdings-table th,
+  .home-holdings-table td {
+    padding-right: 4px;
+    padding-left: 4px;
   }
 }

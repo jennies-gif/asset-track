@@ -23,6 +23,7 @@ export function saveNoteFromForm(status = "published") {
   const format = String(formData.get("format") || "plain");
   const template = String(formData.get("template") || elements.noteForm.dataset.template || "blank");
   const type = ctx.noteTypeFromTags(tags);
+  const contextSnapshot = ctx.buildNoteContextSnapshot();
 
   if (status !== "draft" && (!title || !content)) {
     elements.noteForm.reportValidity();
@@ -40,7 +41,7 @@ export function saveNoteFromForm(status = "published") {
   if (editingId) {
     state.notes = state.notes.map((note) =>
       note.id === editingId
-        ? {
+        ? withoutContextSnapshot({
             ...note,
             title,
             asset,
@@ -51,8 +52,9 @@ export function saveNoteFromForm(status = "published") {
             format,
             status,
             content,
-            updatedAt: new Date().toISOString()
-          }
+            updatedAt: new Date().toISOString(),
+            ...(contextSnapshot ? { contextSnapshot } : {})
+          }, Boolean(contextSnapshot))
         : note
     );
   } else {
@@ -67,13 +69,20 @@ export function saveNoteFromForm(status = "published") {
       format,
       status,
       content,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      ...(contextSnapshot ? { contextSnapshot } : {})
     }, ...state.notes];
   }
 
   elements.noteForm.reset();
   ctx.hideNoteEditor();
   ctx.persistAndRender();
+}
+
+function withoutContextSnapshot(note, keepSnapshot) {
+  if (keepSnapshot) return note;
+  const { contextSnapshot: _removedSnapshot, ...rest } = note;
+  return rest;
 }
 
 export function openNoteById(id) {

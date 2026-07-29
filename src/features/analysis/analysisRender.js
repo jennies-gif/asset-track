@@ -17,6 +17,7 @@ import {
   analysisMiniMetric,
   analysisStatusClass,
   analysisStatusLabel,
+  renderAttributionEquation,
   renderBenchmarkComparisonChart,
   renderDrawdownChart,
   renderWaterfallChart
@@ -120,15 +121,17 @@ function renderAttributionInternal() {
   const topConcentration = topHoldingConcentration(displayPortfolio.positions, displayPortfolio.totals.marketValueCents);
   renderAnalysisJudgement(analysis);
   analysisElements.analysisHealthList.innerHTML = renderAnalysisHealthMetrics(analysis, topConcentration);
-  analysisElements.stageComparisonGrid.innerHTML = [
-    analysisMiniMetric("期初资产", formatDisplayCurrency(convertedStart), analysisStageStartLabel(assets)),
-    analysisMiniMetric("当前资产", formatDisplayCurrency(convertedEnd), analysisStageEndLabel(assets)),
-    analysisMiniMetric("净投入", formatSignedCurrency(convertedContribution), "用户录入资金变化"),
-    analysisMiniMetric("投资结果", formatSignedCurrency(investmentResult), "扣除净投入")
-  ].join("");
+  analysisElements.stageComparisonGrid.innerHTML = renderAttributionEquation({
+    startValue: formatDisplayCurrency(convertedStart),
+    contribution: formatSignedCurrency(convertedContribution),
+    investmentResult: formatSignedCurrency(investmentResult),
+    endValue: formatDisplayCurrency(convertedEnd),
+    startLabel: analysisStageStartLabel(assets),
+    endLabel: analysisStageEndLabel(assets)
+  });
 
   if (analysisElements.attributionList) analysisElements.attributionList.innerHTML = "";
-  renderAttributionWaterfall(analysis, convertedStart, convertedEnd);
+  renderAttributionWaterfall(analysis);
   renderAnalysisQuality(analysis);
   renderAnalysisConcentration(analysis);
   renderAnalysisRisk(analysis);
@@ -290,37 +293,45 @@ function analysisHealthIcon(icon) {
   return `<span class="analysis-health-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[icon] || paths.wallet}</svg></span>`;
 }
 
-function renderAttributionWaterfall(analysis, startValueCents, endValueCents) {
+function renderAttributionWaterfall(analysis) {
   if (!analysisElements.analysisCashflowChart) return;
   const itemByKey = new Map(analysis.attribution.items.map((item) => [item.key, convertUsdToDisplay(item.amountCents)]));
   const income = (itemByKey.get("income") || 0n);
   const fees = (itemByKey.get("fees") || 0n) + (itemByKey.get("taxes") || 0n);
   const rows = [
-    { key: "start", label: "起点资产", amount: startValueCents, type: "total", semantic: "neutral" },
-    { key: "contribution", label: "净投入", amount: itemByKey.get("contribution") || 0n, semantic: "neutral" },
     { key: "price", label: "价格变动", amount: itemByKey.get("price") || 0n },
     { key: "fx", label: "汇率影响", amount: itemByKey.get("fx") || 0n },
-    { key: "income", label: "分红", amount: income },
-    { key: "fees", label: "手续费", amount: fees, semantic: "negative" },
-    { key: "unexplained", label: "未归因差异", amount: itemByKey.get("unexplained") || 0n },
-    { key: "end", label: "当前资产", amount: endValueCents, type: "total", semantic: "neutral" }
+    { key: "income", label: "分红与利息", amount: income },
+    { key: "costs", label: "手续费及税费", amount: fees, semantic: "negative" },
+    { key: "manual", label: "手动调整", amount: itemByKey.get("manual") || 0n },
+    { key: "unexplained", label: "未归因差异", amount: itemByKey.get("unexplained") || 0n }
   ];
-  const maxAmount = rows.reduce((max, row) => {
-    const value = row.type === "total" ? absBigInt(row.amount) : absBigInt(row.amount);
-    return value > max ? value : max;
-  }, 1n);
-  analysisElements.analysisCashflowChart.innerHTML = `${chartSourceLine("录入计算", "基于用户录入的期初价、当前价、汇率、现金流、费用和税费拆解。未补字段会进入未归因差异。", "positive")}${rows.map((row) => {
-    const width = Math.max(4, Number((absBigInt(row.amount) * 10000n) / maxAmount) / 100);
-    const tone = row.type === "total" ? "total" : row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "muted";
-    const semanticTone = row.semantic || (row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "neutral");
-    return `
-      <div class="waterfall-row ${tone} semantic-${semanticTone}">
-        <span>${escapeHtml(row.label)}</span>
-        <div class="waterfall-track"><i style="width:${width.toFixed(2)}%"></i></div>
-        <strong class="${row.type === "total" ? "" : toneClassForValue(row.amount)}">${escapeHtml(row.type === "total" ? formatDisplayCurrency(row.amount) : formatSignedCurrency(row.amount))}</strong>
+  const maxAmount = rows.reduce((max, row) => absBigInt(row.amount) > max ? absBigInt(row.amount) : max, 1n);
+  analysisElements.analysisCashflowChart.innerHTML = `
+    <div class="attribution-breakdown-heading">
+      <div>
+        <h4>投资结果构成</h4>
+        <p>比较各项对投资结果的影响，不含期初资产和净投入。</p>
       </div>
-    `;
-  }).join("")}`;
+      ${chartSourceLine("录入计算", "基于用户录入的价格、汇率、收入、费用和调整项拆解；字段不完整时会显示未归因差异。", "positive")}
+    </div>
+    <div class="attribution-breakdown-list">
+      ${rows.map((row) => {
+        const width = row.amount === 0n
+          ? 0
+          : Math.max(3, Number((absBigInt(row.amount) * 5000n) / maxAmount) / 100);
+        const tone = row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "muted";
+        const semanticTone = row.semantic || (row.amount > 0n ? "positive" : row.amount < 0n ? "negative" : "neutral");
+        return `
+          <div class="waterfall-row ${tone} semantic-${semanticTone}">
+            <span><strong>${escapeHtml(row.label)}</strong><small>${escapeHtml(attributionItemDescription(row.key))}</small></span>
+            <div class="waterfall-track"><i style="width:${width.toFixed(2)}%"></i></div>
+            <strong class="${toneClassForValue(row.amount)}">${escapeHtml(formatSignedCurrency(row.amount))}</strong>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 function attributionItemDescription(key) {
@@ -329,6 +340,7 @@ function attributionItemDescription(key) {
     price: "由资产期初价与当前价变化产生，使用用户录入或补录价格计算。",
     fx: "多币种资产因期初汇率和当前汇率变化产生的折算影响。",
     income: "现金分红、利息或类似收入，来自用户录入记录。",
+    costs: "手续费和税费会减少投资结果，按用户录入金额合并展示。",
     fees: "交易手续费会减少组合变化结果，按用户录入金额扣减。",
     taxes: "税费会减少组合变化结果，按用户录入金额扣减。",
     manual: "手动调整用于记录迁移、对账修正或非标准资产变化。",
@@ -485,10 +497,10 @@ function normalizedReturnPoints(points, start, end) {
 function renderAnalysisRisk(analysis) {
   if (!analysisElements.analysisRiskMetrics) return;
   analysisElements.analysisRiskMetrics.innerHTML = [
-    analysisMiniMetric("最大回撤", formatPercent(analysis.drawdown.maxDrawdownBps), `${analysis.drawdown.maxStartDate} 至 ${analysis.drawdown.maxEndDate}`),
-    analysisMiniMetric("当前回撤", formatPercent(analysis.drawdown.currentDrawdownBps), analysis.drawdown.currentDrawdownDays ? `已持续约 ${analysis.drawdown.currentDrawdownDays} 天` : "当前接近阶段高点"),
-    analysisMiniMetric("最差月份", formatPercent(analysis.drawdown.worstMonthBps), analysis.drawdown.worstMonthLabel),
-    analysisMiniMetric("回撤持续天数", `${analysis.drawdown.maxDrawdownDays} 天`, "历史最大回撤区间")
+    analysisMiniMetric("最大回撤", formatPercent(analysis.drawdown.maxDrawdownBps), `${analysis.drawdown.maxStartDate} 至 ${analysis.drawdown.maxEndDate}`, { variant: "detail" }),
+    analysisMiniMetric("当前回撤", formatPercent(analysis.drawdown.currentDrawdownBps), analysis.drawdown.currentDrawdownDays ? `已持续约 ${analysis.drawdown.currentDrawdownDays} 天` : "当前接近阶段高点", { variant: "detail" }),
+    analysisMiniMetric("最差月份", formatPercent(analysis.drawdown.worstMonthBps), analysis.drawdown.worstMonthLabel, { variant: "detail" }),
+    analysisMiniMetric("回撤持续天数", `${analysis.drawdown.maxDrawdownDays} 天`, "历史最大回撤区间", { variant: "detail" })
   ].join("");
   analysisElements.analysisDrawdownChart.innerHTML = `${chartSourceLine("估算回撤", "基于持仓成本、当前价格和日期推导的趋势点计算，不等同于真实每日回撤。补齐历史价格后可替换为真实回撤。", "warning")}${renderDrawdownChart(analysis.drawdown.points, buildEvenlySpacedXAxisLabels)}`;
   const highRisk = analysis.drawdown.maxDrawdownBps <= -1500n || analysis.drawdown.currentDrawdownBps <= -1000n;
@@ -537,10 +549,10 @@ function chartSourceLine(label, description, tone = "") {
 function renderAnalysisConcentration(analysis) {
   if (!analysisElements.analysisConcentrationMetrics) return;
   analysisElements.analysisConcentrationMetrics.innerHTML = [
-    analysisMiniMetric("Top 1 持仓", formatShare(analysis.concentration.top1WeightBps), analysis.concentration.sorted[0]?.name || "暂无"),
-    analysisMiniMetric("Top 5 持仓", formatShare(analysis.concentration.top5WeightBps), "前五大资产合计"),
-    analysisMiniMetric("最大市场占比", formatShare(analysis.concentration.market.weightBps), analysis.concentration.market.label),
-    analysisMiniMetric("最大账户占比", formatShare(analysis.concentration.account.weightBps), analysis.concentration.account.label)
+    analysisMiniMetric("Top 1 持仓", formatShare(analysis.concentration.top1WeightBps), analysis.concentration.sorted[0]?.name || "暂无", { variant: "detail", emphasizeHint: true }),
+    analysisMiniMetric("Top 5 持仓", formatShare(analysis.concentration.top5WeightBps), "前五大资产合计", { variant: "detail", emphasizeHint: true }),
+    analysisMiniMetric("最大市场占比", formatShare(analysis.concentration.market.weightBps), analysis.concentration.market.label, { variant: "detail", emphasizeHint: true }),
+    analysisMiniMetric("最大账户占比", formatShare(analysis.concentration.account.weightBps), analysis.concentration.account.label, { variant: "detail", emphasizeHint: true })
   ].join("");
   analysisElements.analysisTopHoldings.innerHTML = renderTopHoldings(analysis);
   analysisElements.analysisConcentrationNote.innerHTML = analysis.concentration.status === "high"

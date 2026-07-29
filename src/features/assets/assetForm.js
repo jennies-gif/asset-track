@@ -124,6 +124,7 @@ export function setDefaultAssetFormValues() {
   delete ctx.elements.assetForm.dataset.autoDraftCurrentPrice;
   delete ctx.elements.assetForm.dataset.autoDraftCostPrice;
   delete ctx.elements.assetForm.dataset.autoDraftPriceQuery;
+  delete ctx.elements.assetForm.dataset.manualPriceDirty;
   resetDraftPriceStatus();
   if (ctx.elements.assetForm.elements.quantity) ctx.elements.assetForm.elements.quantity.value = "";
   if (ctx.elements.assetForm.elements.currentPrice) ctx.elements.assetForm.elements.currentPrice.value = "";
@@ -656,6 +657,7 @@ export function applyCashAssetFormMode() {
     renderAccountPicker();
   }
   if (transactionTypeField && isCash && transactionTypeField.value === "买入") transactionTypeField.value = "转入";
+  syncManualCurrentPriceField();
 }
 
 export function syncOptionalEntryPanels() {
@@ -946,6 +948,7 @@ function fillAssetForm(asset) {
     "priceAt",
     "marketTimezone",
     "sourceFetchedAt",
+    "priceError",
     "attachmentName",
     "buyReason",
     "upsideReasons",
@@ -970,6 +973,8 @@ export function resetAssetFormMode(mode = "create") {
   delete ctx.elements.assetForm.dataset.editingId;
   delete ctx.elements.assetForm.dataset.closingId;
   delete ctx.elements.assetForm.dataset.sellingId;
+  delete ctx.elements.assetForm.dataset.manualPriceExpanded;
+  delete ctx.elements.assetForm.dataset.manualPriceDirty;
   ctx.elements.assetForm.dataset.mode = mode;
   delete ctx.elements.assetForm.dataset.adjustmentType;
   ctx.elements.closeFields.classList.add("is-hidden");
@@ -994,8 +999,30 @@ export function resetAssetFormMode(mode = "create") {
   }
 }
 
-function syncManualCurrentPriceField(asset) {
-  void asset;
+export function toggleManualCurrentPriceField() {
+  const form = ctx.elements.assetForm;
+  if (form.dataset.mode !== "edit" || form.elements.type?.value === "现金") return;
+  const expanded = form.dataset.manualPriceExpanded !== "true";
+  if (expanded) {
+    form.dataset.manualPriceExpanded = "true";
+    if (!form.elements.pricedAt?.value) form.elements.pricedAt.value = todayIsoDate();
+  } else {
+    delete form.dataset.manualPriceExpanded;
+  }
+  syncManualCurrentPriceField();
+  if (expanded) form.elements.currentPrice?.focus();
+}
+
+function syncManualCurrentPriceField() {
+  const form = ctx.elements.assetForm;
+  const eligible = form.dataset.mode === "edit" && form.elements.type?.value !== "现金";
+  const expanded = eligible && form.dataset.manualPriceExpanded === "true";
+  ctx.elements.manualCurrentPriceControl?.classList.toggle("is-hidden", !eligible);
+  ctx.elements.manualCurrentPricePanel?.classList.toggle("is-hidden", !expanded);
+  if (ctx.elements.manualCurrentPriceToggle) {
+    ctx.elements.manualCurrentPriceToggle.setAttribute("aria-expanded", String(expanded));
+    ctx.elements.manualCurrentPriceToggle.textContent = expanded ? "收起手动当前价" : "手动填写当前价";
+  }
 }
 
 function resetOptionalEntryPanels() {

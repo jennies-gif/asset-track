@@ -124,6 +124,7 @@ import { initFeedbackEvents } from "./features/feedback/feedbackEvents.js";
 import {
   applyNoteTemplate,
   applySelectedNoteTransaction,
+  buildNoteContextSnapshot,
   clearNoteTransactionLink,
   commitCustomNoteTag,
   configureNotesEditor,
@@ -135,6 +136,7 @@ import {
   setNoteAssetLink,
   setNoteTransactionLink,
   showNoteEditor,
+  syncNoteAssetSelection,
   updateNoteCounters
 } from "./features/notes/notesEditor.js";
 import {
@@ -208,6 +210,7 @@ configurePortfolioSelectors({
   inferAccountType
 });
 configureHomeModel({
+  allAssets: () => getState().assets,
   getState,
   getMarketSyncState,
   buildAssetChangeRecords,
@@ -390,6 +393,7 @@ configureNotesActions({
   activateTab,
   findReviewNote,
   hideNoteEditor,
+  buildNoteContextSnapshot,
   noteTypeFromTags,
   openCloseReviewNote,
   persistAndRender,
@@ -481,6 +485,7 @@ initNotesEvents({
   commitCustomNoteTag,
   clearNoteTransactionLink,
   applySelectedNoteTransaction,
+  syncNoteAssetSelection,
   noteTransactionLabel,
   setNoteAssetLink,
   setNoteTransactionLink,

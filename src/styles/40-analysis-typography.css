@@ -103,6 +103,41 @@
   margin: 0;
 }
 
+#analysis-panel .analysis-mini-metric.is-detail span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#analysis-panel .analysis-mini-metric.is-detail strong {
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+#analysis-panel .analysis-mini-metric.is-detail small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+#analysis-panel .analysis-mini-metric.is-detail small.is-emphasis {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#analysis-panel .bar-label strong {
+  color: var(--ink);
+}
+
+#analysis-panel .bar-label small {
+  color: var(--muted);
+}
+
 #analysis-panel .analysis-return-table th {
   height: 48px;
   background: var(--surface-muted);

@@ -1,4 +1,5 @@
 import { roundDivide } from "../../domain/calculations.js";
+import { calculatePreviousCalendarDayChange } from "../../domain/portfolioDailyChange.js";
 import { addDays, normalizeSnapshotDate, todayIsoDate } from "../../utils/date.js";
 import { buildAssetValuationNotices } from "../assets/dataQuality.js";
 import {
@@ -20,6 +21,7 @@ export function buildHomeRenderContext() {
     calculateDisplayPortfolio: ctx.calculateDisplayPortfolio,
     dailyPnlMetricLabel,
     latestDailyPnlSnapshot,
+    latestOverviewSyncSummary,
     currentOverviewTotalCents: ctx.currentOverviewTotalCents,
     findNoteForChange: ctx.findNoteForChange,
     latestOverviewUpdateLabel,
@@ -34,80 +36,22 @@ export function calculateCumulativeReturnBps() {
   return ctx.calculateDisplayPortfolio(ctx.overviewAssets()).totals.returnBps;
 }
 
-export function latestDailyPnlSnapshot() {
-  const assets = ctx.overviewAssets().filter((asset) => isPositiveDecimal(asset.quantity));
-  if (!assets.length) return { amountCents: null, valuationDate: "", reason: "暂无资产" };
-
-  const pricedAssets = assets.filter((asset) => !isCashAsset(asset));
-  if (!pricedAssets.length) {
-    return {
-      amountCents: null,
-      valuationDate: "",
-      reason: "纯现金组合没有可核对的交易日价格变化"
-    };
-  }
-
-  const hasUnverifiedPrice = pricedAssets.some((asset) =>
-    String(asset.priceStatus || "").trim() !== "synced"
-  );
-  if (hasUnverifiedPrice) {
-    return {
-      amountCents: null,
-      valuationDate: "",
-      reason: "含手动、缺失或同步失败价格，无法计算统一交易日收益"
-    };
-  }
-
-  const hasUnusablePrice = pricedAssets.some((asset) =>
-    !isPositiveDecimal(asset.currentPrice) ||
-      !isPositiveDecimal(asset.previousPrice) ||
-      !isPositiveDecimal(asset.fxRate) ||
-      !isPositiveDecimal(asset.previousFxRate) ||
-      !normalizePriceDate(asset.pricedAt)
-  );
-  if (hasUnusablePrice) {
-    return {
-      amountCents: null,
-      valuationDate: "",
-      reason: "缺少可核对的当前价、上一交易日价格或对应汇率"
-    };
-  }
-
-  const priceDates = [...new Set(pricedAssets.map((asset) => normalizePriceDate(asset.pricedAt)))];
-  if (priceDates.length !== 1) {
-    return { amountCents: null, valuationDate: "", reason: "组合内资产的最新行情日期不一致" };
-  }
-
-  const { totals } = ctx.calculateDisplayPortfolio(assets);
-  return {
-    amountCents: totals.marketValueCents - totals.previousValueCents,
-    valuationDate: priceDates[0],
-    reason: ""
-  };
+export function latestDailyPnlSnapshot(asOfDate = todayIsoDate()) {
+  return calculatePreviousCalendarDayChange({
+    assets: ctx.allAssets?.() || ctx.overviewAssets(),
+    valuationDate: addDays(asOfDate, -1),
+    calculatePortfolio: ctx.calculateDisplayPortfolio
+  });
 }
 
 export function dailyPnlMetricLabel(snapshot) {
   const valuationDate = normalizePriceDate(snapshot?.valuationDate);
-  if (!valuationDate) return "最近交易日收益";
-  const dateLabel = valuationDate.slice(5);
-  return valuationDate === addDays(todayIsoDate(), -1)
-    ? `昨日收益（${dateLabel}）`
-    : `最近交易日收益（${dateLabel}）`;
-}
-
-function isCashAsset(asset) {
-  return String(asset.market || "").toUpperCase() === "CASH" || String(asset.type || "").trim() === "现金";
+  return valuationDate ? `昨日收益（${valuationDate.slice(5)}）` : "昨日收益";
 }
 
 function normalizePriceDate(value) {
   const date = normalizeSnapshotDate(value || "");
   return /^\d{4}-\d{2}-\d{2}$/u.test(date) ? date : "";
-}
-
-function isPositiveDecimal(value) {
-  const normalized = String(value ?? "").trim().replaceAll(",", "");
-  if (!/^\d+(?:\.\d+)?$/u.test(normalized)) return false;
-  return BigInt(normalized.replace(".", "")) > 0n;
 }
 
 export function annualizedCumulativeReturnBps(returnBps) {
@@ -136,13 +80,69 @@ export function valuationAttentionItems() {
 }
 
 export function latestOverviewUpdateLabel() {
-  if (ctx.getMarketSyncState().syncedAt) return ctx.formatDateTimeMinute(ctx.getMarketSyncState().syncedAt);
-  const dates = ctx.overviewAssets()
-    .flatMap((asset) => [asset.pricedAt, asset.updatedAt, asset.purchaseDate])
+  const summary = latestOverviewSyncSummary();
+  return [summary.value, summary.detail].filter(Boolean).join(" · ");
+}
+
+export function latestOverviewSyncSummary() {
+  const marketSyncState = ctx.getMarketSyncState?.() || {};
+  const assets = (ctx.allAssets?.() || ctx.overviewAssets())
+    .filter((asset) => !asset.closed && !isCashAsset(asset));
+  if (!assets.length) {
+    return { value: "暂无需同步", detail: "当前没有非现金持仓", tone: "positive" };
+  }
+
+  if (marketSyncState.status === "loading") {
+    return { value: "同步中", detail: "正在检查最新行情", tone: "warning" };
+  }
+  if (marketSyncState.status === "error") {
+    return { value: "同步失败", detail: "请重新检查价格", tone: "negative" };
+  }
+
+  const syncedAssets = assets.filter((asset) => asset.priceStatus === "synced");
+  const failedAssets = assets.filter((asset) => asset.priceStatus === "error");
+  const fetchedAt = latestTimestamp(syncedAssets.map((asset) => asset.sourceFetchedAt));
+  const pricedAt = latestDate(syncedAssets.map((asset) => asset.pricedAt));
+  const checkedAt = marketSyncState.syncedAt || fetchedAt;
+  const detail = checkedAt
+    ? `上次检查 ${ctx.formatDateTimeMinute(checkedAt)}`
+    : pricedAt ? `最新行情 ${pricedAt}` : "";
+
+  if (marketSyncState.status === "warning" || (syncedAssets.length && syncedAssets.length < assets.length)) {
+    return { value: "部分同步", detail: detail || "部分持仓仍需处理", tone: "warning" };
+  }
+  if (syncedAssets.length === assets.length) {
+    return { value: "已同步", detail, tone: "positive" };
+  }
+  if (failedAssets.length) {
+    const failedAt = latestTimestamp(failedAssets.map((asset) => asset.updatedAt));
+    return {
+      value: "同步异常",
+      detail: failedAt
+        ? `${failedAssets.length} 项失败 · 上次尝试 ${ctx.formatDateTimeMinute(failedAt)}`
+        : `${failedAssets.length} 项需要重新检查`,
+      tone: "negative"
+    };
+  }
+  return { value: "尚未同步", detail: "请检查价格更新", tone: "warning" };
+}
+
+function latestTimestamp(values) {
+  return values
+    .filter((value) => Number.isFinite(Date.parse(value || "")))
+    .sort()
+    .at(-1) || "";
+}
+
+function latestDate(values) {
+  return values
+    .map(normalizePriceDate)
     .filter(Boolean)
-    .map((date) => normalizeSnapshotDate(date))
-    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-    .sort();
-  const latest = dates.at(-1);
-  return latest ? `${latest} ${ctx.notSynced}` : ctx.notSynced;
+    .sort()
+    .at(-1) || "";
+}
+
+function isCashAsset(asset) {
+  return String(asset.market || "").toUpperCase() === "CASH" ||
+    String(asset.type || "").trim() === "现金";
 }

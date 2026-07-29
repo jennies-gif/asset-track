@@ -42,6 +42,7 @@ export function buildAssetFormPayload(existingAsset) {
   const fxRate = form.fxRate || existingAsset?.fxRate || defaultAssetFxRate(form.currency);
   const explicitPriceStatus = String(form.priceStatus || "").trim();
   const hasManualPrice = explicitPriceStatus === "manual" && String(form.currentPrice || "").trim() !== "";
+  const manualPriceChanged = ctx.elements.assetForm.dataset.manualPriceDirty === "true";
   const hasSyncedDraftPrice = explicitPriceStatus === "synced" && String(form.priceSource || "").trim() && String(form.pricedAt || "").trim();
   const hasCostPrice = Number(String(form.costPrice || existingAsset?.costPrice || "0").trim()) > 0;
   const hasExistingPrice = Boolean(existingAsset?.currentPrice && existingAsset?.priceStatus !== "pending");
@@ -60,12 +61,13 @@ export function buildAssetFormPayload(existingAsset) {
     fees: form.fees || existingAsset?.fees || "0",
     taxes: form.taxes || existingAsset?.taxes || "0",
     manualAdjustment: form.manualAdjustment || existingAsset?.manualAdjustment || "0",
-    pricedAt: hasSyncedDraftPrice ? form.pricedAt : form.pricedAt || (hasManualPrice ? todayIsoDate() : existingAsset?.pricedAt || ""),
-    priceSource: hasSyncedDraftPrice ? form.priceSource : form.priceSource || (hasManualPrice ? "用户录入" : existingAsset?.priceSource || ""),
-    priceKind: hasSyncedDraftPrice ? form.priceKind : form.priceKind || existingAsset?.priceKind || "",
-    priceAt: hasSyncedDraftPrice ? form.priceAt : form.priceAt || existingAsset?.priceAt || "",
-    marketTimezone: hasSyncedDraftPrice ? form.marketTimezone : form.marketTimezone || existingAsset?.marketTimezone || "",
-    sourceFetchedAt: hasSyncedDraftPrice ? form.sourceFetchedAt : form.sourceFetchedAt || existingAsset?.sourceFetchedAt || ""
+    pricedAt: hasSyncedDraftPrice ? form.pricedAt : manualPriceChanged ? form.pricedAt || todayIsoDate() : existingAsset?.pricedAt || form.pricedAt || "",
+    priceSource: hasSyncedDraftPrice ? form.priceSource : manualPriceChanged ? "用户录入" : existingAsset?.priceSource || form.priceSource || (hasManualPrice ? "用户录入" : ""),
+    priceKind: hasSyncedDraftPrice ? form.priceKind : manualPriceChanged ? "" : existingAsset?.priceKind || form.priceKind || "",
+    priceAt: hasSyncedDraftPrice ? form.priceAt : manualPriceChanged ? "" : existingAsset?.priceAt || form.priceAt || "",
+    marketTimezone: hasSyncedDraftPrice ? form.marketTimezone : manualPriceChanged ? "" : existingAsset?.marketTimezone || form.marketTimezone || "",
+    sourceFetchedAt: hasSyncedDraftPrice ? form.sourceFetchedAt : manualPriceChanged ? "" : existingAsset?.sourceFetchedAt || form.sourceFetchedAt || "",
+    priceError: manualPriceChanged ? "" : existingAsset?.priceError || form.priceError || ""
   };
 }
 

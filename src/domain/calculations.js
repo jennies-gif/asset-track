@@ -206,6 +206,7 @@ export function normalizeAsset(formAsset) {
     priceAt: String(formAsset.priceAt || "").trim(),
     marketTimezone: String(formAsset.marketTimezone || "").trim(),
     sourceFetchedAt: String(formAsset.sourceFetchedAt || "").trim(),
+    priceError: String(formAsset.priceError || "").trim(),
     dailyPrices: normalizeDailyPriceRows(formAsset.dailyPrices),
     dailyPriceStatus: String(formAsset.dailyPriceStatus || "").trim(),
     dailyPriceMissingDates: Array.isArray(formAsset.dailyPriceMissingDates) ? formAsset.dailyPriceMissingDates.map((date) => String(date).slice(0, 10)).filter(Boolean) : [],
