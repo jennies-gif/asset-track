@@ -33,6 +33,7 @@ export function buildAnalysisModel(assets, portfolio, attribution) {
   const drawdown = calculateDrawdownStats(buildAnalysisTrendPoints(assets));
   const exposure = buildExposureAnalysis(portfolio.positions, portfolio.totals.marketValueCents);
   const concentration = buildConcentrationAnalysis(portfolio.positions, portfolio.totals.marketValueCents);
+  const scope = buildAnalysisScope(portfolio.positions);
 
   return {
     assets,
@@ -49,7 +50,16 @@ export function buildAnalysisModel(assets, portfolio, attribution) {
     monthlyReturns,
     drawdown,
     exposure,
-    concentration
+    concentration,
+    scope
+  };
+}
+
+export function buildAnalysisScope(positions = []) {
+  const assetCount = positions.length;
+  return {
+    assetCount,
+    supportsPortfolioComparisons: assetCount > 1
   };
 }
 

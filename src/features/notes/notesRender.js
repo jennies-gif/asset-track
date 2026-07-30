@@ -1,7 +1,5 @@
 import { normalizeQuickMatchText } from "../assets/assetQuickMatch.js";
-import { resolvePriceStatus } from "../../domain/priceStatus.js";
 import { emptyActionState } from "../../ui/emptyState.js";
-import { formatDisplayCurrency, formatUnitPrice } from "../../ui/formatters.js";
 import { escapeHtml } from "../../utils/dom.js";
 import { renderNoteContent } from "./markdown.js";
 
@@ -140,11 +138,8 @@ export function showNoteReader(id, options = {}) {
   elements.noteReaderTitle.textContent = note.title || "未命名复盘";
   const linkedAsset = noteAssetLabel(note);
   const linkedChange = findLinkedChangeForNote(note);
-  const noteDate = formatNoteDate(note.updatedAt || note.createdAt);
   if (elements.noteReaderHeaderMeta) elements.noteReaderHeaderMeta.innerHTML = renderNoteReaderHeaderMeta(note);
   elements.noteReaderMeta.innerHTML = renderNoteReaderMeta(note, {
-    noteDate,
-    type: noteTypeForNote(note),
     linkedAsset,
     linkedChange
   });
@@ -242,42 +237,16 @@ function formatNoteDate(value) {
 }
 
 function renderNoteReaderMeta(note, details) {
-  if (isBlankTemplateNote(note)) {
-    return renderNoteEvidence(note, details);
-  }
-
-  const realizedReturn = noteRealizedReturnLabel(note, details.linkedChange);
   const linkedAssetId = note.assetId || inferNoteAssetId(note);
-  const rows = [
-    { label: "日期", value: details.noteDate || "-" },
-    { label: "类型", value: details.type || "交易复盘" },
-    {
-      label: "关联资产",
-      value: details.linkedAsset || "未关联",
-      html: details.linkedAsset && linkedAssetId
-        ? `<button class="linked-change-button reader-link" data-open-linked-asset-id="${escapeHtml(linkedAssetId)}" type="button">${escapeHtml(details.linkedAsset)}</button>`
-        : ""
-    },
-    {
-      label: "关联交易",
-      value: note.asset || "未关联",
-      html: note.asset && details.linkedChange
-        ? `<button class="linked-change-button reader-link" data-open-linked-change-id="${escapeHtml(details.linkedChange.id)}" type="button">${escapeHtml(note.asset)}</button>`
-        : ""
-    },
-    { label: "实现收益", value: realizedReturn }
-  ];
-  return `
-    <dl class="note-reader-meta-grid">
-      ${rows.map((row) => `
-        <div>
-          <dt>${escapeHtml(row.label)}</dt>
-          <dd>${row.html || escapeHtml(row.value)}</dd>
-        </div>
-      `).join("")}
-    </dl>
-    ${renderNoteEvidence(note, details)}
-  `;
+  const links = [
+    details.linkedAsset && linkedAssetId
+      ? `<button class="linked-change-button reader-link" data-open-linked-asset-id="${escapeHtml(linkedAssetId)}" type="button">关联资产：${escapeHtml(details.linkedAsset)}</button>`
+      : "",
+    note.asset && details.linkedChange
+      ? `<button class="linked-change-button reader-link" data-open-linked-change-id="${escapeHtml(details.linkedChange.id)}" type="button">关联交易：${escapeHtml(note.asset)}</button>`
+      : ""
+  ].filter(Boolean);
+  return links.join("");
 }
 
 function renderNoteReaderHeaderMeta(note) {
@@ -292,67 +261,4 @@ function renderNoteReaderTags(tags) {
       ${tags.map((tag) => `<span>${escapeHtml(`#${tag}`)}</span>`).join("")}
     </div>
   `;
-}
-
-function isBlankTemplateNote(note) {
-  if (note.template) return note.template === "blank";
-  return !note.asset && !note.assetId && note.realizedPnlCents === undefined;
-}
-
-function noteRealizedReturnLabel(note, linkedChange = null) {
-  const state = ctx.getState();
-  if (note.realizedPnlCents !== undefined) return formatDisplayCurrency(BigInt(note.realizedPnlCents || "0"));
-  const asset = linkedChange?.asset || state.assets.find((item) => item.id === (note.assetId || inferNoteAssetId(note)));
-  if (!asset) return "未记录";
-  if (asset.realizedPnlCents !== undefined) return formatDisplayCurrency(ctx.convertUsdToDisplay(BigInt(asset.realizedPnlCents || "0")));
-  if (linkedChange && (linkedChange.action === "卖出" || linkedChange.action === "清仓")) return "待核对";
-  return "未记录";
-}
-
-function renderNoteEvidence(note, details) {
-  const snapshot = note.contextSnapshot;
-  if (isContextSnapshot(snapshot)) {
-    return renderEvidenceCard(snapshot, "记录时数据", "保存复盘时留存于当前浏览器");
-  }
-  const state = ctx.getState();
-  const asset = state.assets.find((item) => item.id === (note.assetId || inferNoteAssetId(note)));
-  if (!asset && !details.linkedChange) return "";
-  const sourceAsset = asset || details.linkedChange.asset;
-  const status = resolvePriceStatus(sourceAsset);
-  return renderEvidenceCard({
-    assetName: sourceAsset.name,
-    symbol: sourceAsset.symbol,
-    account: sourceAsset.account,
-    currency: sourceAsset.currency,
-    quantity: sourceAsset.quantity,
-    costPrice: sourceAsset.costPrice,
-    currentPrice: sourceAsset.currentPrice,
-    pricedAt: sourceAsset.pricedAt,
-    priceSource: sourceAsset.priceSource,
-    priceStatusLabel: status.label,
-    transactionLabel: note.asset || ""
-  }, "当前资产信息", "历史复盘未保存记录时快照，以下为当前值");
-}
-
-function renderEvidenceCard(snapshot, title, sourceLabel) {
-  const assetLabel = [snapshot.assetName, snapshot.symbol, snapshot.account].filter(Boolean).join(" · ") || "未关联";
-  const currentPrice = formatUnitPrice(snapshot.currentPrice, snapshot.currency, "待补价格");
-  const priceMeta = [snapshot.priceStatusLabel, snapshot.pricedAt, snapshot.priceSource].filter(Boolean).join(" · ") || "未记录来源";
-  const rows = [
-    ["资产", assetLabel],
-    ["当前价", `${currentPrice} · ${priceMeta}`],
-    ["成本价", formatUnitPrice(snapshot.costPrice, snapshot.currency, "未记录")],
-    ["数量", snapshot.quantity || "未记录"],
-    ["关联交易", snapshot.transactionLabel || "未关联"]
-  ];
-  return `
-    <section class="note-evidence-card" aria-label="${escapeHtml(title)}">
-      <header><strong>${escapeHtml(title)}</strong><span class="note-context-source">${escapeHtml(sourceLabel)}</span></header>
-      <dl>${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
-    </section>
-  `;
-}
-
-function isContextSnapshot(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Number(value.version) === 1;
 }

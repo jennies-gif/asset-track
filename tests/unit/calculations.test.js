@@ -116,11 +116,27 @@ test("keeps holdings opened before the analysis period in drawdown calculations"
   const assets = [{ id: "legacy-holding", purchaseDate: "2024-06-01", account: "长期账户" }];
   configureAnalysisFilters({
     elements: {},
-    getAnalysisFilter: () => ({ account: "all", assetId: "all", range: "ytd", startDate: "2026-01-01", endDate: "2026-07-12" }),
+    getAnalysisFilter: () => ({ account: "all", market: "all", range: "ytd", startDate: "2026-01-01", endDate: "2026-07-12" }),
     openAssets: () => assets,
     buildAccountSummaries: () => []
   });
   assert.deepEqual(selectedAnalysisAssets(), assets);
+});
+
+test("filters analysis holdings by account and market without selecting an individual asset", () => {
+  const assets = [
+    { id: "cn-a", account: "证券账户", market: "CN" },
+    { id: "us-a", account: "证券账户", market: "US" },
+    { id: "us-b", account: "长期账户", market: "US" }
+  ];
+  configureAnalysisFilters({
+    elements: {},
+    getAnalysisFilter: () => ({ account: "证券账户", market: "US", range: "ytd", startDate: "2026-01-01", endDate: "2026-07-12" }),
+    openAssets: () => assets,
+    buildAccountSummaries: () => []
+  });
+
+  assert.deepEqual(selectedAnalysisAssets(), [assets[1]]);
 });
 
 test("annualizes volatility and Sharpe ratio using the observed interval", () => {
@@ -203,6 +219,58 @@ test("renders blank note reader tags without the review detail grid", () => {
   assert.match(elements.noteReaderHeaderMeta.innerHTML, /#闪念/);
   assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /note-reader-meta-grid/);
   assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /日期|关联资产|实现收益/);
+});
+
+test("renders linked asset and transaction as two compact reader links", () => {
+  const classList = () => ({ add() {}, remove() {}, toggle() {} });
+  const asset = {
+    id: "asset-1",
+    name: "测试资产",
+    symbol: "TEST",
+    account: "测试账户"
+  };
+  const change = {
+    id: "change-1",
+    asset,
+    action: "买入"
+  };
+  const transactionLabel = "2026-05-28 · 买入 · 测试资产";
+  const elements = {
+    notesReader: { dataset: {}, classList: classList(), scrollIntoView() {} },
+    noteReaderTitle: { textContent: "" },
+    noteReaderHeaderMeta: { innerHTML: "" },
+    noteReaderMeta: { innerHTML: "" },
+    noteReaderAsset: { innerHTML: "", classList: classList() },
+    noteReaderContent: { innerHTML: "" },
+    notesEditor: { classList: classList() },
+    notesHome: { classList: classList() },
+    notesList: { querySelectorAll: () => [] }
+  };
+  configureNotesRender({
+    elements,
+    getState: () => ({
+      assets: [asset],
+      notes: [{
+        id: "note-linked",
+        title: "关联复盘",
+        assetId: asset.id,
+        asset: transactionLabel,
+        content: "正文",
+        createdAt: "2026-05-28T00:00:00.000Z"
+      }]
+    }),
+    buildAssetChangeRecords: () => [change],
+    noteTransactionLabel: () => transactionLabel
+  });
+
+  showNoteReader("note-linked", { scroll: false });
+
+  assert.match(elements.noteReaderMeta.innerHTML, /data-open-linked-asset-id="asset-1"/);
+  assert.match(elements.noteReaderMeta.innerHTML, /关联资产：测试资产（TEST · 测试账户）/);
+  assert.match(elements.noteReaderMeta.innerHTML, /data-open-linked-change-id="change-1"/);
+  assert.match(elements.noteReaderMeta.innerHTML, /关联交易：2026-05-28 · 买入 · 测试资产/);
+  assert.equal((elements.noteReaderMeta.innerHTML.match(/<button/g) || []).length, 2);
+  assert.doesNotMatch(elements.noteReaderMeta.innerHTML, /note-reader-meta-grid|note-evidence-card|当前资产信息|实现收益/);
 });
 
 test("review templates contain reflection prompts without system-owned asset facts", () => {

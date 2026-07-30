@@ -112,6 +112,8 @@ function renderAttributionInternal() {
     return;
   }
   setAnalysisAssetCardsVisible(true);
+  setAnalysisPortfolioCardsVisible(analysis.scope.supportsPortfolioComparisons);
+  renderSingleAssetScopeNotice(analysis);
   const convertedStart = convertUsdToDisplay(attribution.startValueCents);
   const convertedEnd = analysis.endValueCents;
   const convertedChange = analysis.valueChangeCents;
@@ -145,7 +147,28 @@ function setAnalysisAssetCardsVisible(isVisible) {
   });
 }
 
+function setAnalysisPortfolioCardsVisible(isVisible) {
+  document.querySelectorAll("[data-analysis-requires-multiple-assets]").forEach((card) => {
+    card.classList.toggle("is-hidden", !isVisible);
+  });
+}
+
+function renderSingleAssetScopeNotice(analysis) {
+  if (!analysisElements.analysisSingleAssetNoticeSection || !analysisElements.analysisSingleAssetNotice) return;
+  const isSingleAsset = analysis.scope.assetCount === 1;
+  analysisElements.analysisSingleAssetNoticeSection.classList.toggle("is-hidden", !isSingleAsset);
+  if (!isSingleAsset) {
+    analysisElements.analysisSingleAssetNotice.textContent = "";
+    return;
+  }
+  const assetName = analysis.portfolio.positions[0]?.name || "该资产";
+  analysisElements.analysisSingleAssetNotice.textContent =
+    `当前筛选范围仅包含 ${assetName}。集中度、收益贡献排行和组合暴露不适用于单项资产，以下保留收益、基准、回撤和数据质量检查。`;
+}
+
 function renderEmptyAnalysis() {
+  analysisElements.analysisSingleAssetNoticeSection?.classList.add("is-hidden");
+  if (analysisElements.analysisSingleAssetNotice) analysisElements.analysisSingleAssetNotice.textContent = "";
   if (analysisElements.analysisJudgementTitle) analysisElements.analysisJudgementTitle.textContent = "分析数据不足";
   if (analysisElements.analysisJudgementList) {
     analysisElements.analysisJudgementList.innerHTML = "<li>收益、回撤和归因仅用于记录与复盘，不构成投资建议。</li>";
@@ -178,16 +201,20 @@ function renderEmptyAnalysis() {
 
 function renderAnalysisJudgement(analysis) {
   if (!analysisElements.analysisJudgementTitle || !analysisElements.analysisJudgementList) return;
-  const riskHigh = analysis.exposure.highRiskBps >= 3000n || analysis.drawdown.maxDrawdownBps <= -1500n || analysis.concentration.status === "high";
+  const supportsPortfolioComparisons = analysis.scope.supportsPortfolioComparisons;
+  const riskHigh = analysis.drawdown.maxDrawdownBps <= -1500n
+    || (supportsPortfolioComparisons && (analysis.exposure.highRiskBps >= 3000n || analysis.concentration.status === "high"));
   const qualityOkay = analysis.realReturnBps >= 0n || analysis.investmentResultCents >= 0n;
-  analysisElements.analysisJudgementTitle.textContent = riskHigh
-    ? `AI 诊断看板：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
-    : `AI 诊断看板：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`;
+  analysisElements.analysisJudgementTitle.textContent = supportsPortfolioComparisons
+    ? riskHigh
+      ? `AI 诊断看板：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
+      : `AI 诊断看板：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`
+    : `单项资产检查：收益质量${qualityOkay ? "尚可" : "仍需观察"}，组合指标已停用。`;
   const cryptoBps = analysis.exposure.digitalBps;
   const cashBps = analysis.exposure.cashBps;
   const topDriver = topVolatileDriver(analysis);
   const yearChange = calculateTrendValueChangeForRange("ytd");
-  const items = [
+  const portfolioItems = [
     {
       tone: cryptoBps >= 500n ? "warning" : "ok",
       text: `数字资产占比 ${formatShare(cryptoBps)}，${cryptoBps >= 500n ? "高于稳健参考值" : "处于较低水平"}。`
@@ -205,6 +232,17 @@ function renderAnalysisJudgement(analysis) {
       text: `现金占比 ${formatShare(cashBps)}，${cashBps >= 2000n ? "仍有防守和再配置空间" : "防守缓冲相对有限"}。`
     }
   ];
+  const singleAssetItems = [
+    {
+      tone: analysis.drawdown.maxDrawdownBps <= -1500n ? "warning" : "ok",
+      text: `最大回撤 ${formatPercent(analysis.drawdown.maxDrawdownBps)}，${analysis.drawdown.maxDrawdownBps <= -1500n ? "波动较大" : "回撤仍在可观察范围"}。`
+    },
+    {
+      tone: yearChange !== null && yearChange >= 0n ? "ok" : "warning",
+      text: `今年收益${yearChange !== null && yearChange >= 0n ? "为正" : "仍需观察"}，请结合基准和数据完整性查看。`
+    }
+  ];
+  const items = supportsPortfolioComparisons ? portfolioItems : singleAssetItems;
   analysisElements.analysisJudgementList.innerHTML = items.map((item) => `
     <li class="analysis-diagnosis-item is-${escapeHtml(item.tone)}">
       ${analysisDiagnosisIcon(item.tone)}
@@ -252,22 +290,21 @@ function renderAnalysisHealthMetrics(analysis, topConcentration) {
       label: "最大回撤",
       value: formatPercent(analysis.drawdown.maxDrawdownBps),
       status: analysis.drawdown.maxDrawdownBps <= -1500n ? "high" : analysis.drawdown.maxDrawdownBps <= -800n ? "medium" : "low",
-      description: "历史高点到低点的最大跌幅，衡量组合波动压力。"
+      description: "历史高点到低点的最大跌幅，衡量当前范围的波动压力。"
     },
-    {
+    ...(analysis.scope.supportsPortfolioComparisons ? [{
       icon: "allocation",
       label: "数字资产占比",
       value: formatShare(cryptoBps),
       status: cryptoBps >= 3000n ? "high" : cryptoBps >= 1000n ? "medium" : "low",
       description: "数字资产通常波动更高，占比越高组合弹性和回撤都更大。"
-    },
-    {
+    }, {
       icon: "users",
       label: "Top 5 集中度",
       value: formatShare(analysis.concentration.top5WeightBps || topConcentration.top5WeightBps),
       status: analysis.concentration.status,
       description: "前五大持仓合计占比，反映组合是否依赖少数资产。"
-    },
+    }] : []),
   ];
   return metrics.map((metric) => `
     <article class="analysis-health-item ${analysisStatusClass(metric.status)} metric-${escapeHtml(metric.icon)}">
@@ -364,8 +401,13 @@ function renderAnalysisQuality(analysis) {
   if (analysisElements.analysisMonthlyReturnChart) {
     renderAnalysisReturnRows(analysis);
   }
-  analysisElements.analysisTopReturnAssets.innerHTML = renderTopReturnAssets(analysis);
-  renderContributionSummary(analysis);
+  if (analysis.scope.supportsPortfolioComparisons) {
+    analysisElements.analysisTopReturnAssets.innerHTML = renderTopReturnAssets(analysis);
+    renderContributionSummary(analysis);
+  } else {
+    analysisElements.analysisTopReturnAssets.innerHTML = "";
+    analysisElements.analysisContributionSummary.textContent = "";
+  }
 }
 
 function renderAnalysisReturnRows(analysis) {
@@ -408,10 +450,11 @@ function renderRiskAdjustedMetrics(analysis) {
   const coverage = metrics.observationCount >= 3
     ? `${metrics.observationCount} 个有效收益观测 · 典型间隔 ${metrics.intervalDays} 天`
     : `仅 ${metrics.observationCount} 个有效收益观测，至少需要 3 个`;
+  const reviewScope = analysis.scope.supportsPortfolioComparisons ? "组合复盘" : "单项资产复盘";
   analysisElements.analysisRiskAdjustedMetrics.innerHTML = `
     <article><span>年化波动率</span><strong>${escapeHtml(volatility)}</strong><small>按当前收益序列频率年化</small></article>
     <article><span>夏普比率（估算）</span><strong>${escapeHtml(sharpe)}</strong><small>暂按无风险利率 0% 计算</small></article>
-    <p><b>计算覆盖</b><span>${escapeHtml(coverage)}。趋势包含估算值时，本结果仅供组合复盘。</span></p>
+    <p><b>计算覆盖</b><span>${escapeHtml(coverage)}。趋势包含估算值时，本结果仅供${escapeHtml(reviewScope)}。</span></p>
   `;
 }
 

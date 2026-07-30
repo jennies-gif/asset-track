@@ -59,11 +59,11 @@ test("calculates yesterday pnl from aligned calendar-day history across markets"
     amountCents: 1000n,
     valuationDate: "2026-07-27",
     reason: "",
-    detail: "按昨日持仓与已缓存日线计算；跨币种按当前汇率估算"
+    detail: "按可用行情计算；跨币种为估算"
   });
 });
 
-test("does not publish yesterday pnl when either calendar-day price is missing", () => {
+test("publishes the known portion when another holding is missing daily prices", () => {
   configure([
     {
       type: "股票",
@@ -71,14 +71,28 @@ test("does not publish yesterday pnl when either calendar-day price is missing",
       purchaseDate: "2026-01-01",
       fxRate: "1",
       dailyPrices: [{ priceDate: "2026-07-27", closePrice: "105" }]
+    },
+    {
+      type: "基金",
+      quantity: "1",
+      purchaseDate: "2026-01-01",
+      fxRate: "1",
+      dailyPrices: [
+        { priceDate: "2026-07-26", closePrice: "10" },
+        { priceDate: "2026-07-27", closePrice: "12" }
+      ]
     }
   ]);
 
-  assert.equal(latestDailyPnlSnapshot("2026-07-28").amountCents, null);
-  assert.match(latestDailyPnlSnapshot("2026-07-28").reason, /行情尚未齐备/u);
+  assert.deepEqual(latestDailyPnlSnapshot("2026-07-28"), {
+    amountCents: 200n,
+    valuationDate: "2026-07-27",
+    reason: "",
+    detail: "按可用行情计算，另有 1 项未计入；跨币种为估算"
+  });
 });
 
-test("does not publish yesterday pnl when a transaction occurred yesterday", () => {
+test("calculates yesterday pnl for existing units when a transaction occurred yesterday", () => {
   configure([
     {
       type: "股票",
@@ -93,8 +107,7 @@ test("does not publish yesterday pnl when a transaction occurred yesterday", () 
     }
   ]);
 
-  assert.equal(latestDailyPnlSnapshot("2026-07-28").amountCents, null);
-  assert.match(latestDailyPnlSnapshot("2026-07-28").reason, /买卖记录/u);
+  assert.equal(latestDailyPnlSnapshot("2026-07-28").amountCents, 500n);
 });
 
 test("keeps an asset closed today in yesterday's pnl", () => {
@@ -117,7 +130,7 @@ test("keeps an asset closed today in yesterday's pnl", () => {
   assert.equal(latestDailyPnlSnapshot("2026-07-28").amountCents, 1000n);
 });
 
-test("does not invent yesterday pnl for a cash-only portfolio", () => {
+test("reports zero yesterday pnl for a cash-only portfolio", () => {
   configure([
     {
       type: "现金",
@@ -130,8 +143,76 @@ test("does not invent yesterday pnl for a cash-only portfolio", () => {
     }
   ]);
 
-  assert.equal(latestDailyPnlSnapshot("2026-07-28").amountCents, null);
-  assert.match(latestDailyPnlSnapshot("2026-07-28").reason, /纯现金组合/u);
+  assert.deepEqual(latestDailyPnlSnapshot("2026-07-28"), {
+    amountCents: 0n,
+    valuationDate: "2026-07-27",
+    reason: "",
+    detail: ""
+  });
+});
+
+test("excludes manually managed and failed holdings even when cached rows exist", () => {
+  configure([
+    {
+      type: "股票",
+      quantity: "1",
+      purchaseDate: "2026-01-01",
+      fxRate: "1",
+      priceStatus: "manual",
+      dailyPrices: [
+        { priceDate: "2026-07-26", closePrice: "100" },
+        { priceDate: "2026-07-27", closePrice: "120" }
+      ]
+    },
+    {
+      type: "基金",
+      quantity: "1",
+      purchaseDate: "2026-01-01",
+      fxRate: "1",
+      priceStatus: "error",
+      dailyPrices: [
+        { priceDate: "2026-07-26", closePrice: "10" },
+        { priceDate: "2026-07-27", closePrice: "12" }
+      ]
+    },
+    {
+      type: "ETF",
+      quantity: "1",
+      purchaseDate: "2026-01-01",
+      fxRate: "1",
+      priceStatus: "synced",
+      dailyPrices: [
+        { priceDate: "2026-07-26", closePrice: "50" },
+        { priceDate: "2026-07-27", closePrice: "55" }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(latestDailyPnlSnapshot("2026-07-28"), {
+    amountCents: 500n,
+    valuationDate: "2026-07-27",
+    reason: "",
+    detail: "按可用行情计算，另有 2 项未计入；跨币种为估算"
+  });
+});
+
+test("stays unavailable when every non-cash holding lacks usable market data", () => {
+  configure([
+    {
+      type: "股票",
+      quantity: "1",
+      purchaseDate: "2026-01-01",
+      priceStatus: "missing",
+      dailyPrices: []
+    }
+  ]);
+
+  assert.deepEqual(latestDailyPnlSnapshot("2026-07-28"), {
+    amountCents: null,
+    valuationDate: "2026-07-27",
+    reason: "1 项持仓行情不可用",
+    detail: ""
+  });
 });
 
 test("labels the metric as yesterday with its calendar date", () => {

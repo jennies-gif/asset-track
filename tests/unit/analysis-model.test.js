@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   annualizedAnalysisReturnBps,
+  buildAnalysisScope,
   buildAnalysisModel,
   configureAnalysisModel
 } from "../../src/features/analysis/analysisModel.js";
@@ -57,4 +58,14 @@ test("analysis model accepts a restored portfolio without cost basis", () => {
   assert.equal(analysis.returnBps, null);
   assert.equal(analysis.annualizedReturnBps, null);
   assert.equal(analysis.endValueCents, 22000n);
+  assert.deepEqual(analysis.scope, {
+    assetCount: 1,
+    supportsPortfolioComparisons: false
+  });
+});
+
+test("portfolio-relative analysis requires more than one holding", () => {
+  assert.equal(buildAnalysisScope([]).supportsPortfolioComparisons, false);
+  assert.equal(buildAnalysisScope([{}]).supportsPortfolioComparisons, false);
+  assert.equal(buildAnalysisScope([{}, {}]).supportsPortfolioComparisons, true);
 });

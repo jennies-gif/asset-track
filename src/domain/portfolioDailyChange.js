@@ -18,17 +18,7 @@ export function calculatePreviousCalendarDayChange({
   const previousDate = addDays(normalizedDate, -1);
   const marketAssets = assets.filter((asset) => !isCashAsset(asset));
   if (!marketAssets.length) {
-    return unavailable(normalizedDate, "纯现金组合没有昨日行情收益");
-  }
-
-  const transactionAssets = marketAssets.filter((asset) =>
-    hasTransactionOnDate(asset, normalizedDate)
-  );
-  if (transactionAssets.length) {
-    return unavailable(
-      normalizedDate,
-      `昨日有 ${transactionAssets.length} 项买卖记录，暂无法准确剔除交易资金影响`
-    );
+    return available(normalizedDate, 0n, "");
   }
 
   const valuationAssets = [];
@@ -36,6 +26,11 @@ export function calculatePreviousCalendarDayChange({
   for (const asset of marketAssets) {
     const quantity = quantityAtEndOfDate(asset, previousDate);
     if (!isPositiveUnits(quantity)) continue;
+
+    if (hasUnavailableMarketData(asset)) {
+      missingAssets.push(asset);
+      continue;
+    }
 
     const currentPrice = dailyPriceOnDate(asset, normalizedDate);
     const previousPrice = dailyPriceOnDate(asset, previousDate);
@@ -56,23 +51,21 @@ export function calculatePreviousCalendarDayChange({
     });
   }
 
-  if (missingAssets.length) {
-    return unavailable(
-      normalizedDate,
-      `${missingAssets.length} 项昨日或前一日行情尚未齐备`
-    );
-  }
   if (!valuationAssets.length) {
-    return unavailable(normalizedDate, "昨日没有可核对的非现金持仓");
+    return missingAssets.length
+      ? unavailable(normalizedDate, `${missingAssets.length} 项持仓行情不可用`)
+      : available(normalizedDate, 0n, "");
   }
 
   const { totals } = calculatePortfolio(valuationAssets);
-  return {
-    amountCents: totals.marketValueCents - totals.previousValueCents,
-    valuationDate: normalizedDate,
-    reason: "",
-    detail: "按昨日持仓与已缓存日线计算；跨币种按当前汇率估算"
-  };
+  const detail = missingAssets.length
+    ? `按可用行情计算，另有 ${missingAssets.length} 项未计入；跨币种为估算`
+    : "按可用行情计算；跨币种为估算";
+  return available(
+    normalizedDate,
+    totals.marketValueCents - totals.previousValueCents,
+    detail
+  );
 }
 
 export function quantityAtEndOfDate(asset, date) {
@@ -108,12 +101,10 @@ function dailyPriceOnDate(asset, date) {
   return positiveDecimal(matched?.closePrice || matched?.closeDecimal || matched?.close);
 }
 
-function hasTransactionOnDate(asset, date) {
-  if (normalizeDate(asset.purchaseDate) === date) return true;
-  return (Array.isArray(asset.buyRecords) ? asset.buyRecords : [])
-    .some((record) => normalizeDate(record.boughtAt) === date) ||
-    (Array.isArray(asset.sellRecords) ? asset.sellRecords : [])
-      .some((record) => normalizeDate(record.soldAt) === date);
+function hasUnavailableMarketData(asset) {
+  return ["manual", "missing", "error"].includes(
+    String(asset.priceStatus || "").trim().toLowerCase()
+  );
 }
 
 function isCashAsset(asset) {
@@ -150,5 +141,14 @@ function unavailable(valuationDate, reason) {
     valuationDate,
     reason,
     detail: ""
+  };
+}
+
+function available(valuationDate, amountCents, detail) {
+  return {
+    amountCents,
+    valuationDate,
+    reason: "",
+    detail
   };
 }

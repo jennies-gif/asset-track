@@ -67,7 +67,15 @@ test("analysis keeps benchmark comparison and its trend chart permanently visibl
   assert.match(analysisRenderSource, /renderAnalysisBenchmarkTrendChart\(analysis\);/u);
 });
 
-test("analysis keeps concentration and return contribution as adjacent persistent cards", async () => {
+test("analysis filters by account and market without exposing an individual asset selector", async () => {
+  const source = await readFile(resolve(projectRoot, "index.html"), "utf8");
+
+  assert.match(source, /<select id="analysis-account-filter"><\/select>/u);
+  assert.match(source, /<select id="analysis-market-filter"><\/select>/u);
+  assert.equal(source.includes('id="analysis-asset-filter"'), false);
+});
+
+test("analysis keeps concentration and return contribution as adjacent multi-asset cards", async () => {
   const source = await readFile(resolve(projectRoot, "index.html"), "utf8");
   const concentrationIndex = source.indexOf('id="analysis-concentration-title"');
   const contributionIndex = source.indexOf('id="analysis-contribution-title"');
@@ -78,15 +86,17 @@ test("analysis keeps concentration and return contribution as adjacent persisten
   assert.ok(concentrationIndex < contributionIndex);
   assert.ok(contributionIndex < attributionIndex);
   assert.equal(source.includes("<summary><span>资产贡献排行</span>"), false);
-  assert.match(source, /<section class="analysis-card"[^>]+aria-labelledby="analysis-contribution-title"/u);
+  assert.match(source, /data-analysis-requires-multiple-assets[^>]+aria-labelledby="analysis-contribution-title"/u);
+  assert.match(source, /id="analysis-single-asset-notice-section"/u);
 });
 
-test("analysis exposes the approved attribution hierarchy and opens risk details by default", async () => {
+test("analysis hides change attribution for the seed release and opens risk details by default", async () => {
   const [indexSource, analysisUiSource] = await Promise.all([
     readFile(resolve(projectRoot, "index.html"), "utf8"),
     readFile(resolve(projectRoot, "src/features/analysis/analysisUi.js"), "utf8")
   ]);
 
+  assert.match(indexSource, /<details class="analysis-card analysis-card-wide analysis-disclosure is-hidden" id="analysis-attribution-section" hidden>/u);
   assert.match(indexSource, /<details class="analysis-card analysis-disclosure" data-analysis-requires-assets open>/u);
   assert.match(indexSource, /class="analysis-detail-metrics" id="analysis-concentration-metrics"/u);
   assert.match(indexSource, /class="analysis-detail-metrics" id="analysis-risk-metrics"/u);
@@ -94,10 +104,14 @@ test("analysis exposes the approved attribution hierarchy and opens risk details
 });
 
 test("mobile interaction rules preserve 44px touch targets", async () => {
-  const source = await readFile(resolve(projectRoot, "src/styles/210-spacing-breathing.css"), "utf8");
+  const [spacingSource, analysisSource] = await Promise.all([
+    readFile(resolve(projectRoot, "src/styles/210-spacing-breathing.css"), "utf8"),
+    readFile(resolve(projectRoot, "src/styles/180-analysis-alert.css"), "utf8")
+  ]);
 
-  assert.match(source, /@media \(max-width: 900px\)[\s\S]*?\.primary-button,[\s\S]*?min-height: 44px;/u);
-  assert.match(source, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/u);
+  assert.match(spacingSource, /@media \(max-width: 900px\)[\s\S]*?\.primary-button,[\s\S]*?min-height: 44px;/u);
+  assert.match(spacingSource, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/u);
+  assert.match(analysisSource, /@media \(max-width: 900px\)[\s\S]*?#analysis-panel \.analysis-focus-grid > \.analysis-card \{\s*grid-column: 1 \/ -1;/u);
 });
 
 test("asset rows and the edit form expose accessible delete actions without overlapping search results", async () => {

@@ -7,6 +7,8 @@ export function getAnalysisElements() {
     analysisHealthList: document.querySelector("#analysis-health-list"),
     stageComparisonGrid: document.querySelector("#stage-comparison-grid"),
     analysisDataNoticeSection: document.querySelector("#analysis-data-notice-section"),
+    analysisSingleAssetNoticeSection: document.querySelector("#analysis-single-asset-notice-section"),
+    analysisSingleAssetNotice: document.querySelector("#analysis-single-asset-notice"),
     analysisQualityMetrics: document.querySelector("#analysis-quality-metrics"),
     analysisMonthlyReturnChart: document.querySelector("#analysis-monthly-return-chart"),
     analysisRiskAdjustedMetrics: document.querySelector("#analysis-risk-adjusted-metrics"),
@@ -22,7 +24,8 @@ export function getAnalysisElements() {
     analysisConcentrationNote: document.querySelector("#analysis-concentration-note"),
     analysisCashflowChart: document.querySelector("#analysis-cashflow-chart"),
     analysisAccountFilter: document.querySelector("#analysis-account-filter"),
-    analysisAssetFilter: document.querySelector("#analysis-asset-filter"),
+    analysisMarketFilterField: document.querySelector("#analysis-market-filter-field"),
+    analysisMarketFilter: document.querySelector("#analysis-market-filter"),
     analysisStart: document.querySelector("#analysis-start"),
     analysisEnd: document.querySelector("#analysis-end"),
     analysisRangeSummary: document.querySelector("#analysis-range-summary")

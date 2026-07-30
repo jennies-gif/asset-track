@@ -383,6 +383,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  #analysis-panel .analysis-focus-grid > .analysis-card {
+    grid-column: 1 / -1;
+  }
+
   #analysis-panel .analysis-range-field,
   #analysis-panel .analysis-filter .filter-summary {
     grid-column: 1 / -1;

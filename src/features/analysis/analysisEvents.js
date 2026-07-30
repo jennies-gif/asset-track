@@ -19,16 +19,16 @@ export function initAnalysisEvents({
     const nextFilter = {
       ...getAnalysisFilter(),
       account: elements.analysisAccountFilter.value || "all",
-      assetId: "all"
+      market: "all"
     };
     setAnalysisFilter(withRecordBoundsForScope(nextFilter));
     renderAttribution();
   });
 
-  elements.analysisAssetFilter?.addEventListener("change", () => {
+  elements.analysisMarketFilter?.addEventListener("change", () => {
     const nextFilter = {
       ...getAnalysisFilter(),
-      assetId: elements.analysisAssetFilter.value || "all"
+      market: elements.analysisMarketFilter.value || "all"
     };
     setAnalysisFilter(withRecordBoundsForScope(nextFilter));
     renderAttribution();
