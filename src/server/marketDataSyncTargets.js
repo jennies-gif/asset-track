@@ -24,6 +24,10 @@ export async function registerMarketDataSyncTargets(marketStorageDir, targets) {
     byKey.set(key, {
       ...current,
       ...target,
+      historyLookbackDays: Math.max(
+        normalizeHistoryLookbackDays(current?.historyLookbackDays),
+        normalizeHistoryLookbackDays(target.historyLookbackDays)
+      ),
       firstRequestedAt: current?.firstRequestedAt || target.requestedAt,
       lastRequestedAt: target.requestedAt,
       status: "active",
@@ -81,10 +85,19 @@ function dedupeSyncTargets(targets) {
       symbol,
       market,
       sourceType: current?.sourceType === "benchmark" || target.sourceType === "benchmark" ? "benchmark" : "user_requested",
+      historyLookbackDays: Math.max(
+        normalizeHistoryLookbackDays(current?.historyLookbackDays),
+        normalizeHistoryLookbackDays(target.historyLookbackDays)
+      ),
       requestedAt: target.requestedAt || new Date().toISOString()
     });
   }
   return [...byKey.values()];
+}
+
+function normalizeHistoryLookbackDays(value) {
+  const days = Number(value);
+  return Number.isInteger(days) && days > 0 ? Math.min(days, 36500) : 7;
 }
 
 function syncTargetsFile(marketStorageDir) {

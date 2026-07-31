@@ -14,8 +14,30 @@ services:
       - key: MARKET_DATA_DIR
         value: storage/market-data
       - key: MARKET_DAILY_SYNC_ENABLED
-        value: true
+        value: false
+      - key: MARKET_CRON_SECRET
+        generateValue: true
       - key: API_ALLOWED_ORIGINS
         sync: false
       - key: DATABASE_URL
         sync: false
+  - type: cron
+    name: asset-trail-market-daily-sync
+    runtime: node
+    plan: starter
+    schedule: "0 14 * * *"
+    buildCommand: npm install
+    startCommand: npm run data:scheduled-sync
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: MARKET_API_HOSTPORT
+        fromService:
+          type: web
+          name: asset-trail-api
+          property: hostport
+      - key: MARKET_CRON_SECRET
+        fromService:
+          type: web
+          name: asset-trail-api
+          envVarKey: MARKET_CRON_SECRET

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { URL } from "node:url";
 import { execFile } from "node:child_process";
+import { timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -63,6 +64,7 @@ const dailySyncMinute = Number(process.env.MARKET_DAILY_SYNC_MINUTE || "0");
 const dailySyncEnabled = process.env.MARKET_DAILY_SYNC_ENABLED !== "false";
 const draftLookupForceRefreshEnabled = process.env.MARKET_DRAFT_LOOKUP_FORCE_REFRESH_ENABLED !== "false";
 const privateAssetCloudSyncEnabled = process.env.PRIVATE_ASSET_CLOUD_SYNC_ENABLED === "true";
+const marketCronSecret = String(process.env.MARKET_CRON_SECRET || "");
 const privateAssetApiPaths = new Set([
   "/api/accounts",
   "/api/assets",
@@ -174,6 +176,9 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/market-data/fx-rates") return getFxRates(url, response);
     if (request.method === "POST" && url.pathname === "/api/market-data/fetch-recent") return fetchRecentMarketData(request, response);
     if (request.method === "POST" && url.pathname === "/api/market-data/sync-daily") return syncDailyMarketData(request, response);
+    if (request.method === "POST" && url.pathname === "/api/market-data/scheduled-sync") {
+      return runScheduledMarketDataSyncRequest(request, response);
+    }
     if (request.method === "GET" && url.pathname === "/api/market-data/tasks") return listMarketTasks(response);
     if (request.method === "POST" && url.pathname === "/api/market-data/tasks/backfill") return createBackfillTask(request, response);
     if (request.method === "POST" && url.pathname === "/api/attribution/runs") return createAttributionRun(request, response);
@@ -500,6 +505,23 @@ async function syncDailyMarketData(request, response) {
   }
 }
 
+async function runScheduledMarketDataSyncRequest(request, response) {
+  if (!marketCronSecret) {
+    return sendError(response, 503, "scheduled_sync_not_configured", "每日行情任务尚未配置安全密钥");
+  }
+  const providedSecret = String(request.headers["x-market-cron-secret"] || "");
+  if (!safeSecretEqual(providedSecret, marketCronSecret)) {
+    return sendError(response, 401, "scheduled_sync_unauthorized", "每日行情任务认证失败");
+  }
+  try {
+    return sendJson(response, await runScheduledMarketDataSync(), 202);
+  } catch (error) {
+    const message = errorMessage(error, "每日行情任务失败");
+    console.error(`[market-data] scheduled sync failed: ${message}`);
+    return sendError(response, 502, "scheduled_sync_failed", message);
+  }
+}
+
 async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {}) {
   const requestedSymbols = parseSymbols(body.symbols || body.symbol).map(canonicalMarketSymbol);
   const clientAssets = !options.publicOnly && Array.isArray(body.assets) ? body.assets.map(normalizeAsset).filter((asset) => asset.symbol) : [];
@@ -535,6 +557,7 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
   let dailyPriceGapCount = 0;
 
   const requestedSymbolSet = new Set(requestedSymbols);
+  const historyLookbackDays = Math.max(1, Math.min(maxPublicHistoryWindowDays, Number(body.days || 7)));
   const targetsToRegister = candidates
     .filter((asset) => (
       (trigger !== "scheduled" && requestedSymbolSet.has(canonicalMarketSymbol(asset.symbol))) ||
@@ -544,13 +567,14 @@ async function runDailyMarketDataSync(body = {}, trigger = "manual", options = {
       symbol: canonicalMarketSymbol(asset.symbol),
       market: asset.market || "UNKNOWN",
       sourceType: isBenchmarkSymbol(asset.symbol) ? "benchmark" : "user_requested",
+      historyLookbackDays,
       requestedAt: syncedAt
     }));
   if (targetsToRegister.length && options.registerTargets !== false) {
     await registerMarketDataSyncTargets(marketStorageDir, targetsToRegister);
   }
   const historyDateTo = normalizeDateParam(body.dateTo) || (body.autoFetch === false ? "" : todayIsoDate());
-  const fallbackHistoryDays = Math.max(1, Number(body.days || 7));
+  const fallbackHistoryDays = historyLookbackDays;
   const historyDateFrom = normalizeDateParam(body.dateFrom) ||
     (body.autoFetch === false
       ? earliestAssetHistoryDate(stateCandidates) || addDays(historyDateTo || todayIsoDate(), -fallbackHistoryDays + 1)
@@ -816,16 +840,7 @@ function scheduleDailyMarketSync() {
   console.log(`Next daily market data sync scheduled at ${nextRunAt.toLocaleString()} local time`);
   setTimeout(async () => {
     try {
-      const syncTargets = await loadMarketDataSyncTargets(marketStorageDir);
-      const symbols = syncTargets
-        .filter((target) => target.sourceType !== "benchmark")
-        .map((target) => canonicalMarketSymbol(target.symbol))
-        .filter(Boolean);
-      const result = await runDailyMarketDataSync(
-        { ...(symbols.length ? { symbols } : {}), includeBenchmarks: true },
-        "scheduled",
-        { publicOnly: !privateAssetCloudSyncEnabled }
-      );
+      const result = await runScheduledMarketDataSync();
       console.log(
         `Daily market data sync finished: ${result.summary.syncedCount} synced, ${result.summary.missingCount} missing`
       );
@@ -839,6 +854,28 @@ function scheduleDailyMarketSync() {
   }, delayMs);
 }
 
+async function runScheduledMarketDataSync() {
+  const syncTargets = await loadMarketDataSyncTargets(marketStorageDir);
+  const symbols = syncTargets
+    .filter((target) => target.sourceType !== "benchmark")
+    .map((target) => canonicalMarketSymbol(target.symbol))
+    .filter(Boolean);
+  const historyLookbackDays = syncTargets.reduce(
+    (maximum, target) => Math.max(maximum, Number(target.historyLookbackDays || 7)),
+    7
+  );
+  return runDailyMarketDataSync(
+    {
+      ...(symbols.length ? { symbols } : {}),
+      days: Math.min(maxPublicHistoryWindowDays, historyLookbackDays),
+      includeBenchmarks: true,
+      autoFetch: true
+    },
+    "scheduled",
+    { publicOnly: !privateAssetCloudSyncEnabled }
+  );
+}
+
 function nextDailySyncAt(now, hour, minute) {
   const safeHour = Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 22;
   const safeMinute = Number.isInteger(minute) && minute >= 0 && minute <= 59 ? minute : 0;
@@ -846,6 +883,14 @@ function nextDailySyncAt(now, hour, minute) {
   next.setHours(safeHour, safeMinute, 0, 0);
   if (next <= now) next.setDate(next.getDate() + 1);
   return next;
+}
+
+function safeSecretEqual(provided, expected) {
+  const providedBuffer = Buffer.from(String(provided || ""));
+  const expectedBuffer = Buffer.from(String(expected || ""));
+  return providedBuffer.length > 0 &&
+    providedBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 async function fetchRecentMarketDataRun(body, options = {}) {

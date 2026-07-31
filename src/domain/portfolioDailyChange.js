@@ -27,11 +27,6 @@ export function calculatePreviousCalendarDayChange({
     const quantity = quantityAtEndOfDate(asset, previousDate);
     if (!isPositiveUnits(quantity)) continue;
 
-    if (hasUnavailableMarketData(asset)) {
-      missingAssets.push(asset);
-      continue;
-    }
-
     const currentPrice = dailyPriceOnDate(asset, normalizedDate);
     const previousPrice = dailyPriceOnDate(asset, previousDate);
     if (!currentPrice || !previousPrice) {
@@ -99,12 +94,6 @@ function dailyPriceOnDate(asset, date) {
   const matched = (Array.isArray(asset.dailyPrices) ? asset.dailyPrices : [])
     .find((row) => normalizeDate(row.priceDate || row.date) === date);
   return positiveDecimal(matched?.closePrice || matched?.closeDecimal || matched?.close);
-}
-
-function hasUnavailableMarketData(asset) {
-  return ["manual", "missing", "error"].includes(
-    String(asset.priceStatus || "").trim().toLowerCase()
-  );
 }
 
 function isCashAsset(asset) {

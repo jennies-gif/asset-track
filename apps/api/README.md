@@ -26,7 +26,7 @@ http://127.0.0.1:4180
 API_HOST=0.0.0.0 npm run api:start
 ```
 
-服务启动后默认按本机时区每天 `22:00` 自动执行一次行情同步，更新已登记的公共行情同步目标和全部分析基准。可用 `MARKET_DAILY_SYNC_HOUR`、`MARKET_DAILY_SYNC_MINUTE` 调整时间，或用 `MARKET_DAILY_SYNC_ENABLED=false` 关闭。
+服务启动后默认按本机时区每天 `22:00` 自动执行一次行情同步，更新已登记的公共行情同步目标和全部分析基准。可用 `MARKET_DAILY_SYNC_HOUR`、`MARKET_DAILY_SYNC_MINUTE` 调整时间，或用 `MARKET_DAILY_SYNC_ENABLED=false` 关闭。Render Blueprint 会关闭该进程内定时器，改由每天 `14:00 UTC` 的平台 Cron 使用私网和 `MARKET_CRON_SECRET` 调用受保护的计划任务入口。
 
 ## 线上部署
 
@@ -62,6 +62,7 @@ MARKET_DAILY_SYNC_ENABLED=true
 - `GET /api/market-data/fx-rates?base=USD&quote=CNY`
 - `POST /api/market-data/fetch-recent`
 - `POST /api/market-data/sync-daily`：按公共代码同步最新行情；只接受 `symbols`、`trigger`、`days`、`includeHistory`、`includeBenchmarks`、`autoFetch`。不接收首次持有日期、账户、资产 ID、数量、成本或备注；请求代码会登记为不关联用户的公共行情同步目标。
+- `POST /api/market-data/scheduled-sync`：仅供平台 Cron 使用；必须提供正确的 `X-Market-Cron-Secret`。读取已登记公共目标及其最大匿名历史窗口，不接收用户资产负载。
 - `GET /api/asset-prices/daily`：私人资产 API，种子版默认关闭；主入口读取本地 `dailyPrices`。
 - `GET /api/market-data/tasks`：私人资产 API，种子版默认关闭。
 - `POST /api/market-data/tasks/backfill`：私人资产 API，种子版默认关闭。

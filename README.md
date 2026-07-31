@@ -126,6 +126,8 @@ Render Blueprint 默认会：
 5. 将其中的 `[YOUR-PASSWORD]` 替换为项目数据库密码。
 6. 粘贴到 Render 的 `DATABASE_URL` 环境变量。
 
+Blueprint 部署会关闭 Web 进程内定时器，并创建 `asset-trail-market-daily-sync` Render Cron。Cron 每天 `14:00 UTC`（北京时间 `22:00`）通过 Render 私网调用 API；`MARKET_CRON_SECRET` 由 Render 自动生成并在两个服务间共享。Cron 失败会以非零状态进入 Render 运行记录和失败通知。
+
 API 服务部署成功后，确认健康检查：
 
 ```text
@@ -236,7 +238,7 @@ npm run api:start
 http://localhost:4180/api/health
 ```
 
-API 常驻运行时会默认按本机时区每天 `22:00` 执行一次价格同步，更新已登记的公共行情同步目标和全部分析基准；首次历史回补窗口由浏览器根据本地最早持有日期计算。系统不会抓取完整资产资源库。可用环境变量调整或关闭：
+本地 API 常驻运行时默认按本机时区每天 `22:00` 执行一次价格同步；Render 生产环境使用 Blueprint 中的平台 Cron。两种方式都会更新已登记的公共行情同步目标和全部分析基准，并使用服务端保存的最大匿名历史窗口修复首端或尾端缺口。首次历史窗口仍由浏览器根据本地最早持有日期计算。系统不会抓取完整资产资源库。可用环境变量调整或关闭进程内调度：
 
 ```bash
 MARKET_DAILY_SYNC_HOUR=22 MARKET_DAILY_SYNC_MINUTE=0 npm run api:start

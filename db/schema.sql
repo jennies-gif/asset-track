@@ -358,6 +358,7 @@ create table market_data_sync_targets (
   symbol text not null,
   market text not null,
   source_type text not null default 'user_requested',
+  history_lookback_days integer not null default 7,
   status text not null default 'active',
   first_requested_at timestamptz not null default now(),
   last_requested_at timestamptz not null default now(),
@@ -367,6 +368,7 @@ create table market_data_sync_targets (
   updated_at timestamptz not null default now(),
   primary key (market, symbol),
   check (source_type in ('user_requested', 'benchmark')),
+  check (history_lookback_days between 1 and 36500),
   check (status in ('active', 'error'))
 );
 

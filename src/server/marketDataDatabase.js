@@ -372,22 +372,32 @@ export async function upsertMarketDataSyncTargets(targets = []) {
     await pool.query(
       `
         insert into market_data_sync_targets (
-          symbol, market, source_type, status, first_requested_at,
+          symbol, market, source_type, history_lookback_days, status, first_requested_at,
           last_requested_at, updated_at
         )
-        values ($1, $2, $3, 'active', $4::timestamptz, $4::timestamptz, now())
+        values ($1, $2, $3, $4, 'active', $5::timestamptz, $5::timestamptz, now())
         on conflict (market, symbol)
         do update set
           source_type = case
             when market_data_sync_targets.source_type = 'benchmark' then 'benchmark'
             else excluded.source_type
           end,
+          history_lookback_days = greatest(
+            market_data_sync_targets.history_lookback_days,
+            excluded.history_lookback_days
+          ),
           status = 'active',
           last_requested_at = excluded.last_requested_at,
           last_error = null,
           updated_at = now()
       `,
-      [target.symbol, target.market, target.sourceType || "user_requested", target.requestedAt || new Date().toISOString()]
+      [
+        target.symbol,
+        target.market,
+        target.sourceType || "user_requested",
+        Math.max(1, Math.min(36500, Number(target.historyLookbackDays || 7))),
+        target.requestedAt || new Date().toISOString()
+      ]
     );
   }
   return true;
@@ -399,7 +409,7 @@ export async function readMarketDataSyncTargets() {
   await ensureMarketDataSchema(pool);
   const result = await pool.query(
     `
-      select symbol, market, source_type, status, first_requested_at,
+      select symbol, market, source_type, history_lookback_days, status, first_requested_at,
         last_requested_at, last_synced_at, last_error
       from market_data_sync_targets
       order by market asc, symbol asc
@@ -409,6 +419,7 @@ export async function readMarketDataSyncTargets() {
     symbol: row.symbol,
     market: row.market,
     sourceType: row.source_type,
+    historyLookbackDays: Number(row.history_lookback_days || 7),
     status: row.status,
     firstRequestedAt: row.first_requested_at,
     lastRequestedAt: row.last_requested_at,
@@ -861,6 +872,7 @@ async function createMarketDataSchema(pool) {
       symbol text not null,
       market text not null,
       source_type text not null default 'user_requested',
+      history_lookback_days integer not null default 7,
       status text not null default 'active',
       first_requested_at timestamptz not null default now(),
       last_requested_at timestamptz not null default now(),
@@ -870,6 +882,7 @@ async function createMarketDataSchema(pool) {
       updated_at timestamptz not null default now(),
       primary key (market, symbol),
       check (source_type in ('user_requested', 'benchmark')),
+      check (history_lookback_days between 1 and 36500),
       check (status in ('active', 'error'))
     );
 

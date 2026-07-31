@@ -283,7 +283,7 @@
 
 ### `POST /api/market-data/sync-daily`
 
-用途：同步最新公共行情，也可按公共窗口返回历史行情。浏览器不发送首次持有日期，而是根据本地最早持有日期计算 `days`；返回的公共历史行情由浏览器在本地结合 `purchaseDate` 生成每日价格。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 会把请求代码登记为不关联用户的公共行情同步目标，不保存数量、成本、账户、交易、备注或精确持有日期。服务常驻运行时默认按本机时区每天 `22:00` 同步这些目标和全部系统分析基准。
+用途：同步最新公共行情，也可按公共窗口返回历史行情。浏览器不发送首次持有日期，而是根据本地最早持有日期计算 `days`；返回的公共历史行情由浏览器在本地结合 `purchaseDate` 生成每日价格。传入 `"autoFetch": false` 时只读取已有缓存，不访问外部数据源。API 会把请求代码登记为不关联用户的公共行情同步目标，并保留该代码曾请求的最大匿名历史窗口；不保存数量、成本、账户、交易、备注或精确持有日期。本地服务可使用进程内计划任务；Render 生产环境使用平台 Cron。
 
 请求：
 
@@ -306,7 +306,7 @@ HTTP 请求字段采用白名单，只允许：
 
 任何其他字段返回 `400 request_field_not_allowed`。尤其不接受 `assets`、`assetId`、`account`、`purchaseDate`、`dateFrom`、`dateTo`、数量、成本或备注。
 
-用户触发的代码不会写入 `market_data_runs.requested_symbols`、运行记录或运行记录的 `raw_payload`。代码会单独写入 `market_data_sync_targets`，只作为不关联用户的公共行情维护集合；该表不得保存 `userId`、资产 ID、数量、成本、账户、交易、备注或持有日期。
+用户触发的代码不会写入 `market_data_runs.requested_symbols`、运行记录或运行记录的 `raw_payload`。代码会单独写入 `market_data_sync_targets`，只作为不关联用户的公共行情维护集合；`history_lookback_days` 只保存同一公共代码曾请求的最大窗口天数。该表不得保存 `userId`、资产 ID、数量、成本、账户、交易、备注或持有日期。
 
 如果请求包含白名单外字段，API 返回：
 
@@ -357,6 +357,12 @@ HTTP 请求字段采用白名单，只允许：
 - `failed`：本轮抓取流程整体失败，API 尝试回退读取已有公共缓存。
 
 股票、ETF、指数和基金的日频当前价必须先按 `tradeDate` 或 `navDate` 选择最新日期；`sourceFetchedAt` 只用于同一价格日期内的版本比较，不能让较晚抓取的旧交易日覆盖较新的交易日。
+
+### `POST /api/market-data/scheduled-sync`
+
+用途：仅供平台 Cron 执行无人访问时的每日公共行情维护。请求必须携带服务端配置的 `X-Market-Cron-Secret`；未配置返回 `503`，认证失败返回 `401`。
+
+任务读取 `market_data_sync_targets`，按目标集合中的最大 `history_lookback_days` 检查公共缓存首端与尾端缺口，并同步全部系统分析基准。请求不接受或读取用户资产负载，响应与 `sync-daily` 使用相同的运行摘要。浏览器端不得调用该接口。
 
 ### `POST /api/market-data/fetch-recent`
 

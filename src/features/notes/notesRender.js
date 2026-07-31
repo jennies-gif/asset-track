@@ -143,8 +143,6 @@ export function showNoteReader(id, options = {}) {
     linkedAsset,
     linkedChange
   });
-  elements.noteReaderAsset.innerHTML = "";
-  elements.noteReaderAsset.classList.add("is-hidden");
   elements.noteReaderContent.innerHTML = renderNoteContent(note);
   elements.notesEditor.classList.add("is-hidden");
   elements.notesReader.classList.remove("is-hidden");

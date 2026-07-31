@@ -163,6 +163,10 @@ export function calculateSellPreview({
 export function normalizeAsset(formAsset) {
   const priceStatus = String(formAsset.priceStatus || (formAsset.currentPrice ? "manual" : "pending")).trim();
   const hasCostPrice = Number(String(formAsset.costPrice || "0").trim()) > 0;
+  const symbol = String(formAsset.symbol || "").trim().toUpperCase();
+  const type = String(formAsset.type || "其他").trim();
+  const market = String(formAsset.market || "").trim();
+  const needsMarketRegistration = Boolean(symbol) && type !== "现金" && market.toUpperCase() !== "CASH";
   const priceSource = formAsset.priceSource !== undefined
     ? String(formAsset.priceSource).trim()
     : priceStatus === "manual"
@@ -171,9 +175,9 @@ export function normalizeAsset(formAsset) {
   return {
     id: formAsset.id || cryptoRandomId(),
     name: String(formAsset.name || "").trim(),
-    symbol: String(formAsset.symbol || "").trim().toUpperCase(),
-    type: String(formAsset.type || "其他").trim(),
-    market: String(formAsset.market || "").trim(),
+    symbol,
+    type,
+    market,
     account: String(formAsset.account || "").trim(),
     accountType: String(formAsset.accountType || "securities").trim(),
     currency: String(formAsset.currency || "USD").trim(),
@@ -210,6 +214,15 @@ export function normalizeAsset(formAsset) {
     dailyPrices: normalizeDailyPriceRows(formAsset.dailyPrices),
     dailyPriceStatus: String(formAsset.dailyPriceStatus || "").trim(),
     dailyPriceMissingDates: Array.isArray(formAsset.dailyPriceMissingDates) ? formAsset.dailyPriceMissingDates.map((date) => String(date).slice(0, 10)).filter(Boolean) : [],
+    historyBackfillStatus: String(formAsset.historyBackfillStatus || "").trim(),
+    historyBackfillUpdatedAt: String(formAsset.historyBackfillUpdatedAt || "").trim(),
+    historyBackfillError: String(formAsset.historyBackfillError || "").trim(),
+    marketSyncRegistrationStatus: String(
+      formAsset.marketSyncRegistrationStatus || (needsMarketRegistration ? "pending" : "")
+    ).trim(),
+    marketSyncRegistrationAttemptedAt: String(formAsset.marketSyncRegistrationAttemptedAt || "").trim(),
+    marketSyncRegistrationConfirmedAt: String(formAsset.marketSyncRegistrationConfirmedAt || "").trim(),
+    marketSyncRegistrationError: String(formAsset.marketSyncRegistrationError || "").trim(),
     attachmentName: String(formAsset.attachmentName || "").trim(),
     buyReason: String(formAsset.buyReason || "").trim(),
     upsideReasons: String(formAsset.upsideReasons || "").trim(),

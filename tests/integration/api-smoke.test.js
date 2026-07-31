@@ -286,6 +286,7 @@ test("api skeleton serves health, positions and attribution", async () => {
       API_PORT: String(port),
       MARKET_DATA_DIR: marketDataDir,
       MARKET_DAILY_SYNC_ENABLED: "false",
+      MARKET_CRON_SECRET: "integration-test-cron-secret",
       MARKET_DRAFT_LOOKUP_FORCE_REFRESH_ENABLED: "false"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -388,9 +389,18 @@ test("api skeleton serves health, positions and attribution", async () => {
     assert.equal(sync.results[0].dailyPrices.length, 0);
     const registeredTargets = JSON.parse(await fs.readFile(path.join(marketDataDir, "sync-targets.json"), "utf8"));
     assert.deepEqual(
-      registeredTargets.map((target) => ({ symbol: target.symbol, market: target.market, sourceType: target.sourceType })),
-      [{ symbol: "00700", market: "HK", sourceType: "user_requested" }]
+      registeredTargets.map((target) => ({
+        symbol: target.symbol,
+        market: target.market,
+        sourceType: target.sourceType,
+        historyLookbackDays: target.historyLookbackDays
+      })),
+      [{ symbol: "00700", market: "HK", sourceType: "user_requested", historyLookbackDays: 7 }]
     );
+
+    const unauthorizedScheduledSync = await rawPostJson("/api/market-data/scheduled-sync", {});
+    assert.equal(unauthorizedScheduledSync.status, 401);
+    assert.equal(unauthorizedScheduledSync.body.code, "scheduled_sync_unauthorized");
 
     const legacyListedEtfSync = await postJson("/api/market-data/sync-daily", {
       symbols: ["513050.OF", "513050"],
@@ -416,6 +426,11 @@ test("api skeleton serves health, positions and attribution", async () => {
       autoFetch: false
     });
     assert.equal(longHistoryWindow.summary.syncedCount, 1);
+    const targetsAfterLongWindow = JSON.parse(await fs.readFile(path.join(marketDataDir, "sync-targets.json"), "utf8"));
+    assert.equal(
+      targetsAfterLongWindow.find((target) => target.symbol === "00700")?.historyLookbackDays,
+      1097
+    );
 
     const dailyPrices = await rawGetJson("/api/asset-prices/daily?assetId=asset-00700");
     assert.equal(dailyPrices.status, 403);

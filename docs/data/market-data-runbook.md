@@ -45,7 +45,7 @@ storage/market-data/
 
 当前根目录静态种子版在新增资产后调用 `/api/market-data/sync-daily` 执行公共行情“确保覆盖”：仅发送代码和由本地最早持有日期计算出的历史天数，不发送精确持有日期、数量、成本、账户或备注。服务端先读取按代码共享的公共行情缓存；缓存已覆盖请求区间时不重复抓取，只在首端或尾端存在缺口时增量抓取。长区间会按数据源限制分段请求。响应中的公共历史价格回到浏览器后，按本地资产生成每日价格并刷新趋势。
 
-API 会把请求代码登记到 `market_data_sync_targets`，作为不关联用户的公共行情同步目标。该集合只保存代码、市场和同步状态，不保存用户身份或私人资产明细；PostgreSQL 是线上持久化来源，本地开发回退到 `storage/market-data/sync-targets.json`。
+API 会把请求代码登记到 `market_data_sync_targets`，作为不关联用户的公共行情同步目标。该集合保存代码、市场、同步状态和曾请求的最大匿名历史窗口天数，不保存用户身份、精确持有日期或私人资产明细；PostgreSQL 是线上持久化来源，本地开发回退到 `storage/market-data/sync-targets.json`。浏览器在登记失败时保留本地 `pending` 状态，并在冷却时间后或下次打开时重试。
 
 `POST /api/market-data/tasks/backfill` 保留给未来启用云端资产同步后的异步任务模式：
 
@@ -85,7 +85,7 @@ npm run data:process-backfill-tasks -- --limit=5 --dry-run=true
 设置 `DATABASE_URL` 后，行情抓取脚本和 API 同步都会写入 `market_data_runs`：
 
 - `data:daily`、`data:backfill` 和资源库同步脚本记录脚本级运行结果。
-- `POST /api/market-data/sync-daily` 记录 `sync-daily:manual` 或 `sync-daily:scheduled`。
+- `POST /api/market-data/sync-daily` 记录手动、自动或新增资产触发的同步；平台 Cron 通过受保护的 `POST /api/market-data/scheduled-sync` 记录 `sync-daily:scheduled`。
 - `success_count` 表示成功同步的资产数量，`failure_count` 表示缺少可用价格缓存的资产数量，`requested_symbols` 保存本次触达的去重代码。
 - 这张表用于排查 Render 定时任务、用户手动同步和外部数据源失败，不存用户持仓明细。
 
@@ -103,17 +103,20 @@ npm run data:process-backfill-tasks -- --limit=5 --dry-run=true
 
 ```text
 db/migrations/20260725_market_data_sync_targets.sql
+db/migrations/20260731_market_data_sync_target_history_window.sql
 ```
 
 不要对已有生产实例直接执行完整 `db/schema.sql`。迁移完成后，使用 Render API 实际 `DATABASE_URL` 对应的数据库角色运行只读检查：
 
 ```text
 db/verification/20260725_market_data_sync_targets.sql
+db/verification/20260731_market_data_sync_target_history_window.sql
 ```
 
 必须确认：
 
 - 表和 `market_data_sync_targets_status_idx` 已存在；
+- `history_lookback_days` 已存在、范围为 1–36500，且只表示公共代码的匿名历史维护窗口；迁移会按现有公共价格缓存最早日期初始化旧目标，不读取私人资产表；
 - RLS 已启用且没有向浏览器端开放写入 policy；
 - API 数据库角色具备 `SELECT`、`INSERT` 和 `UPDATE` 权限；
 - 表中不包含用户 ID、资产 ID、数量、成本、账户、交易、备注或持有日期。

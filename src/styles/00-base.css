@@ -1691,24 +1691,8 @@ small {
 }
 
 .note-reader-card h2,
-.note-reader-asset,
 .note-reader-content {
   max-width: 100%;
-}
-
-.note-reader-asset {
-  width: fit-content;
-  max-width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.note-reader-asset b {
-  color: var(--primary);
 }
 
 .note-reader-content {

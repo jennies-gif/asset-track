@@ -269,9 +269,6 @@
 #notes-panel .note-card time,
 #notes-panel .note-card-preview,
 #notes-panel .note-card-preview small,
-#notes-panel .note-reader-meta-grid dt,
-#notes-panel .note-reader-meta-grid dd,
-#notes-panel .note-reader-asset,
 #notes-panel .note-template-card span,
 #notes-panel .notes-sort-control .text-button,
 #notes-panel .notes-pagination button,
@@ -312,8 +309,6 @@
 
 #notes-panel .note-card-meta span,
 #notes-panel .note-card time,
-#notes-panel .note-reader-meta-grid dt,
-#notes-panel .note-reader-meta-grid dd,
 #notes-panel .note-status-pill,
 #notes-panel .note-input-shell small,
 #notes-panel .note-textarea-shell > small,

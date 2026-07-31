@@ -151,7 +151,7 @@ test("reports zero yesterday pnl for a cash-only portfolio", () => {
   });
 });
 
-test("excludes manually managed and failed holdings even when cached rows exist", () => {
+test("uses dated cached rows even when the latest-price status is manual or failed", () => {
   configure([
     {
       type: "股票",
@@ -189,10 +189,10 @@ test("excludes manually managed and failed holdings even when cached rows exist"
   ]);
 
   assert.deepEqual(latestDailyPnlSnapshot("2026-07-28"), {
-    amountCents: 500n,
+    amountCents: 2700n,
     valuationDate: "2026-07-27",
     reason: "",
-    detail: "按可用行情计算，另有 2 项未计入；跨币种为估算"
+    detail: "按可用行情计算；跨币种为估算"
   });
 });
 

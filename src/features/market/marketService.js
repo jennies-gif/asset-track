@@ -35,7 +35,10 @@ export async function syncLatestMarketPrices() {
 export async function syncDailyMarketPricesIfDue() {
   const today = todayIsoDate();
   const autoSync = readAutoSyncState();
-  if (!isAutomaticMarketSyncDue(autoSync, today)) return;
+  const now = Date.now();
+  const automaticSyncDue = isAutomaticMarketSyncDue(autoSync, today, now);
+  const registrationRetryDue = hasPendingMarketRegistrationRetry(now);
+  if (!automaticSyncDue && !registrationRetryDue) return;
 
   const symbols = symbolsForMarketSync();
   if (!symbols.length) return;
@@ -74,6 +77,8 @@ export async function syncDailyMarketPricesIfDue() {
 export async function ensureAssetMarketHistory(asset) {
   const symbol = syncSymbolForAsset(asset);
   if (!ctx.marketApiBaseUrl || !asset?.id || !symbol || !asset.purchaseDate || inferAssetMarket(asset) === "CASH") return;
+  markMarketRegistrationPending([symbol], "", new Date().toISOString());
+  ctx.persistAndRender();
   try {
     const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
       method: "POST",
@@ -89,6 +94,7 @@ export async function ensureAssetMarketHistory(asset) {
     if (!response.ok) throw new Error(await marketApiErrorMessage(response));
     const payload = await response.json();
     const result = (payload.results || []).find((item) => canonicalSyncSymbol(item.symbol) === canonicalSyncSymbol(symbol));
+    if (!result) throw new Error("服务端未确认该代码的行情同步目标登记");
     const daily = buildUserAssetDailyPriceSnapshots({
       userId: "local-user",
       asset,
@@ -105,7 +111,11 @@ export async function ensureAssetMarketHistory(asset) {
         dailyPriceStatus: daily.status,
         dailyPriceMissingDates: daily.missingDates,
         historyBackfillStatus: daily.rows.length ? daily.status : "missing",
-        historyBackfillUpdatedAt: new Date().toISOString()
+        historyBackfillUpdatedAt: new Date().toISOString(),
+        historyBackfillError: "",
+        marketSyncRegistrationStatus: "registered",
+        marketSyncRegistrationConfirmedAt: new Date().toISOString(),
+        marketSyncRegistrationError: ""
       } : item)
     });
     ctx.persistAndRender();
@@ -116,7 +126,10 @@ export async function ensureAssetMarketHistory(asset) {
       assets: state.assets.map((item) => item.id === asset.id ? {
         ...item,
         historyBackfillStatus: "error",
-        historyBackfillError: error instanceof Error ? error.message : "历史价格回补失败"
+        historyBackfillError: error instanceof Error ? error.message : "历史价格回补失败",
+        marketSyncRegistrationStatus: "pending",
+        marketSyncRegistrationAttemptedAt: new Date().toISOString(),
+        marketSyncRegistrationError: error instanceof Error ? error.message : "行情目标登记失败"
       } : item)
     });
     ctx.persistAndRender();
@@ -129,6 +142,7 @@ async function runAutomaticMarketPriceSync() {
     includeBenchmarks: true,
     autoFetch: false,
     includeHistory: true,
+    preserveExistingOnFailure: true,
     loadingMessage: () => "正在读取已缓存的历史价格..."
   });
   if (cacheRun.state.status === "error") {
@@ -193,6 +207,7 @@ async function runMarketPriceSync({
   let syncedAt = "";
 
   for (const [index, batch] of batches.entries()) {
+    markMarketRegistrationPending(batch.symbols, "", new Date().toISOString());
     try {
       const response = await fetch(`${ctx.marketApiBaseUrl}/api/market-data/sync-daily`, {
         method: "POST",
@@ -209,19 +224,42 @@ async function runMarketPriceSync({
       if (!response.ok) throw new Error(await marketApiErrorMessage(response));
       const payload = await response.json();
       syncedAt = payload.syncedAt || syncedAt || new Date().toISOString();
-      results.push(...decorateMarketSyncResults(payload.results || [], payload.fetch));
+      results.push(...decorateMarketSyncResults(payload.results || [], payload.fetch).map((result) => ({
+        ...result,
+        targetRegistrationAcknowledged: true
+      })));
       fetchPresentations.push(marketFetchPresentation(payload.fetch));
       fetchResults.push(payload.fetch);
     } catch (error) {
       const message = error instanceof Error ? error.message : "无法连接行情 API";
+      markMarketRegistrationPending(batch.symbols, message, new Date().toISOString());
       failedBatches.push({ index, symbols: batch.symbols, message });
-      results.push(...batch.symbols.map((symbol) => ({ symbol, status: "error", message })));
+      results.push(...batch.symbols.map((symbol) => ({
+        symbol,
+        status: "error",
+        message,
+        targetRegistrationAcknowledged: false
+      })));
     }
   }
 
   if (results.length && failedBatches.length < batches.length) {
     syncedAt ||= new Date().toISOString();
     const applied = applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure });
+    const acknowledgedSymbols = new Set(
+      results
+        .filter((result) => result.targetRegistrationAcknowledged)
+        .map((result) => canonicalSyncSymbol(result.symbol))
+        .filter(Boolean)
+    );
+    const unacknowledgedSymbols = symbols.filter((symbol) => !acknowledgedSymbols.has(canonicalSyncSymbol(symbol)));
+    if (unacknowledgedSymbols.length) {
+      markMarketRegistrationPending(
+        unacknowledgedSymbols,
+        "服务端未确认该代码的行情同步目标登记",
+        syncedAt
+      );
+    }
     if (!preserveExistingOnFailure) {
       for (const failed of failedBatches) markOpenAssetsPriceError(failed.symbols, failed.message);
     }
@@ -352,11 +390,21 @@ function applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure =
   state.assets = state.assets.map((asset) => {
     const symbol = canonicalSyncSymbol(syncSymbolForAsset(asset));
     const result = bySymbol.get(symbol);
+    const acknowledged = results.some((item) =>
+      item.targetRegistrationAcknowledged &&
+      canonicalSyncSymbol(item.symbol) === symbol
+    );
+    const registrationFields = acknowledged ? {
+      marketSyncRegistrationStatus: "registered",
+      marketSyncRegistrationConfirmedAt: syncedAt,
+      marketSyncRegistrationError: ""
+    } : {};
     if (!result) {
       const missing = results.find((item) => canonicalSyncSymbol(item.symbol) === symbol && item.status !== "synced");
-      if (!missing || preserveExistingOnFailure) return asset;
+      if (!missing || preserveExistingOnFailure) return { ...asset, ...registrationFields };
       return {
         ...asset,
+        ...registrationFields,
         priceStatus: "missing",
         priceError: missing.message || "未找到可用价格缓存",
         updatedAt: syncedAt || new Date().toISOString()
@@ -380,6 +428,7 @@ function applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure =
     const matched = findAssetQuickMatch(symbol);
     return {
       ...asset,
+      ...registrationFields,
       symbol: asset.symbol || symbol,
       market: asset.market || matched?.market || asset.market,
       type: asset.type || matched?.type || asset.type,
@@ -428,6 +477,31 @@ function isAutomaticMarketSyncDue(autoSync, today, now = Date.now()) {
   const referenceTime = Date.parse(referenceAt || "");
   if (!Number.isFinite(referenceTime)) return false;
   return now - referenceTime >= marketAutoSyncRetryCooldownMs;
+}
+
+function hasPendingMarketRegistrationRetry(now = Date.now()) {
+  return ctx.getState().assets.some((asset) => {
+    if (!syncSymbolForAsset(asset) || inferAssetMarket(asset) === "CASH") return false;
+    if (String(asset.marketSyncRegistrationStatus || "").trim() === "registered") return false;
+    const attemptedAt = Date.parse(asset.marketSyncRegistrationAttemptedAt || "");
+    return !Number.isFinite(attemptedAt) || now - attemptedAt >= marketAutoSyncRetryCooldownMs;
+  });
+}
+
+function markMarketRegistrationPending(symbols, message = "", attemptedAt = new Date().toISOString()) {
+  const state = ctx.getState();
+  const requested = new Set((symbols || []).map(canonicalSyncSymbol).filter(Boolean));
+  state.assets = state.assets.map((asset) => {
+    const symbol = canonicalSyncSymbol(syncSymbolForAsset(asset));
+    if (!symbol || !requested.has(symbol) || asset.closed) return asset;
+    if (String(asset.marketSyncRegistrationStatus || "").trim() === "registered") return asset;
+    return {
+      ...asset,
+      marketSyncRegistrationStatus: "pending",
+      marketSyncRegistrationAttemptedAt: attemptedAt,
+      marketSyncRegistrationError: message
+    };
+  });
 }
 
 function marketFetchHasChanges(fetchResult) {

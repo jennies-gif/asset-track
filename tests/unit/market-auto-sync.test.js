@@ -7,6 +7,7 @@ import {
   syncLatestMarketPrices
 } from "../../src/features/market/marketService.js";
 import { configureMarketRender } from "../../src/features/market/marketRender.js";
+import { todayIsoDate } from "../../src/utils/date.js";
 
 test("hydrates cached history before a lightweight covered-price check", async () => {
   const harness = createMarketSyncHarness();
@@ -36,6 +37,7 @@ test("hydrates cached history before a lightweight covered-price check", async (
     "2"
   );
   assert.equal(harness.state.assets[0].priceStatus, "synced");
+  assert.equal(harness.state.assets[0].marketSyncRegistrationStatus, "registered");
   assert.equal(harness.autoSyncState().attemptStatus, "completed");
 });
 
@@ -143,7 +145,36 @@ test("coalesces a manual request into an automatic sync already in progress", as
   assert.equal(requestCount, 2);
 });
 
-function createMarketSyncHarness() {
+test("retries a pending target even after today's normal sync completed", async () => {
+  const harness = createMarketSyncHarness({
+    asset: {
+      marketSyncRegistrationStatus: "pending",
+      marketSyncRegistrationAttemptedAt: "2026-07-24T00:00:00.000Z"
+    },
+    autoSync: {
+      lastCompletedDate: todayIsoDate(),
+      lastCompletedAt: new Date().toISOString(),
+      attemptStatus: "completed"
+    }
+  });
+  let requestCount = 0;
+  await harness.withGlobals(async () => {
+    globalThis.fetch = async () => {
+      requestCount += 1;
+      return jsonResponse(requestCount === 1
+        ? marketPayload({ fetchResult: null, history: cachedHistory(), currentPrice: "2" })
+        : marketPayload({ fetchResult: coveredFetch(), currentPrice: "2" }));
+    };
+
+    await syncDailyMarketPricesIfDue();
+  });
+
+  assert.equal(requestCount, 2);
+  assert.equal(harness.state.assets[0].marketSyncRegistrationStatus, "registered");
+  assert.equal(harness.state.assets[0].marketSyncRegistrationError, "");
+});
+
+function createMarketSyncHarness({ asset = {}, autoSync = null } = {}) {
   let state = {
     assets: [{
       id: "asset-aapl",
@@ -154,11 +185,13 @@ function createMarketSyncHarness() {
       currency: "USD",
       purchaseDate: "2026-07-20",
       currentPrice: "1",
-      dailyPrices: []
+      dailyPrices: [],
+      ...asset
     }]
   };
   let marketSyncState = { status: "idle", message: "", results: [], syncedAt: "" };
   const storage = memoryStorage();
+  if (autoSync) storage.setItem("asset-trail-market-auto-sync-v1", JSON.stringify(autoSync));
   configureMarketService({
     marketApiBaseUrl: "https://market.example.test",
     getState: () => state,

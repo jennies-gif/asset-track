@@ -137,7 +137,8 @@ import {
   setNoteTransactionLink,
   showNoteEditor,
   syncNoteAssetSelection,
-  updateNoteCounters
+  updateNoteCounters,
+  updateSelectedNoteTags
 } from "./features/notes/notesEditor.js";
 import {
   configureNotesActions,
@@ -482,6 +483,7 @@ initNotesEvents({
   persistAndRender,
   renderNotes,
   updateNoteCounters,
+  updateSelectedNoteTags,
   commitCustomNoteTag,
   clearNoteTransactionLink,
   applySelectedNoteTransaction,

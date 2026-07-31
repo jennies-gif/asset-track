@@ -43,6 +43,9 @@ export function initNotesEvents(context) {
   elements.notesSearch.addEventListener("input", context.renderNotes);
   elements.noteForm.elements.title.addEventListener("input", context.updateNoteCounters);
   elements.noteForm.elements.content.addEventListener("input", context.updateNoteCounters);
+  elements.noteForm.addEventListener("change", (event) => {
+    if (event.target.matches('input[name="tags"]')) context.updateSelectedNoteTags();
+  });
   elements.noteTemplateCards?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-note-template]");
     if (!card) return;

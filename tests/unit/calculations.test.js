@@ -47,7 +47,11 @@ import { findAssetQuickMatch } from "../../src/features/assets/assetQuickMatch.j
 import { findAssetQuickMatches } from "../../src/features/assets/assetQuickMatch.js";
 import { normalizeAccountTypeFormValue, savedAccountOptionsFromAssets } from "../../src/features/assets/accountOptions.js";
 import { configureNotesRender, noteDisplayTagsFor, noteTypeFromTags, showNoteReader } from "../../src/features/notes/notesRender.js";
-import { buildReviewTemplate } from "../../src/features/notes/notesEditor.js";
+import {
+  buildReviewTemplate,
+  configureNotesEditor,
+  updateSelectedNoteTags
+} from "../../src/features/notes/notesEditor.js";
 import { closeNoteMenus } from "../../src/features/notes/notesEvents.js";
 import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from "../../src/features/trends/trendModel.js";
 import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
@@ -189,7 +193,6 @@ test("renders blank note reader tags without the review detail grid", () => {
     noteReaderTitle: { textContent: "" },
     noteReaderHeaderMeta: { innerHTML: "" },
     noteReaderMeta: { innerHTML: "" },
-    noteReaderAsset: { innerHTML: "", classList: classList() },
     noteReaderContent: { innerHTML: "" },
     notesEditor: { classList: classList() },
     notesHome: { classList: classList() },
@@ -240,7 +243,6 @@ test("renders linked asset and transaction as two compact reader links", () => {
     noteReaderTitle: { textContent: "" },
     noteReaderHeaderMeta: { innerHTML: "" },
     noteReaderMeta: { innerHTML: "" },
-    noteReaderAsset: { innerHTML: "", classList: classList() },
     noteReaderContent: { innerHTML: "" },
     notesEditor: { classList: classList() },
     notesHome: { classList: classList() },
@@ -277,6 +279,37 @@ test("review templates contain reflection prompts without system-owned asset fac
   const template = buildReviewTemplate("hold");
   assert.match(template, /持有理由是否仍成立/);
   assert.doesNotMatch(template, /当前价格|成本价格|未关联资产/);
+});
+
+test("mirrors checked review tags into the writing area", () => {
+  const selectedTags = { innerHTML: "", hidden: true };
+  const tagInputs = [
+    { value: "持有观察", checked: true, nextElementSibling: { textContent: "# 持有观察" } },
+    { value: "交易心理", checked: false, nextElementSibling: { textContent: "# 交易心理" } },
+    { value: "<自定义>", checked: true, nextElementSibling: { textContent: "# <自定义>" } }
+  ];
+  configureNotesEditor({
+    elements: {
+      noteSelectedTags: selectedTags,
+      noteForm: {
+        querySelectorAll: () => tagInputs.filter((input) => input.checked)
+      }
+    }
+  });
+
+  updateSelectedNoteTags();
+
+  assert.equal(selectedTags.hidden, false);
+  assert.match(selectedTags.innerHTML, /# 持有观察/);
+  assert.match(selectedTags.innerHTML, /# &lt;自定义&gt;/);
+  assert.doesNotMatch(selectedTags.innerHTML, /交易心理/);
+
+  tagInputs.forEach((input) => {
+    input.checked = false;
+  });
+  updateSelectedNoteTags();
+  assert.equal(selectedTags.hidden, true);
+  assert.equal(selectedTags.innerHTML, "");
 });
 
 test("closing note menus preserves only the active menu", () => {
@@ -1031,7 +1064,10 @@ test("keeps successful market sync batches when a later batch fails", async () =
   assert.deepEqual(requests.map((request) => request.symbols.length), [50, 1]);
   assert.deepEqual(requests.map((request) => request.includeBenchmarks), [true, false]);
   assert.equal(state.assets[0].priceStatus, "synced");
+  assert.equal(state.assets[0].marketSyncRegistrationStatus, "registered");
   assert.equal(state.assets[50].priceStatus, "error");
+  assert.equal(state.assets[50].marketSyncRegistrationStatus, "pending");
+  assert.ok(state.assets[50].marketSyncRegistrationError);
   assert.equal(marketSyncState.status, "warning");
   assert.match(marketSyncState.message, /2 批中 1 批完成、1 批失败/);
   assert.equal(benchmarkReloadCount, 1);

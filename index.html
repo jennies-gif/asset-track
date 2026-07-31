@@ -486,7 +486,6 @@
                     <div class="note-reader-actions"><button class="secondary-button compact-button" id="note-reader-edit" type="button">编辑</button></div>
                   </header>
                   <div class="note-reader-meta" id="note-reader-meta"></div>
-                  <div class="note-reader-asset" id="note-reader-asset"></div>
                   <div class="note-reader-content" id="note-reader-content"></div>
                   <button class="danger-button compact-button is-hidden" id="note-reader-delete" type="button">删除</button>
                 </div>
@@ -500,6 +499,7 @@
             <section class="note-editor-card">
               <div class="note-writing-area">
                 <label class="note-title-field"><strong>标题</strong><span class="note-input-shell"><input name="title" maxlength="80" required placeholder="写下这次复盘的核心判断"><small id="note-title-count">0/80</small></span></label>
+                <div class="note-selected-tags" id="note-selected-tags" aria-label="已选标签" aria-live="polite" hidden></div>
                 <label class="note-content-field"><strong>正文</strong><span class="note-textarea-shell"><textarea name="content" maxlength="5000" required rows="14" placeholder="记录你的想法、观察与总结..."></textarea><small id="note-content-count">0/5000</small></span></label>
               </div>
               <aside class="note-editor-sidebar" aria-label="复盘设置与依据">

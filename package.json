@@ -22,6 +22,7 @@
     "data:migrate-storage": "node scripts/market-data/migrate-market-data-storage.mjs",
     "data:backfill": "node scripts/market-data/fetch-market-data.mjs backfill --months=3",
     "data:daily": "node scripts/market-data/fetch-market-data.mjs daily",
+    "data:scheduled-sync": "node scripts/market-data/trigger-scheduled-sync.mjs",
     "build": "npm run build -w apps/web",
     "build:static": "node scripts/build-static.mjs",
     "typecheck": "npm run typecheck -w packages/domain && npm run typecheck -w apps/web",

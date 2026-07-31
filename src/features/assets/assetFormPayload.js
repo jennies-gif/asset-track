@@ -47,6 +47,10 @@ export function buildAssetFormPayload(existingAsset) {
   const hasCostPrice = Number(String(form.costPrice || existingAsset?.costPrice || "0").trim()) > 0;
   const hasExistingPrice = Boolean(existingAsset?.currentPrice && existingAsset?.priceStatus !== "pending");
   const priceStatus = hasSyncedDraftPrice ? "synced" : hasManualPrice ? "manual" : hasExistingPrice ? existingAsset.priceStatus || "manual" : hasCostPrice ? "pending" : "missing";
+  const historyIdentityChanged = Boolean(existingAsset) && (
+    String(form.symbol || "").trim().toUpperCase() !== String(existingAsset.symbol || "").trim().toUpperCase() ||
+    String(form.purchaseDate || "").slice(0, 10) !== String(existingAsset.purchaseDate || "").slice(0, 10)
+  );
   return {
     ...form,
     costPrice: form.costPrice || existingAsset?.costPrice || "0",
@@ -67,7 +71,19 @@ export function buildAssetFormPayload(existingAsset) {
     priceAt: hasSyncedDraftPrice ? form.priceAt : manualPriceChanged ? "" : existingAsset?.priceAt || form.priceAt || "",
     marketTimezone: hasSyncedDraftPrice ? form.marketTimezone : manualPriceChanged ? "" : existingAsset?.marketTimezone || form.marketTimezone || "",
     sourceFetchedAt: hasSyncedDraftPrice ? form.sourceFetchedAt : manualPriceChanged ? "" : existingAsset?.sourceFetchedAt || form.sourceFetchedAt || "",
-    priceError: manualPriceChanged ? "" : existingAsset?.priceError || form.priceError || ""
+    priceError: manualPriceChanged ? "" : existingAsset?.priceError || form.priceError || "",
+    dailyPrices: historyIdentityChanged ? [] : existingAsset?.dailyPrices || [],
+    dailyPriceStatus: historyIdentityChanged ? "" : existingAsset?.dailyPriceStatus || "",
+    dailyPriceMissingDates: historyIdentityChanged ? [] : existingAsset?.dailyPriceMissingDates || [],
+    historyBackfillStatus: historyIdentityChanged ? "" : existingAsset?.historyBackfillStatus || "",
+    historyBackfillUpdatedAt: historyIdentityChanged ? "" : existingAsset?.historyBackfillUpdatedAt || "",
+    historyBackfillError: historyIdentityChanged ? "" : existingAsset?.historyBackfillError || "",
+    marketSyncRegistrationStatus: historyIdentityChanged
+      ? "pending"
+      : existingAsset?.marketSyncRegistrationStatus || "",
+    marketSyncRegistrationAttemptedAt: historyIdentityChanged ? "" : existingAsset?.marketSyncRegistrationAttemptedAt || "",
+    marketSyncRegistrationConfirmedAt: historyIdentityChanged ? "" : existingAsset?.marketSyncRegistrationConfirmedAt || "",
+    marketSyncRegistrationError: historyIdentityChanged ? "" : existingAsset?.marketSyncRegistrationError || ""
   };
 }
 

@@ -26,13 +26,17 @@ createServer(async (request, response) => {
     const filePath = resolvePath(request.url);
     const body = await readFile(filePath);
     response.writeHead(200, {
-      "Content-Type": contentTypes[extname(filePath)] || "application/octet-stream"
+      "Content-Type": contentTypes[extname(filePath)] || "application/octet-stream",
+      "Cache-Control": "no-store"
     });
     response.end(body);
   } catch {
     const pathname = new URL(request.url || "/", `http://localhost:${port}`).pathname;
     if (pathname === "/public/runtime-config.js") {
-      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.writeHead(200, {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "no-store"
+      });
       response.end('window.ASSET_TRAIL_CONFIG = { marketApiBaseUrl: "", supabase: { url: "", anonKey: "" } };\n');
       return;
     }

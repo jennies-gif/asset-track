@@ -25,6 +25,7 @@ export function openCloseReviewNote(asset, type = "close") {
   setNoteAssetLink(asset.id);
   if (formatSelect) formatSelect.value = "plain";
   if (reviewTag) reviewTag.checked = true;
+  updateSelectedNoteTags();
   setNoteTemplateSelection(template);
   elements.noteForm.dataset.template = template;
   if (contentInput) contentInput.value = buildReviewTemplate(template);
@@ -52,6 +53,7 @@ export function openChangeReviewNote(change) {
   setNoteAssetLink(change.asset.id);
   if (formatSelect) formatSelect.value = "plain";
   if (reviewTag) reviewTag.checked = true;
+  updateSelectedNoteTags();
   setNoteTemplateSelection(template);
   elements.noteForm.dataset.template = template;
   if (contentInput) contentInput.value = buildReviewTemplate(template);
@@ -98,6 +100,7 @@ export function applyNoteTemplate(template = "blank", options = {}) {
   const defaultTag = template === "hold" ? "持有观察" : "交易复盘";
   const reviewTag = elements.noteForm.querySelector(`input[name="tags"][value="${defaultTag}"]`);
   if (template !== "blank" && reviewTag) reviewTag.checked = true;
+  updateSelectedNoteTags();
   updateNoteCounters();
 }
 
@@ -146,6 +149,7 @@ export function showNoteEditor(note = null) {
       }
     });
   }
+  updateSelectedNoteTags();
   updateNoteContextPreview();
   updateNoteCounters();
   elements.noteForm.elements.title.focus();
@@ -162,6 +166,7 @@ export function hideNoteEditor() {
   clearDynamicNoteTags();
   elements.noteCustomTagField.classList.add("is-hidden");
   clearNoteTransactionLink();
+  updateSelectedNoteTags();
   updateNoteContextPreview();
   setNoteTemplateSelection("blank");
   delete elements.noteForm.dataset.editingId;
@@ -173,8 +178,26 @@ export function commitCustomNoteTag() {
   const tag = normalizeNoteTag(elements.noteForm.elements.customTag.value);
   elements.noteForm.elements.customTag.value = "";
   elements.noteCustomTagField.classList.add("is-hidden");
-  if (!tag) return;
+  if (!tag) {
+    updateSelectedNoteTags();
+    return;
+  }
   addCustomNoteTag(tag);
+}
+
+export function updateSelectedNoteTags() {
+  const elements = ctx.elements;
+  if (!elements.noteSelectedTags) return;
+  const tags = [...elements.noteForm.querySelectorAll('input[name="tags"]:checked')]
+    .map((input) => {
+      const visibleLabel = input.nextElementSibling?.textContent?.trim();
+      return visibleLabel || `# ${normalizeNoteTag(input.value)}`;
+    })
+    .filter(Boolean);
+  elements.noteSelectedTags.innerHTML = tags
+    .map((tag) => `<span>${escapeHtml(tag)}</span>`)
+    .join("");
+  elements.noteSelectedTags.hidden = tags.length === 0;
 }
 
 export function updateNoteCounters() {
@@ -295,6 +318,7 @@ function addCustomNoteTag(tag) {
     .find((input) => input.value === normalizedTag);
   if (existingInput) {
     existingInput.checked = true;
+    updateSelectedNoteTags();
     return;
   }
 
@@ -317,9 +341,13 @@ function addCustomNoteTag(tag) {
   deleteButton.type = "button";
   deleteButton.className = "note-tag-action";
   deleteButton.textContent = "删除";
-  deleteButton.addEventListener("click", () => tagControl.remove());
+  deleteButton.addEventListener("click", () => {
+    tagControl.remove();
+    updateSelectedNoteTags();
+  });
   tagControl.append(input, chip, editButton, deleteButton);
   elements.noteNewTagButton.before(tagControl);
+  updateSelectedNoteTags();
 }
 
 function clearDynamicNoteTags() {
@@ -353,11 +381,13 @@ function startEditingCustomNoteTag(tagControl) {
     if (duplicate) {
       duplicate.checked = true;
       tagControl.remove();
+      updateSelectedNoteTags();
       return;
     }
     input.value = nextTag;
     chip.textContent = `# ${nextTag}`;
     editor.replaceWith(chip);
+    updateSelectedNoteTags();
   };
 
   editor.addEventListener("keydown", (event) => {
