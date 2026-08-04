@@ -481,7 +481,7 @@
   color: var(--brand);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .snapshot-actions,
   .snapshot-actions .primary-button,
   .snapshot-actions .secondary-button {
@@ -548,7 +548,7 @@
   }
 }
 
-@media (min-width: 901px) {
+@media (min-width: 1024px) {
   .site-footer {
     width: auto;
     max-width: 1360px;

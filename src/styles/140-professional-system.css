@@ -1,29 +1,37 @@
-/* Professional B2B visual system: financial-blue brand color, lighter elevation, and stable finance numerals. */
+/* Professional financial workspace: neutral brand, warm surfaces, vivid data colors, and stable finance numerals. */
 :root {
-  --bg: #F4F7FC;
-  --bg-page: #F4F7FC;
+  --bg: #FFFFFF;
+  --bg-page: #FFFFFF;
   --surface: #FFFFFF;
-  --surface-muted: #EAF0FA;
-  --ink: #27272A;
-  --muted: #64748B;
-  --subtle: #64748B;
-  --writing-ink: #27272A;
-  --writing-placeholder: #94A3B8;
-  --brand: #2E5AA7;
-  --brand-dark: #244A8C;
-  --brand-soft: #EAF0FA;
+  --surface-muted: #F8F8F8;
+  --sidebar-bg: #FAFAFA;
+  --ink: #161616;
+  --muted: #666666;
+  --subtle: #8A8A8A;
+  --writing-ink: #161616;
+  --writing-placeholder: #8A8A8A;
+  --brand: #111111;
+  --brand-dark: #2A2A2A;
+  --brand-soft: #F5F5F5;
   --primary: var(--brand);
   --primary-hover: var(--brand-dark);
   --primary-soft: var(--brand-soft);
   --on-primary: #FFFFFF;
-  --accent: #86C5FF;
-  --accent-dark: #2E5AA7;
-  --accent-soft: #EAF6FF;
-  --success: #1AA083;
-  --positive: #1AA083;
-  --positive-soft: #EDF9F6;
-  --border: #E5E7EB;
-  --border-strong: #CBD5E1;
+  --accent: #111111;
+  --accent-dark: #111111;
+  --accent-soft: #F5F5F5;
+  --success: #168A5B;
+  --positive: #168A5B;
+  --positive-soft: #EEF8F3;
+  --negative: #D64545;
+  --negative-soft: #FFF3F3;
+  --warning: #D87900;
+  --warning-soft: #FFF7E8;
+  --danger: #D64545;
+  --border: #EEEEEE;
+  --border-strong: #DCDCDC;
+  --border-control: #E5E5E5;
+  --text-control: #4D4D4D;
   --line: var(--border);
   --line-strong: var(--border-strong);
   --radius-control: 6px;
@@ -34,26 +42,27 @@
   --radius-lg: 6px;
   --radius-xl: 6px;
   --shadow-card: none;
-  --shadow-popover: 0 8px 24px rgba(46, 90, 167, 0.12);
-  --shadow-dialog: 0 18px 48px rgba(46, 90, 167, 0.16);
+  --shadow-popover: 0 8px 24px rgba(17, 17, 17, 0.10);
+  --shadow-dialog: 0 18px 48px rgba(17, 17, 17, 0.14);
   --shadow: var(--shadow-card);
-  --chart-1: #2E5AA7;
-  --chart-2: #86C5FF;
-  --chart-3: #1AA083;
-  --chart-4: #D97706;
-  --chart-5: #4F46E5;
-  --chart-6: #71717A;
-  --chart-line: #2E5AA7;
-  --chart-line-soft: #EAF0FA;
-  --chart-grid: #E2E8F0;
-  --chart-axis: #CBD5E1;
-  --chart-muted: #71717A;
+  --chart-1: #2764E7;
+  --chart-2: #35A7E8;
+  --chart-3: #20A67A;
+  --chart-4: #F28A1A;
+  --chart-5: #8B5CF6;
+  --chart-6: #E84A5F;
+  --chart-line: #2764E7;
+  --chart-line-soft: #EAF0FF;
+  --chart-grid: #EEEEEE;
+  --chart-axis: #DCDCDC;
+  --chart-muted: #777777;
 }
 
 :root[data-theme="dark"] {
   --bg: #09090B;
   --surface: #18181B;
   --surface-muted: #27272A;
+  --sidebar-bg: #18181B;
   --ink: #FAFAFA;
   --muted: #A1A1AA;
   --subtle: #A1A1AA;
@@ -61,27 +70,27 @@
   --writing-placeholder: #A1A1AA;
   --line: #27272A;
   --line-strong: #3F3F46;
-  --brand: #86C5FF;
-  --brand-dark: #B8DDFF;
-  --brand-soft: #162B4A;
-  --primary: #86C5FF;
-  --primary-hover: #B8DDFF;
-  --primary-soft: #162B4A;
+  --brand: #FAFAFA;
+  --brand-dark: #E4E4E7;
+  --brand-soft: #27272A;
+  --primary: #FAFAFA;
+  --primary-hover: #E4E4E7;
+  --primary-soft: #27272A;
   --on-primary: #08111F;
-  --accent: #86C5FF;
-  --accent-dark: #B8DDFF;
-  --accent-soft: #1E3A5F;
+  --accent: #FAFAFA;
+  --accent-dark: #FFFFFF;
+  --accent-soft: #27272A;
   --positive: #5EEAD4;
   --positive-soft: #12342F;
   --success: #5EEAD4;
-  --chart-1: #86C5FF;
-  --chart-2: #B8DDFF;
-  --chart-3: #5EEAD4;
-  --chart-4: #F59E0B;
-  --chart-5: #A5B4FC;
-  --chart-6: #A1A1AA;
-  --chart-line: #86C5FF;
-  --chart-line-soft: #162B4A;
+  --chart-1: #5B8CFF;
+  --chart-2: #5BC0EB;
+  --chart-3: #36D399;
+  --chart-4: #FFA43A;
+  --chart-5: #A78BFA;
+  --chart-6: #FB7185;
+  --chart-line: #5B8CFF;
+  --chart-line-soft: #1D2D52;
   --chart-grid: #27272A;
   --chart-axis: #3F3F46;
   --chart-muted: #A1A1AA;
@@ -135,7 +144,7 @@ body {
 .row-more-panel,
 .modal-dialog,
 .auth-card {
-  border: 1px solid #E5E7EB;
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
 }
@@ -348,7 +357,6 @@ textarea {
   color: var(--success);
 }
 
-.market-sync-header .settings-button,
 .trust-badge.data-ok,
 .chart-source-badge.positive {
   border-color: color-mix(in srgb, var(--success) 24%, var(--line));
@@ -403,7 +411,7 @@ th,
 th,
 .benchmark-table th,
 #analysis-panel .analysis-return-table th {
-  background: #F4F7FC;
+  background: var(--surface-muted);
   border-color: var(--line);
 }
 
@@ -619,7 +627,7 @@ th,
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .portfolio-snapshot {
     grid-template-columns: 1fr;
   }
@@ -816,7 +824,7 @@ th,
 
 .asset-status-badge.is-neutral {
   border-color: var(--line);
-  background: #F4F7FC;
+  background: var(--surface-muted);
   color: var(--muted);
 }
 
@@ -899,14 +907,14 @@ th,
   color: var(--negative);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   #open-portfolio-view .table-wrap {
     overflow-x: auto;
   }
 }
 
 #notes-panel {
-  background: #FFFFFF;
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -1005,7 +1013,7 @@ th,
 }
 
 #notes-panel .note-card:hover {
-  background: #F8FAFC;
+  background: var(--surface-muted);
   box-shadow: none;
 }
 
@@ -1331,7 +1339,7 @@ th,
 #analysis-panel .analysis-judgement-card {
   padding: 18px 20px;
   border-color: var(--line);
-  background: color-mix(in srgb, #F8FAFC 72%, var(--surface));
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
 }
 
 #analysis-panel .analysis-judgement-card h3 {
@@ -1397,7 +1405,7 @@ th,
   min-height: 30px;
   gap: 7px;
   padding: 5px 9px;
-  border-color: #CBD5E1;
+  border-color: var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
@@ -1409,7 +1417,7 @@ th,
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #2E5AA7;
+  accent-color: var(--primary);
 }
 
 #analysis-panel .benchmark-option span {
@@ -1418,8 +1426,8 @@ th,
 }
 
 #analysis-panel .benchmark-option.is-selected {
-  border-color: #2E5AA7;
-  background: #FFFFFF;
+  border-color: var(--primary);
+  background: var(--surface);
   color: var(--ink);
 }
 
@@ -1470,7 +1478,7 @@ th,
 
 #analysis-panel .waterfall-track {
   height: 10px;
-  background: #EAF0FA;
+  background: var(--surface-muted);
 }
 
 #analysis-panel .waterfall-track i {
@@ -1517,7 +1525,7 @@ th,
   padding: 2px 7px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
-  background: #F4F7FC;
+  background: var(--surface-muted);
   color: var(--muted);
   font-size: 12px;
   font-weight: var(--weight-semibold);

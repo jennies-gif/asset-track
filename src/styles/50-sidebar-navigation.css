@@ -223,7 +223,7 @@ body.sidebar-collapsed .side-nav .tab-icon {
   width: 34px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   :root,
   body.sidebar-collapsed {
     --sidebar-current-width: 0px;

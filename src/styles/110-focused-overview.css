@@ -179,6 +179,10 @@
   grid-column: 1 / -1;
 }
 
+.asset-attention-section {
+  margin-top: 24px;
+}
+
 .home-list,
 .home-checklist {
   display: grid;

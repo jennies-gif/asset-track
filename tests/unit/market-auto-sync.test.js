@@ -174,6 +174,39 @@ test("retries a pending target even after today's normal sync completed", async 
   assert.equal(harness.state.assets[0].marketSyncRegistrationError, "");
 });
 
+test("repairs locally emptied history even after today's normal sync completed", async () => {
+  const harness = createMarketSyncHarness({
+    asset: {
+      dailyPrices: [],
+      dailyPriceStatus: "complete",
+      marketSyncRegistrationStatus: "registered"
+    },
+    autoSync: {
+      lastCompletedDate: todayIsoDate(),
+      lastCompletedAt: new Date().toISOString(),
+      attemptStatus: "completed"
+    }
+  });
+  let requestCount = 0;
+  await harness.withGlobals(async () => {
+    globalThis.fetch = async () => {
+      requestCount += 1;
+      return jsonResponse(requestCount === 1
+        ? marketPayload({ fetchResult: null, history: cachedHistory(), currentPrice: "2" })
+        : marketPayload({ fetchResult: coveredFetch(), currentPrice: "2" }));
+    };
+
+    await syncDailyMarketPricesIfDue();
+  });
+
+  assert.equal(requestCount, 2);
+  assert.equal(harness.state.assets[0].dailyPriceStatus, "complete");
+  assert.equal(
+    harness.state.assets[0].dailyPrices.find((row) => row.priceDate === "2026-07-21")?.closePrice,
+    "2"
+  );
+});
+
 function createMarketSyncHarness({ asset = {}, autoSync = null } = {}) {
   let state = {
     assets: [{
@@ -258,6 +291,9 @@ function marketPayload({
         sourceFetchedAt: "2026-07-25T01:59:00.000Z",
         priceKind: "daily_close"
       },
+      dailyPrices: [],
+      dailyPriceStatus: "",
+      dailyPriceMissingDates: [],
       ...(history ? { history } : {})
     }]
   };

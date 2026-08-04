@@ -5,6 +5,7 @@ import {
   formatCompactCurrency,
   formatDisplayCurrency,
   formatOptionalSignedAmount,
+  formatSignedCurrency,
   formatTrendReturn,
   toneClassForValue
 } from "../../ui/formatters.js";
@@ -12,7 +13,9 @@ import { absBigInt } from "../../utils/bigint.js";
 import { escapeHtml } from "../../utils/dom.js";
 import {
   buildReturnTrendPoints,
-  buildTrendSeries
+  buildTrendSeries,
+  summarizeTrendPoints,
+  trendRangePeriodLabel
 } from "./trendModel.js";
 
 let ctx = {};
@@ -174,21 +177,32 @@ function buildTrendPointTooltip(point, previousPoint, firstPoint) {
 }
 
 function buildTrendChartSummary(points) {
+  const periodLabel = trendRangePeriodLabel();
+  const summary = summarizeTrendPoints(points);
   if (!points.length) {
     return [
       { label: "当前总资产", value: ctx.dataUnavailable },
-      { label: "今年最高", value: ctx.dataUnavailable },
-      { label: "今年最低", value: ctx.dataUnavailable }
+      { label: `${periodLabel}最高`, value: ctx.dataUnavailable },
+      { label: `${periodLabel}最低`, value: ctx.dataUnavailable },
+      { label: `${periodLabel}资产变化`, value: ctx.dataUnavailable }
     ];
   }
-  const values = points.map((point) => point.valueCents);
-  const latest = points.at(-1).valueCents;
-  const high = values.reduce((current, value) => (value > current ? value : current), values[0]);
-  const low = values.reduce((current, value) => (value < current ? value : current), values[0]);
+  const changeValue = summary.changeCents === null
+    ? ctx.dataUnavailable
+    : formatSignedCurrency(summary.changeCents);
+  const changeDetail = summary.changeBps === null
+    ? "未扣除投入/提现"
+    : `${formatPercent(summary.changeBps)} · 未扣除投入/提现`;
   return [
-    { label: "当前总资产", value: formatDisplayCurrency(latest) },
-    { label: "今年最高", value: formatDisplayCurrency(high) },
-    { label: "今年最低", value: formatDisplayCurrency(low) }
+    { label: "当前总资产", value: formatDisplayCurrency(summary.latestCents) },
+    { label: `${periodLabel}最高`, value: formatDisplayCurrency(summary.highCents) },
+    { label: `${periodLabel}最低`, value: formatDisplayCurrency(summary.lowCents) },
+    {
+      label: `${periodLabel}资产变化`,
+      value: changeValue,
+      className: toneClassForValue(summary.changeCents),
+      detail: changeDetail
+    }
   ];
 }
 

@@ -53,7 +53,13 @@ import {
   updateSelectedNoteTags
 } from "../../src/features/notes/notesEditor.js";
 import { closeNoteMenus } from "../../src/features/notes/notesEvents.js";
-import { buildTrendPoints, calculateMaxDrawdownAsset, configureTrendModel } from "../../src/features/trends/trendModel.js";
+import {
+  buildTrendPoints,
+  calculateMaxDrawdownAsset,
+  configureTrendModel,
+  summarizeTrendPoints,
+  trendRangePeriodLabel
+} from "../../src/features/trends/trendModel.js";
 import { analysisPresetBounds, configureAnalysisFilters, selectedAnalysisAssets } from "../../src/features/analysis/analysisFilters.js";
 import { buildWorstMonth } from "../../src/features/analysis/analysisModel.js";
 import { calculateRiskAdjustedMetrics } from "../../src/features/analysis/analysisReturns.js";
@@ -573,6 +579,49 @@ test("builds portfolio trend from synced daily asset prices before falling back 
     ["2026-06-02", 100000n],
     ["2026-06-03", 120000n]
   ]);
+});
+
+test("summarizes the selected trend interval with high, low and signed end result", () => {
+  assert.deepEqual(summarizeTrendPoints([
+    { date: "2026-05-01", valueCents: 100000n },
+    { date: "2026-06-01", valueCents: 80000n },
+    { date: "2026-08-01", valueCents: 120000n }
+  ]), {
+    latestCents: 120000n,
+    highCents: 120000n,
+    lowCents: 80000n,
+    changeCents: 20000n,
+    changeBps: 2000n
+  });
+
+  assert.equal(trendRangePeriodLabel("1"), "近1月");
+  assert.equal(trendRangePeriodLabel("3"), "近3月");
+  assert.equal(trendRangePeriodLabel("ytd"), "今年");
+  assert.equal(trendRangePeriodLabel("all"), "记录至今");
+  assert.equal(trendRangePeriodLabel("custom"), "区间");
+
+  assert.deepEqual(summarizeTrendPoints([
+    { date: "2026-05-01", valueCents: 100000n },
+    { date: "2026-08-01", valueCents: 75000n }
+  ]), {
+    latestCents: 75000n,
+    highCents: 100000n,
+    lowCents: 75000n,
+    changeCents: -25000n,
+    changeBps: -2500n
+  });
+});
+
+test("keeps a trend result unavailable when the interval has no comparable start value", () => {
+  assert.deepEqual(summarizeTrendPoints([
+    { date: "2026-08-01", valueCents: 120000n }
+  ]), {
+    latestCents: 120000n,
+    highCents: 120000n,
+    lowCents: 120000n,
+    changeCents: null,
+    changeBps: null
+  });
 });
 
 test("identifies the asset with the largest value loss during the maximum drawdown interval", () => {

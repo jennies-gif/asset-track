@@ -151,7 +151,7 @@
   min-height: 190px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .legal-docs {
     grid-template-columns: 1fr;
     padding-inline: 14px;

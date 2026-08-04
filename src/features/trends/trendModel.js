@@ -202,13 +202,46 @@ export function earliestTrendRecordDate() {
 
 export function trendRangeLabel() {
   const { elements } = ctx;
+  return `${trendRangePeriodLabel(elements.trendRange.value)}变化`;
+}
+
+export function trendRangePeriodLabel(range = ctx.elements?.trendRange?.value) {
   return {
-    "1": "近1月变化",
-    "3": "近3月变化",
-    ytd: "今年变化",
-    all: "记录至今变化",
-    custom: "区间变化"
-  }[elements.trendRange.value] || "今年变化";
+    "1": "近1月",
+    "3": "近3月",
+    ytd: "今年",
+    all: "记录至今",
+    custom: "区间"
+  }[range] || "今年";
+}
+
+export function summarizeTrendPoints(points) {
+  if (!points.length) {
+    return {
+      latestCents: null,
+      highCents: null,
+      lowCents: null,
+      changeCents: null,
+      changeBps: null
+    };
+  }
+
+  const values = points.map((point) => point.valueCents);
+  const first = values[0];
+  const latest = values.at(-1);
+  const hasPeriodResult = values.length >= 2;
+  const changeCents = hasPeriodResult ? latest - first : null;
+  const changeBps = hasPeriodResult && first !== 0n
+    ? roundDivide(changeCents * 10000n, first)
+    : null;
+
+  return {
+    latestCents: latest,
+    highCents: values.reduce((current, value) => (value > current ? value : current), first),
+    lowCents: values.reduce((current, value) => (value < current ? value : current), first),
+    changeCents,
+    changeBps
+  };
 }
 
 export function buildReturnTrendPoints(points) {

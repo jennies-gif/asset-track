@@ -208,13 +208,6 @@
             </div>
             <div class="home-list" id="home-notes-list"></div>
           </section>
-          <section class="home-section home-dashboard-section home-readiness-section is-hidden" id="home-attention-section" aria-labelledby="home-readiness-title">
-            <div class="home-module-heading">
-              <div><h2 id="home-readiness-title">待处理</h2><p class="section-description">这里只显示可能影响当前估值的问题。</p></div>
-              <button class="text-button" data-home-action="sync-prices" type="button">重新同步价格</button>
-            </div>
-            <div class="home-checklist" id="home-checklist"></div>
-          </section>
         </div>
       </section>
 
@@ -411,6 +404,13 @@
         <section class="portfolio-view" id="changes-portfolio-view" role="tabpanel" aria-labelledby="changes-portfolio-tab" hidden>
           <div class="table-wrap"><table><thead><tr><th>资产</th><th>类型</th><th>日期</th><th>数量</th><th>成交价</th><th id="changes-current-price-heading">当前价</th><th>金额</th><th>费用</th><th>复盘</th></tr></thead><tbody id="asset-change-rows"></tbody></table></div>
         </section>
+        <section class="home-section home-dashboard-section home-readiness-section asset-attention-section is-hidden" id="home-attention-section" aria-labelledby="home-readiness-title">
+          <div class="home-module-heading">
+            <div><h2 id="home-readiness-title">待处理</h2><p class="section-description">这里只显示可能影响当前估值的问题。</p></div>
+            <button class="text-button" data-home-action="sync-prices" type="button">重新同步价格</button>
+          </div>
+          <div class="home-checklist" id="home-checklist"></div>
+        </section>
       </section>
 
       <section class="panel" id="analysis-panel" role="tabpanel" aria-labelledby="analysis-tab" hidden>
@@ -427,7 +427,7 @@
         </div>
         <section class="analysis-card analysis-card-wide analysis-judgement-card">
           <div class="analysis-judgement-intro">
-            <span class="analysis-sparkle" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3Z"/><path d="m18 14 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14Z"/></svg></span>
+            <span class="analysis-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/></svg></span>
             <div><h3>组合检查摘要</h3><p id="analysis-judgement-title"></p></div>
           </div>
           <ol class="analysis-judgement-list" id="analysis-judgement-list"></ol>

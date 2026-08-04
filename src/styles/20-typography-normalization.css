@@ -273,7 +273,7 @@ small,
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .shell {
     width: min(100% - 32px, 1280px);
     margin-right: auto;
@@ -783,7 +783,7 @@ small,
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .analysis-health-layout {
     grid-template-columns: 1fr;
   }

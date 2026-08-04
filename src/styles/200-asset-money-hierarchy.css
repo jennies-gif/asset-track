@@ -23,7 +23,7 @@
 }
 
 .asset-money-currency {
-  color: #9CA3AF;
+  color: var(--subtle);
   font-size: 12px;
   font-weight: var(--weight-normal);
   line-height: 1;

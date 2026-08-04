@@ -38,7 +38,8 @@ export async function syncDailyMarketPricesIfDue() {
   const now = Date.now();
   const automaticSyncDue = isAutomaticMarketSyncDue(autoSync, today, now);
   const registrationRetryDue = hasPendingMarketRegistrationRetry(now);
-  if (!automaticSyncDue && !registrationRetryDue) return;
+  const localHistoryRepairDue = hasInconsistentLocalMarketHistory();
+  if (!automaticSyncDue && !registrationRetryDue && !localHistoryRepairDue) return;
 
   const symbols = symbolsForMarketSync();
   if (!symbols.length) return;
@@ -426,6 +427,18 @@ function applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure =
     if (changed) updatedCount += 1;
     else unchangedCount += 1;
     const matched = findAssetQuickMatch(symbol);
+    const responseDailyPrices = normalizeDailyPriceRows(result.dailyPrices);
+    const nextDailyPrices = refreshedDailyPrices
+      ? normalizeDailyPriceRows(refreshedDailyPrices.rows)
+      : responseDailyPrices.length ? responseDailyPrices : asset.dailyPrices;
+    const nextDailyPriceStatus = refreshedDailyPrices
+      ? refreshedDailyPrices.status
+      : responseDailyPrices.length ? result.dailyPriceStatus || asset.dailyPriceStatus || "" : asset.dailyPriceStatus || "";
+    const nextDailyPriceMissingDates = refreshedDailyPrices
+      ? refreshedDailyPrices.missingDates
+      : responseDailyPrices.length && Array.isArray(result.dailyPriceMissingDates)
+        ? result.dailyPriceMissingDates
+        : asset.dailyPriceMissingDates || [];
     return {
       ...asset,
       ...registrationFields,
@@ -443,9 +456,9 @@ function applyMarketSyncResults(results, syncedAt, { preserveExistingOnFailure =
       sourceFetchedAt: result.after.sourceFetchedAt || asset.sourceFetchedAt || "",
       priceStatus: "synced",
       priceError: "",
-      dailyPrices: normalizeDailyPriceRows(refreshedDailyPrices?.rows || result.dailyPrices || asset.dailyPrices),
-      dailyPriceStatus: refreshedDailyPrices?.status || result.dailyPriceStatus || asset.dailyPriceStatus || "",
-      dailyPriceMissingDates: refreshedDailyPrices?.missingDates || (Array.isArray(result.dailyPriceMissingDates) ? result.dailyPriceMissingDates : asset.dailyPriceMissingDates || []),
+      dailyPrices: nextDailyPrices,
+      dailyPriceStatus: nextDailyPriceStatus,
+      dailyPriceMissingDates: nextDailyPriceMissingDates,
       updatedAt: syncedAt || new Date().toISOString()
     };
   });
@@ -485,6 +498,14 @@ function hasPendingMarketRegistrationRetry(now = Date.now()) {
     if (String(asset.marketSyncRegistrationStatus || "").trim() === "registered") return false;
     const attemptedAt = Date.parse(asset.marketSyncRegistrationAttemptedAt || "");
     return !Number.isFinite(attemptedAt) || now - attemptedAt >= marketAutoSyncRetryCooldownMs;
+  });
+}
+
+function hasInconsistentLocalMarketHistory() {
+  return ctx.getState().assets.some((asset) => {
+    if (!syncSymbolForAsset(asset) || inferAssetMarket(asset) === "CASH") return false;
+    if (Array.isArray(asset.dailyPrices) && asset.dailyPrices.length) return false;
+    return ["complete", "partial"].includes(String(asset.dailyPriceStatus || "").trim());
   });
 }
 

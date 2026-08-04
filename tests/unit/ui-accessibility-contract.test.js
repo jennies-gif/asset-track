@@ -32,6 +32,12 @@ test("trend chart includes a screen-reader summary and tabular alternative", asy
   assert.match(source, /aria-describedby="trend-chart-accessible-summary"/u);
   assert.match(source, /查看趋势数据表/u);
   assert.match(source, /<caption>当前筛选范围内的总资产趋势明细<\/caption>/u);
+  assert.match(source, /`\$\{periodLabel\}最高`/u);
+  assert.match(source, /`\$\{periodLabel\}最低`/u);
+  assert.match(source, /`\$\{periodLabel\}资产变化`/u);
+  assert.match(source, /未扣除投入\/提现/u);
+  assert.equal(source.includes('label: "今年最高"'), false);
+  assert.equal(source.includes('label: "今年最低"'), false);
 });
 
 test("overview and analysis expose one consistent reporting range vocabulary", async () => {
@@ -109,9 +115,17 @@ test("mobile interaction rules preserve 44px touch targets", async () => {
     readFile(resolve(projectRoot, "src/styles/180-analysis-alert.css"), "utf8")
   ]);
 
-  assert.match(spacingSource, /@media \(max-width: 900px\)[\s\S]*?\.primary-button,[\s\S]*?min-height: 44px;/u);
+  assert.match(spacingSource, /@media \(max-width: 1023px\)[\s\S]*?\.primary-button,[\s\S]*?min-height: 44px;/u);
   assert.match(spacingSource, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/u);
-  assert.match(analysisSource, /@media \(max-width: 900px\)[\s\S]*?#analysis-panel \.analysis-focus-grid > \.analysis-card \{\s*grid-column: 1 \/ -1;/u);
+  assert.match(analysisSource, /@media \(max-width: 1279px\)[\s\S]*?#analysis-panel \.analysis-focus-grid > \.analysis-card \{\s*grid-column: 1 \/ -1;/u);
+});
+
+test("responsive shell centers wide content and switches navigation at the canonical tablet boundary", async () => {
+  const spacingSource = await readFile(resolve(projectRoot, "src/styles/210-spacing-breathing.css"), "utf8");
+
+  assert.match(spacingSource, /@media \(min-width: 1024px\)[\s\S]*?width: min\(1360px, calc\(100% - var\(--sidebar-current-width\) - 48px\)\);/u);
+  assert.match(spacingSource, /margin-left: calc\(var\(--sidebar-current-width\) \+ max\(24px, calc\(\(100% - var\(--sidebar-current-width\) - 1360px\) \/ 2\)\)\);/u);
+  assert.match(spacingSource, /@media \(max-width: 1023px\)[\s\S]*?--sidebar-current-width: 0px;[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/u);
 });
 
 test("asset rows and the edit form expose accessible delete actions without overlapping search results", async () => {

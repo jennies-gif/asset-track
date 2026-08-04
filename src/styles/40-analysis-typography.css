@@ -204,7 +204,7 @@
   color: var(--negative);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   #analysis-panel .analysis-health-item {
     min-height: 128px;
   }

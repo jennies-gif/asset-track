@@ -161,7 +161,7 @@
   text-align: center;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   #open-portfolio-view table {
     min-width: 1080px;
   }

@@ -111,7 +111,7 @@ small,
 
 .inline-icon,
 .tab-icon svg,
-.analysis-sparkle svg {
+.analysis-summary-icon svg {
   display: block;
   width: 18px;
   height: 18px;
@@ -246,7 +246,7 @@ th,
   color: var(--brand-dark);
 }
 
-@media (min-width: 901px) {
+@media (min-width: 1024px) {
   .shell,
   .content-container {
     margin-left: calc(var(--sidebar-current-width, var(--sidebar-width)) + max(32px, calc((100% - var(--sidebar-current-width, var(--sidebar-width)) - 1360px) / 2)));
@@ -254,7 +254,7 @@ th,
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .content-container,
   .shell {
     width: 100%;

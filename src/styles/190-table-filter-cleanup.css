@@ -8,8 +8,8 @@ table th,
 .allocation-table th,
 #analysis-panel .analysis-return-table th,
 #analysis-panel .analysis-contribution-table th {
-  border-bottom: 1px solid #F1F5F9;
-  background: #FFFFFF;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   box-shadow: none;
 }
 
@@ -24,8 +24,8 @@ table th,
 .portfolio-filter,
 .analysis-filter,
 .notes-filter-row {
-  border-color: #E5E7EB;
-  background: #FFFFFF;
+  border-color: var(--border);
+  background: var(--surface);
   box-shadow: none;
 }
 
@@ -38,8 +38,8 @@ select,
 .compose-form select,
 .currency-switch select,
 .inline-select {
-  border: 1px solid #E5E7EB;
-  background-color: #FFFFFF;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
   color: var(--ink);
   box-shadow: none;
 }
@@ -53,8 +53,8 @@ select:hover,
 .compose-form select:hover,
 .currency-switch select:hover,
 .inline-select:hover {
-  border-color: #CBD5E1;
-  background-color: #FFFFFF;
+  border-color: var(--border-strong);
+  background-color: var(--surface);
 }
 
 select:focus,
@@ -66,7 +66,7 @@ select:focus,
 .compose-form select:focus,
 .currency-switch select:focus,
 .inline-select:focus {
-  border-color: #CBD5E1;
-  background-color: #FFFFFF;
+  border-color: var(--border-strong);
+  background-color: var(--surface);
   outline: none;
 }

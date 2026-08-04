@@ -207,8 +207,8 @@ function renderAnalysisJudgement(analysis) {
   const qualityOkay = analysis.realReturnBps >= 0n || analysis.investmentResultCents >= 0n;
   analysisElements.analysisJudgementTitle.textContent = supportsPortfolioComparisons
     ? riskHigh
-      ? `AI 诊断看板：组合风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
-      : `AI 诊断看板：组合风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`
+      ? `组合状态：风险偏高，收益质量${qualityOkay ? "尚可" : "承压"}。`
+      : `组合状态：风险可控，收益质量${qualityOkay ? "尚可" : "仍需观察"}。`
     : `单项资产检查：收益质量${qualityOkay ? "尚可" : "仍需观察"}，组合指标已停用。`;
   const cryptoBps = analysis.exposure.digitalBps;
   const cashBps = analysis.exposure.cashBps;
@@ -567,7 +567,7 @@ function renderAnalysisLimitations(analysis, limitations) {
   analysisElements.analysisRiskNote.innerHTML = `
     <span class="analysis-audit-badge is-warning">${escapeHtml(limitations.length ? `${limitations.length} 项信息限制分析` : "存在未归因差异")}</span>
     <span>${summary ? escapeHtml(summary) : `未归因差异 ${escapeHtml(formatSignedCurrency(unexplained))}，建议核对期初价格、汇率和费用记录。`}</span>
-    <span class="analysis-audit-badge">当前市值问题请在总览“待处理”中处理</span>
+    <span class="analysis-audit-badge">当前市值问题请在资产页“待处理”中处理</span>
   `;
 }
 
